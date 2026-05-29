@@ -21,10 +21,20 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
+}
+
+body:not(.guide-page) {
+  height: 100vh;
+  overflow: hidden;
 }
 
 button,
@@ -69,7 +79,9 @@ textarea:focus-visible,
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -174,6 +186,7 @@ textarea:focus-visible,
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(420px, var(--editor-width, 58%)) 8px minmax(420px, 1fr);
+  overflow: hidden;
 }
 
 .editor-panel,
@@ -613,6 +626,24 @@ textarea {
 .json-value-token:hover,
 .json-value-token:focus-visible {
   background: #fff7e6;
+  outline: 1px solid var(--amber);
+  outline-offset: 1px;
+}
+
+.json-value-editor {
+  min-height: 22px;
+  max-width: 100%;
+  border: 1px solid var(--amber);
+  border-radius: 4px;
+  background: #fffdf6;
+  color: #1f2933;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0 4px;
+}
+
+.json-value-editor:focus {
   outline: 1px solid var(--amber);
   outline-offset: 1px;
 }
@@ -1147,12 +1178,16 @@ th.input-jump-highlight {
     grid-template-columns: 1fr;
   }
 
+  .workspace {
+    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+  }
+
   .workspace-splitter {
     display: none;
   }
 
   .editor-panel {
-    min-height: 42vh;
+    min-height: 0;
     border-bottom: 1px solid var(--line);
   }
 

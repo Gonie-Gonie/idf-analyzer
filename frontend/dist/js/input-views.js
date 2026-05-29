@@ -268,23 +268,75 @@ function focusSelectedJSONObject() {
 
 async function editJSONValueToken(button) {
   const currentRaw = button.dataset.rawValue || "null";
-  const nextRaw = window.prompt("JSON value", currentRaw);
-  if (nextRaw === null || nextRaw === currentRaw) {
+  const editor = document.createElement("input");
+  editor.type = "text";
+  editor.className = "json-value-editor";
+  editor.value = currentRaw;
+  editor.dataset.objectIndex = button.dataset.objectIndex;
+  editor.dataset.fieldIndex = button.dataset.fieldIndex;
+  editor.dataset.jsonPath = button.dataset.jsonPath || "[]";
+  editor.dataset.rawValue = currentRaw;
+  editor.setAttribute("aria-label", "JSON value");
+  editor.style.width = `${Math.min(Math.max(currentRaw.length + 2, 8), 56)}ch`;
+
+  button.replaceWith(editor);
+  editor.focus();
+  editor.select();
+
+  let finished = false;
+  const restore = () => {
+    if (editor.isConnected) {
+      editor.replaceWith(button);
+    }
+  };
+  const commit = async () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    const nextRaw = editor.value.trim();
+    if (nextRaw === currentRaw) {
+      restore();
+      return;
+    }
+    editor.disabled = true;
+    await commitJSONValueEdit(editor, nextRaw, restore);
+  };
+
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      finished = true;
+      restore();
+    }
+  });
+  editor.addEventListener("blur", () => commit());
+}
+
+async function commitJSONValueEdit(editor, nextRaw, restore) {
+  const currentRaw = editor.dataset.rawValue || "null";
+  if (nextRaw === currentRaw) {
+    restore();
     return;
   }
 
   const api = backend();
   if (!api || typeof api.PatchModelValueText !== "function") {
     setStatus("Backend patch API unavailable", "warn");
+    restore();
     return;
   }
 
   try {
     const result = await api.PatchModelValueText(
       elements.idfInput.value,
-      Number(button.dataset.objectIndex),
-      Number(button.dataset.fieldIndex),
-      JSON.parse(button.dataset.jsonPath || "[]"),
+      Number(editor.dataset.objectIndex),
+      Number(editor.dataset.fieldIndex),
+      JSON.parse(editor.dataset.jsonPath || "[]"),
       nextRaw,
     );
     elements.idfInput.value = result.text;
@@ -297,6 +349,7 @@ async function editJSONValueToken(button) {
     setStatus("JSON value updated", "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
+    restore();
   }
 }
 
@@ -696,4 +749,3 @@ export function setTableOrientation(orientation) {
   });
   renderFieldTable();
 }
-
