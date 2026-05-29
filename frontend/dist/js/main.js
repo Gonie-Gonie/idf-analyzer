@@ -1,12 +1,12 @@
-﻿import { sampleIDF } from "./sample.js";
+import { sampleIDF } from "./sample.js";
 import { elements, state, updateTextStats } from "./state.js";
 import { analyze, closeToolMenu, convertInput, downloadText, openGuide, removeUnused } from "./actions.js";
-import { renderEmpty } from "./analysis-views.js";
+import { renderEmpty, renderReport } from "./analysis-views.js";
 import { applyJSONText, configureInputViews, renderFieldTable, setTableOrientation, switchInputView } from "./input-views.js";
 import { initializeWorkspaceSplitter } from "./layout.js";
 import { handleAnalysisActivation, switchTab } from "./navigation.js";
 
-configureInputViews({ analyze });
+configureInputViews({ analyze, renderReport });
 
 elements.fileInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];

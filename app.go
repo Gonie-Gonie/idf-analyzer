@@ -21,6 +21,7 @@ type TextEditResult struct {
 }
 
 type InputAnalysisResult struct {
+	Text    string         `json:"text,omitempty"`
 	Format  string         `json:"format"`
 	Version string         `json:"version,omitempty"`
 	Model   *epinput.Model `json:"model"`
@@ -34,6 +35,8 @@ type ConversionResult struct {
 	Version  string   `json:"version,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
 }
+
+type ModelPatchResult = InputAnalysisResult
 
 func NewApp() *App {
 	return &App{}
@@ -64,6 +67,37 @@ func (a *App) AnalyzeInputText(text string) (*InputAnalysisResult, error) {
 	}
 
 	return &InputAnalysisResult{
+		Text:    text,
+		Format:  string(model.Format),
+		Version: model.Version.Raw,
+		Model:   model,
+		EPJSON:  epjsonText,
+		Report:  &report,
+	}, nil
+}
+
+func (a *App) PatchModelValueText(text string, objectIndex int, fieldIndex int, jsonPath []string, rawValue string) (*ModelPatchResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	if err := epinput.PatchFieldValue(model, objectIndex, fieldIndex, jsonPath, rawValue); err != nil {
+		return nil, err
+	}
+
+	resultText, err := epinput.Write(model, model.Format)
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	report := idf.Analyze(doc)
+	epjsonText, err := epinput.Write(model, epinput.FormatEPJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ModelPatchResult{
+		Text:    resultText,
 		Format:  string(model.Format),
 		Version: model.Version.Raw,
 		Model:   model,

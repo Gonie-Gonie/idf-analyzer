@@ -14,8 +14,9 @@
 - Support EnergyPlus 22+ as the default compatibility range and keep version-specific IDD/schema integration pluggable.
 - Input viewing should keep Text, JSON, and Table modes in sync from one parsed/cached EnergyPlus model; Table mode should be organized by IDF object type and support row/column orientation changes.
 - JSON structured view should stay epJSON-shaped with quoted keys, braces, colons, literal values, semantic grouping, and compact indentation.
+- JSON view is a structured editor, not a raw textarea: syntax tokens are read-only UI, value tokens call backend model patch APIs, and raw epJSON remains Advanced mode.
 - Keep Text and Table groups open by default, and maintain stable table row headers.
 - Keep result navigation focused: Summary, Schedules, and Systems on the right.
-- Clickable analysis items should jump to the matching object in the active left input view.
+- Clickable analysis items should jump to the matching object in the active left input view without scrolling the right analysis pane.
 - Zone summary should grow into a structured navigation surface with surfaces and related objects first.
 - Frontend code organization: keep `frontend/dist/app.js` as a tiny entrypoint and place feature modules under `frontend/dist/js/`.

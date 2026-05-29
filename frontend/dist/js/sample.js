@@ -1,4 +1,4 @@
-﻿export const sampleIDF = `Version,
+export const sampleIDF = `Version,
   24.1;                    !- Version Identifier
 
 SimulationControl,

@@ -56,13 +56,16 @@
           </div>
           <div class="input-view" id="jsonInputView">
             <div id="jsonStructuredView" class="json-view"></div>
-            <div class="raw-editor-block json-editor-block">
-              <div class="subhead">
-                <h3>epJSON Text</h3>
-                <button id="applyJSONButton" type="button">Apply JSON</button>
+            <details class="raw-editor-block json-editor-block advanced-json-block">
+              <summary>Advanced epJSON Text</summary>
+              <div class="advanced-json-body">
+                <div class="subhead">
+                  <h3>Raw epJSON</h3>
+                  <button id="applyJSONButton" type="button">Apply JSON</button>
+                </div>
+                <textarea id="jsonTextInput" spellcheck="false"></textarea>
               </div>
-              <textarea id="jsonTextInput" spellcheck="false"></textarea>
-            </div>
+            </details>
           </div>
           <div class="input-view" id="tableInputView">
             <div class="table-tools">

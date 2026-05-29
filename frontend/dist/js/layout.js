@@ -1,4 +1,4 @@
-﻿import { elements } from "./state.js";
+import { elements } from "./state.js";
 
 export function initializeWorkspaceSplitter() {
   const savedWidth = localStorage.getItem("idfAnalyzer.editorWidth");

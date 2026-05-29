@@ -16,6 +16,12 @@ type orderedMember struct {
 
 type orderedObject []orderedMember
 
+func (object orderedObject) MarshalJSON() ([]byte, error) {
+	var b strings.Builder
+	writeJSONValue(&b, object)
+	return []byte(b.String()), nil
+}
+
 func ParseEPJSON(content []byte) (*Model, error) {
 	decoder := json.NewDecoder(bytes.NewReader(content))
 	decoder.UseNumber()

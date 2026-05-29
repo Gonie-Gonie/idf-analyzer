@@ -1,4 +1,4 @@
-﻿import { elements, escapeHTML, state } from "./state.js";
+import { elements, escapeHTML, state } from "./state.js";
 import { renderInputViews } from "./input-views.js";
 
 export function renderReport() {

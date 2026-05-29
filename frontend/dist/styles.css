@@ -281,6 +281,33 @@ textarea:focus-visible,
   flex-basis: 36%;
 }
 
+.advanced-json-block {
+  flex: 0 0 auto;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.advanced-json-block[open] {
+  flex-basis: 36%;
+  min-height: 220px;
+}
+
+.advanced-json-block > summary {
+  min-height: 36px;
+  cursor: pointer;
+  padding: 9px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.advanced-json-body {
+  height: calc(100% - 36px);
+  display: flex;
+  flex-direction: column;
+}
+
 .subhead {
   min-height: 36px;
   border-bottom: 1px solid var(--line);
@@ -328,7 +355,7 @@ textarea {
 }
 
 .json-view {
-  flex: 1 1 64%;
+  flex: 1 1 auto;
   padding: 12px;
 }
 
@@ -337,6 +364,27 @@ textarea {
   flex-wrap: wrap;
   gap: 6px;
   margin-bottom: 10px;
+}
+
+.json-editor-tools {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.json-editor-tools input,
+.json-editor-tools select {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 9px;
+  background: #ffffff;
+}
+
+.json-editor-tools button {
+  min-height: 30px;
+  padding: 0 9px;
 }
 
 .json-groups {
@@ -446,8 +494,8 @@ textarea {
 }
 
 .json-inline-tree {
-  max-height: 160px;
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .json-node {
@@ -467,7 +515,8 @@ textarea {
 .json-root-line,
 .json-close-line,
 .json-brace,
-.json-colon {
+.json-colon,
+.json-comma {
   color: var(--muted);
 }
 
@@ -479,6 +528,12 @@ textarea {
 .json-instance,
 .json-value-node {
   padding: 0;
+}
+
+.json-instance.selected > summary {
+  background: #fff7e6;
+  outline: 1px solid #f0c36d;
+  outline-offset: -1px;
 }
 
 .json-type-group > summary,
@@ -538,6 +593,28 @@ textarea {
 .json-primitive {
   overflow-wrap: anywhere;
   color: #1f2933;
+}
+
+.json-value-token {
+  min-height: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #1f2933;
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  padding: 0 2px;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.json-value-token:hover,
+.json-value-token:focus-visible {
+  background: #fff7e6;
+  outline: 1px solid var(--amber);
+  outline-offset: 1px;
 }
 
 #tableInputView {
@@ -615,8 +692,8 @@ textarea {
 }
 
 .object-type-table-scroll {
-  max-height: 440px;
-  overflow: auto;
+  overflow-x: auto;
+  overflow-y: visible;
   border-top: 1px solid var(--line);
 }
 

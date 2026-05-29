@@ -44,7 +44,7 @@
             </article>
             <article>
               <h3>JSON</h3>
-              <p>An epJSON-shaped tree first, with object type keys, object name keys, JSON punctuation, and compact indentation, with editable epJSON text below it.</p>
+              <p>A structured epJSON-like editor with read-only syntax, clickable value tokens, search, collapse depth, object focus, and raw epJSON in Advanced mode.</p>
             </article>
             <article>
               <h3>Table</h3>
@@ -66,11 +66,11 @@
             </article>
             <article>
               <h3>Schedules</h3>
-              <p>Schedule objects and conservative unused named-object candidates. Click rows to locate the source object in the input view.</p>
+              <p>Schedule objects and conservative unused named-object candidates. Click rows to locate the source object in the left input pane.</p>
             </article>
             <article>
               <h3>Systems</h3>
-              <p>Simple node-to-node HVAC connection diagrams from inlet and outlet node fields. Click rows or paths to locate the source object.</p>
+              <p>Simple node-to-node HVAC connection diagrams from inlet and outlet node fields. Click rows or paths to locate the source object without scrolling the analysis pane.</p>
             </article>
           </div>
         </section>
@@ -80,7 +80,8 @@
           <p>
             Remove unused currently targets schedule, material, construction, curve, and table objects
             that are not referenced by other fields. To IDF, To epJSON, and Remove unused are grouped
-            under Tools. Download exports the current editor text.
+            under Tools. JSON value edits patch the backend model and regenerate the source text,
+            epJSON preview, tables, and analysis report. Download exports the current editor text.
           </p>
         </section>
 
@@ -108,6 +109,7 @@
         <section id="updates" class="guide-section">
           <h2>Update Log</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-29</strong> Rebuilt JSON view as a structured editor with read-only syntax tokens, clickable value tokens, search, collapse depth, backend model patching, and Advanced raw epJSON editing.</li>
             <li><strong>2026-05-29</strong> Split the frontend script into ES modules under `frontend/dist/js/` and consolidated agent notes into `docs/agent.md`.</li>
             <li><strong>2026-05-29</strong> Reorganized the toolbar, removed the Objects result tab, added analysis-to-input object jumps, and expanded zone details with surface and related-object lists.</li>
             <li><strong>2026-05-29</strong> Restyled JSON structured view as an epJSON-shaped tree with quoted keys, braces, colons, and literal values.</li>

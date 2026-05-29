@@ -1,4 +1,4 @@
-﻿import { elements, setStatus, state } from "./state.js";
+import { elements, setStatus, state } from "./state.js";
 import { analyze } from "./actions.js";
 import { renderZoneDetails, renderZoneViz } from "./analysis-views.js";
 import { renderFieldTable, renderInputViews, switchInputView } from "./input-views.js";
@@ -49,10 +49,30 @@ function highlightInputTarget(element) {
   window.setTimeout(() => element.classList.remove("input-jump-highlight"), 1800);
 }
 
+function scrollInputTargetIntoView(element) {
+  const container = element.closest(".formatted-object-view, .json-view, .field-table");
+  if (!container) {
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  const targetTop = container.scrollTop + elementRect.top - containerRect.top - container.clientHeight * 0.25;
+  const targetLeft = container.scrollLeft + elementRect.left - containerRect.left - 24;
+  container.scrollTo({
+    top: Math.max(0, targetTop),
+    left: Math.max(0, targetLeft),
+    behavior: "smooth",
+  });
+}
+
 export async function focusInputObject(target) {
   const hasObjectIndex = target.objectIndex !== undefined && target.objectIndex !== null && String(target.objectIndex) !== "";
   if (!hasObjectIndex && !target.objectType) {
     return;
+  }
+  if (hasObjectIndex) {
+    state.jsonSelectedObjectIndex = String(target.objectIndex);
   }
   if (state.lastAnalyzedText !== elements.idfInput.value) {
     await analyze();
@@ -76,7 +96,7 @@ export async function focusInputObject(target) {
   }
 
   expandDetailsFor(element);
-  element.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  scrollInputTargetIntoView(element);
   highlightInputTarget(element);
   setStatus("Input object located", "ok");
 }

@@ -1,9 +1,11 @@
-﻿import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
+import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
 
 let analyzeCallback = async () => {};
+let renderReportCallback = () => renderInputViews();
 
 export function configureInputViews(callbacks) {
   analyzeCallback = callbacks.analyze || analyzeCallback;
+  renderReportCallback = callbacks.renderReport || renderReportCallback;
 }
 
 export function renderInputViews() {
@@ -88,17 +90,36 @@ function renderJSONView() {
       <span class="badge">Version ${escapeHTML(versionLabel)}</span>
       <span class="badge">${escapeHTML(model.objects.length)} objects</span>
     </div>
+    <div class="json-editor-tools">
+      <input id="jsonObjectSearch" type="search" placeholder="Search object, field, value" value="${escapeHTML(state.jsonSearchQuery)}" />
+      <select id="jsonCollapseDepth" aria-label="JSON collapse depth">
+        ${[
+          ["1", "Type only"],
+          ["2", "Objects"],
+          ["3", "Fields"],
+          ["99", "Expand all"],
+        ]
+          .map(
+            ([value, label]) =>
+              `<option value="${value}" ${String(state.jsonCollapseDepth) === value ? "selected" : ""}>${label}</option>`,
+          )
+          .join("")}
+      </select>
+      <button id="jsonFocusObjectButton" type="button">Focus Object</button>
+    </div>
     <div class="json-tree primary-tree json-object-tree">${renderJSONObjectsTree(model.objects)}</div>
   `;
+  bindJSONEditorControls();
 }
 
 function renderJSONObjectsTree(objects) {
   if (!objects.length) {
     return `<div class="empty">No objects</div>`;
   }
+  const query = state.jsonSearchQuery.trim().toLowerCase();
   const groups = [];
   const byType = new Map();
-  objects.forEach((object) => {
+  objects.filter((object) => matchesJSONSearch(object, query)).forEach((object) => {
     const objectType = object.type || "Object";
     if (!byType.has(objectType)) {
       const group = { type: objectType, objects: [] };
@@ -107,6 +128,9 @@ function renderJSONObjectsTree(objects) {
     }
     byType.get(objectType).objects.push(object);
   });
+  if (!groups.length) {
+    return `<div class="empty">No matching objects</div>`;
+  }
 
   return `
     <div class="json-root-line">{</div>
@@ -116,8 +140,9 @@ function renderJSONObjectsTree(objects) {
 }
 
 function renderJSONTypeGroup(group, isLastGroup) {
+  const openAttr = state.jsonCollapseDepth >= 1 ? "open" : "";
   return `
-    <details class="json-node json-type-group" data-object-type="${escapeHTML(group.type)}" open>
+    <details class="json-node json-type-group" data-object-type="${escapeHTML(group.type)}" ${openAttr}>
       <summary>
         <span class="json-line"><span class="json-key">${formatJSONKey(group.type)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="badge">${escapeHTML(group.objects.length)} objects</span>
@@ -137,9 +162,11 @@ function renderJSONInstance(object, isLastObject) {
   const fallbackOrdinal = Number.isFinite(Number(sourceIndex)) ? Number(sourceIndex) + 1 : 1;
   const objectName = object.name || `${objectType} ${fallbackOrdinal}`;
   const sourceLabel = sourceIndex === "" ? "" : `<span class="row-sub">#${escapeHTML(sourceIndex)}</span>`;
+  const selected = String(sourceIndex) === String(state.jsonSelectedObjectIndex);
+  const openAttr = state.jsonCollapseDepth >= 2 || selected ? "open" : "";
   return `
-    <details class="json-node json-instance" data-object-index="${escapeHTML(sourceIndex)}" data-object-type="${escapeHTML(objectType)}" open>
-      <summary>
+    <details class="json-node json-instance ${selected ? "selected" : ""}" data-object-index="${escapeHTML(sourceIndex)}" data-object-type="${escapeHTML(objectType)}" ${openAttr}>
+      <summary class="json-object-summary" data-json-object-index="${escapeHTML(sourceIndex)}">
         <span class="json-line" title="${escapeHTML(objectName)}"><span class="json-key">${formatJSONKey(objectName)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="json-summary-meta">
           ${sourceLabel}
@@ -148,7 +175,7 @@ function renderJSONInstance(object, isLastObject) {
       </summary>
       <div class="json-fields">
         ${fields
-          .map((field, index) => renderJSONFieldRow(field, index, index === fields.length - 1))
+          .map((field, index) => renderJSONFieldRow(field, sourceIndex, index, index === fields.length - 1))
           .join("")}
       </div>
       <div class="json-close-line">}${isLastObject ? "" : ","}</div>
@@ -156,15 +183,121 @@ function renderJSONInstance(object, isLastObject) {
   `;
 }
 
-function renderJSONFieldRow(field, index, isLastField) {
-  const key = field.key || field.comment || `field_${index + 1}`;
+function renderJSONFieldRow(field, objectIndex, fieldIndex, isLastField) {
+  const key = field.key || field.comment || `field_${fieldIndex + 1}`;
   return `
     <div class="json-field-row">
       <span class="json-key" title="${escapeHTML(field.comment || key)}">${formatJSONKey(key)}</span>
       <span class="json-colon">: </span>
-      <span class="json-field-value">${renderJSONValue(field.value, 0, !isLastField)}</span>
+      <span class="json-field-value">${renderJSONEditorValue(field.value, { objectIndex, fieldIndex, path: [] }, 0, !isLastField)}</span>
     </div>
   `;
+}
+
+function matchesJSONSearch(object, query) {
+  if (!query) {
+    return true;
+  }
+  const fields = object.fields || [];
+  const haystack = [
+    object.type || "",
+    object.name || "",
+    object.sourceIndex ?? "",
+    ...fields.flatMap((field) => [field.key || "", field.comment || "", formatJSONValue(field.value)]),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function bindJSONEditorControls() {
+  const searchInput = elements.jsonStructuredView.querySelector("#jsonObjectSearch");
+  const depthSelect = elements.jsonStructuredView.querySelector("#jsonCollapseDepth");
+  const focusButton = elements.jsonStructuredView.querySelector("#jsonFocusObjectButton");
+
+  searchInput?.addEventListener("input", () => {
+    const caret = searchInput.selectionStart || 0;
+    state.jsonSearchQuery = searchInput.value;
+    renderJSONView();
+    const nextSearchInput = elements.jsonStructuredView.querySelector("#jsonObjectSearch");
+    nextSearchInput?.focus();
+    nextSearchInput?.setSelectionRange(caret, caret);
+  });
+  depthSelect?.addEventListener("change", () => {
+    state.jsonCollapseDepth = Number(depthSelect.value);
+    renderJSONView();
+  });
+  focusButton?.addEventListener("click", () => focusSelectedJSONObject());
+
+  elements.jsonStructuredView.querySelectorAll(".json-object-summary").forEach((summary) => {
+    summary.addEventListener("click", () => {
+      state.jsonSelectedObjectIndex = summary.dataset.jsonObjectIndex || "";
+    });
+  });
+  elements.jsonStructuredView.querySelectorAll(".json-value-token").forEach((button) => {
+    button.addEventListener("click", () => editJSONValueToken(button));
+  });
+}
+
+function focusSelectedJSONObject() {
+  let target = null;
+  if (state.jsonSelectedObjectIndex !== "") {
+    target = [...elements.jsonStructuredView.querySelectorAll("[data-object-index]")].find(
+      (element) => element.dataset.objectIndex === String(state.jsonSelectedObjectIndex),
+    );
+  }
+  if (!target) {
+    target = elements.jsonStructuredView.querySelector(".json-instance");
+  }
+  if (!target) {
+    return;
+  }
+  target.open = true;
+  const container = elements.jsonStructuredView.querySelector(".json-tree");
+  if (!container) {
+    return;
+  }
+  const containerRect = container.getBoundingClientRect();
+  const targetRect = target.getBoundingClientRect();
+  container.scrollTo({
+    top: Math.max(0, container.scrollTop + targetRect.top - containerRect.top - container.clientHeight * 0.25),
+    left: Math.max(0, container.scrollLeft + targetRect.left - containerRect.left - 24),
+    behavior: "smooth",
+  });
+}
+
+async function editJSONValueToken(button) {
+  const currentRaw = button.dataset.rawValue || "null";
+  const nextRaw = window.prompt("JSON value", currentRaw);
+  if (nextRaw === null || nextRaw === currentRaw) {
+    return;
+  }
+
+  const api = backend();
+  if (!api || typeof api.PatchModelValueText !== "function") {
+    setStatus("Backend patch API unavailable", "warn");
+    return;
+  }
+
+  try {
+    const result = await api.PatchModelValueText(
+      elements.idfInput.value,
+      Number(button.dataset.objectIndex),
+      Number(button.dataset.fieldIndex),
+      JSON.parse(button.dataset.jsonPath || "[]"),
+      nextRaw,
+    );
+    elements.idfInput.value = result.text;
+    updateTextStats();
+    state.report = result.report;
+    state.model = result.model || null;
+    state.epjsonText = result.epjson || "";
+    state.lastAnalyzedText = result.text;
+    renderReportCallback();
+    setStatus("JSON value updated", "ok");
+  } catch (error) {
+    setStatus(error.message || String(error), "error");
+  }
 }
 
 function renderFormattedObject(object) {
@@ -204,7 +337,7 @@ function formatJSONKey(value) {
 
 function renderJSONFieldValue(value) {
   if (value && typeof value === "object") {
-    return `<div class="json-inline-tree">${renderJSONValue(value, 0, false)}</div>`;
+    return `<div class="json-inline-tree">${renderJSONReadonlyValue(value, 0, false)}</div>`;
   }
   return `<span title="${escapeHTML(formatJSONValue(value))}">${escapeHTML(formatJSONValue(value))}</span>`;
 }
@@ -221,7 +354,7 @@ function formatJSONLiteral(value) {
   }
 }
 
-function renderJSONValue(value, depth = 0, trailingComma = false) {
+function renderJSONReadonlyValue(value, depth = 0, trailingComma = false) {
   const comma = trailingComma ? "," : "";
   const openAttr = depth < 2 ? "open" : "";
   if (Array.isArray(value)) {
@@ -235,7 +368,7 @@ function renderJSONValue(value, depth = 0, trailingComma = false) {
           ${value
             .map(
               (item, index) =>
-                `<div class="json-array-row"><span class="json-index">${escapeHTML(index)}</span>${renderJSONValue(item, depth + 1, index !== value.length - 1)}</div>`,
+                `<div class="json-array-row"><span class="json-index">${escapeHTML(index)}</span>${renderJSONReadonlyValue(item, depth + 1, index !== value.length - 1)}</div>`,
             )
             .join("")}
         </div>
@@ -258,7 +391,7 @@ function renderJSONValue(value, depth = 0, trailingComma = false) {
                 <div class="json-field-row">
                   <span class="json-key">${formatJSONKey(key)}</span>
                   <span class="json-colon">: </span>
-                  <span class="json-field-value">${renderJSONValue(child, depth + 1, index !== entries.length - 1)}</span>
+                  <span class="json-field-value">${renderJSONReadonlyValue(child, depth + 1, index !== entries.length - 1)}</span>
                 </div>`,
             )
             .join("")}
@@ -268,6 +401,62 @@ function renderJSONValue(value, depth = 0, trailingComma = false) {
   }
 
   return `<span class="json-primitive">${escapeHTML(formatJSONLiteral(value))}${comma}</span>`;
+}
+
+function renderJSONEditorValue(value, context, depth = 0, trailingComma = false) {
+  const comma = trailingComma ? "," : "";
+  const openAttr = state.jsonCollapseDepth >= depth + 3 ? "open" : "";
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      return `<span class="json-primitive">[]</span><span class="json-comma">${comma}</span>`;
+    }
+    return `
+      <details class="json-node json-value-node" ${openAttr}>
+        <summary><span class="json-brace">[</span> <span class="badge">${escapeHTML(value.length)}</span></summary>
+        <div class="json-children">
+          ${value
+            .map((item, index) => {
+              const childContext = { ...context, path: [...context.path, String(index)] };
+              return `<div class="json-array-row"><span class="json-index">${escapeHTML(index)}</span>${renderJSONEditorValue(item, childContext, depth + 1, index !== value.length - 1)}</div>`;
+            })
+            .join("")}
+        </div>
+        <div class="json-close-line">]</div><span class="json-comma">${comma}</span>
+      </details>`;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value);
+    if (!entries.length) {
+      return `<span class="json-primitive">{}</span><span class="json-comma">${comma}</span>`;
+    }
+    return `
+      <details class="json-node json-value-node" ${openAttr}>
+        <summary><span class="json-brace">{</span> <span class="badge">${escapeHTML(entries.length)}</span></summary>
+        <div class="json-children">
+          ${entries
+            .map(([key, child], index) => {
+              const childContext = { ...context, path: [...context.path, key] };
+              return `
+                <div class="json-field-row">
+                  <span class="json-key">${formatJSONKey(key)}</span>
+                  <span class="json-colon">: </span>
+                  <span class="json-field-value">${renderJSONEditorValue(child, childContext, depth + 1, index !== entries.length - 1)}</span>
+                </div>`;
+            })
+            .join("")}
+        </div>
+        <div class="json-close-line">}</div><span class="json-comma">${comma}</span>
+      </details>`;
+  }
+
+  const rawValue = formatJSONLiteral(value);
+  return `
+    <button class="json-value-token" type="button"
+      data-object-index="${escapeHTML(context.objectIndex)}"
+      data-field-index="${escapeHTML(context.fieldIndex)}"
+      data-json-path="${escapeHTML(JSON.stringify(context.path))}"
+      data-raw-value="${escapeHTML(rawValue)}">${escapeHTML(rawValue)}</button><span class="json-comma">${comma}</span>`;
 }
 
 export function renderFieldTable() {

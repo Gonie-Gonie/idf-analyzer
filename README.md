@@ -66,7 +66,7 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 ## Input Views
 
 - Text: fully expanded formatted object summary first, editable raw source below.
-- JSON: epJSON-shaped tree first, using object type keys, object name keys, JSON punctuation, and compact indentation, editable epJSON text below.
+- JSON: structured epJSON-like editor first, with read-only syntax tokens and clickable value tokens that patch the backend model; raw epJSON text stays in Advanced mode.
 - Table: fully expanded IDF object type tables with fixed row headers plus global and per-table row/column orientation controls.
 - Workspace: resizable input and analysis panes with separate scroll areas.
 
@@ -74,7 +74,7 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 
 - Result tabs are Summary, Schedules, and Systems.
 - Summary zone cards expose surface and related-object lists.
-- Clickable analysis rows and system paths locate and highlight the matching object in Text, JSON, or Table view.
+- Clickable analysis rows and system paths locate and highlight the matching object inside the left input pane without moving the analysis pane.
 - Conversion and cleanup commands are grouped under the top toolbar Tools menu.
 
 ## Project Layout

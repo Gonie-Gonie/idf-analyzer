@@ -102,3 +102,41 @@ func TestRejectsPre22VersionWhenKnown(t *testing.T) {
 		t.Fatalf("error = %q, want supported range message", err)
 	}
 }
+
+func TestPatchFieldValueUpdatesRootAndNestedValues(t *testing.T) {
+	model, err := Parse("model.epJSON", []byte(`{
+  "Version": {
+    "Version 1": {
+      "version_identifier": "22.2",
+      "idf_order": 1
+    }
+  },
+  "Zone": {
+    "Office": {
+      "direction_of_relative_north": 0,
+      "metadata": {"tags": ["old"]},
+      "idf_order": 2
+    }
+  }
+}`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+
+	if err := PatchFieldValue(model, 1, 0, nil, "15"); err != nil {
+		t.Fatalf("PatchFieldValue(root) error = %v", err)
+	}
+	if err := PatchFieldValue(model, 1, 1, []string{"tags", "0"}, `"new"`); err != nil {
+		t.Fatalf("PatchFieldValue(nested) error = %v", err)
+	}
+
+	epjson, err := Write(model, FormatEPJSON)
+	if err != nil {
+		t.Fatalf("Write(epjson) error = %v", err)
+	}
+	for _, want := range []string{`"direction_of_relative_north": 15`, `"metadata": {"tags": ["new"]}`} {
+		if !strings.Contains(epjson, want) {
+			t.Fatalf("patched epJSON missing %q:\n%s", want, epjson)
+		}
+	}
+}

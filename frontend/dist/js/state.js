@@ -1,4 +1,4 @@
-﻿export const state = {
+export const state = {
   report: null,
   model: null,
   epjsonText: "",
@@ -9,6 +9,9 @@
   tableGroupOrientations: new Map(),
   selectedZoneName: "",
   selectedZoneTab: "surfaces",
+  jsonSearchQuery: "",
+  jsonCollapseDepth: 2,
+  jsonSelectedObjectIndex: "",
 };
 
 export const elements = {

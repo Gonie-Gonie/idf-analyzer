@@ -1,4 +1,4 @@
-﻿import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
+import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
 import { renderEmpty, renderReport } from "./analysis-views.js";
 
 export async function analyze() {
