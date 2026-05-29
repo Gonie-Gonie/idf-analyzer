@@ -296,11 +296,18 @@ textarea {
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .json-object dt {
   color: var(--muted);
+  white-space: nowrap;
+}
+
+.json-object dd > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .json-code {
@@ -326,6 +333,55 @@ textarea {
   font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.json-tree {
+  max-height: 420px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding: 10px;
+  font-size: 12px;
+}
+
+.json-inline-tree {
+  max-height: 160px;
+  overflow: auto;
+}
+
+.json-node {
+  margin: 2px 0;
+}
+
+.json-node summary {
+  cursor: pointer;
+  padding: 3px 0;
+  font-weight: 600;
+}
+
+.json-node ol {
+  margin: 2px 0 2px 16px;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+
+.json-node li {
+  display: grid;
+  grid-template-columns: minmax(96px, 28%) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.json-key {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-primitive {
+  overflow-wrap: anywhere;
 }
 
 #tableInputView {
@@ -356,9 +412,35 @@ textarea {
   font-size: 12px;
 }
 
+.object-table-group {
+  margin: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.object-table-group summary {
+  min-height: 38px;
+  cursor: pointer;
+  padding: 9px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.object-type-table-scroll {
+  max-height: 440px;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+}
+
 .field-table table {
   width: 100%;
-  min-width: 760px;
+  min-width: 920px;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -379,7 +461,7 @@ textarea {
 .field-table th {
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   background: var(--surface-2);
   color: var(--muted);
   text-align: left;
@@ -390,8 +472,27 @@ textarea {
   background: #ffffff;
 }
 
+.field-table .sticky-col {
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  min-width: 64px;
+  background: var(--surface-2);
+}
+
+.field-table td.sticky-col {
+  z-index: 1;
+  background: #ffffff;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.field-table .empty-cell {
+  background: #f6f8fa;
+}
+
 .field-table input {
-  width: 100%;
+  width: max(120px, 100%);
   height: 28px;
   border: 1px solid transparent;
   border-radius: 4px;

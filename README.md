@@ -65,8 +65,8 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 ## Input Views
 
 - Text: editable source input for IDF or epJSON.
-- JSON: grouped object view backed by the cached parsed model and epJSON conversion.
-- Table: field-level table with editable values for spreadsheet-style workflows.
+- JSON: grouped object view plus a collapsible tree backed by the cached parsed model and epJSON conversion.
+- Table: IDF object type tables with editable value cells for spreadsheet-style workflows.
 
 ## Project Layout
 
