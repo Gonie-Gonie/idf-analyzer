@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "idf-analyzer",
+  "outputfilename": "idf-analyzer",
+  "assetdir": "frontend/dist",
+  "frontend:dir": "frontend",
+  "frontend:install": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/frontend-install.ps1",
+  "frontend:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/frontend-build.ps1",
+  "frontend:dev:build": "powershell -NoProfile -ExecutionPolicy Bypass -File ../scripts/frontend-build.ps1",
+  "frontend:dev:watcher": "",
+  "author": {
+    "name": "Gonie-Gonie"
+  },
+  "info": {
+    "productName": "IDF Analyzer",
+    "productVersion": "0.1.0",
+    "comments": "Lightweight EnergyPlus IDF analyzer"
+  }
+}

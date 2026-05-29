@@ -1,0 +1,23 @@
+# Go build outputs
+/bin/
+/build/bin/
+*.exe
+*.test
+coverage.out
+
+# Wails generated frontend bindings
+/frontend/wailsjs/
+
+# Optional web tooling, kept out of this base project
+node_modules/
+
+# Local environment
+.env
+.env.*
+.tools/
+
+# Editors and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

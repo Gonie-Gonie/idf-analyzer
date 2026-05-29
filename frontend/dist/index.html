@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IDF Analyzer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>IDF Analyzer</h1>
+          <p id="runtimeStatus">Waiting for analysis backend</p>
+        </div>
+        <div class="toolbar" role="toolbar" aria-label="IDF actions">
+          <label class="file-button">
+            Open
+            <input id="fileInput" type="file" accept=".idf,.imf,.txt" />
+          </label>
+          <button id="analyzeButton" type="button">Analyze</button>
+          <button id="removeUnusedButton" type="button">Remove unused</button>
+          <button id="downloadButton" type="button">Download</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <aside class="editor-panel" aria-label="IDF editor">
+          <div class="panel-head">
+            <h2>IDF Text</h2>
+            <span id="textStats">0 lines</span>
+          </div>
+          <textarea id="idfInput" spellcheck="false"></textarea>
+        </aside>
+
+        <section class="analysis-panel" aria-label="Analysis results">
+          <nav class="tabs" aria-label="Result tabs">
+            <button class="tab active" data-tab="summary" type="button">Summary</button>
+            <button class="tab" data-tab="objects" type="button">Objects</button>
+            <button class="tab" data-tab="schedules" type="button">Schedules</button>
+            <button class="tab" data-tab="systems" type="button">Systems</button>
+          </nav>
+
+          <div class="tab-pane active" id="summaryPane">
+            <div class="metric-grid">
+              <div class="metric"><span>Objects</span><strong id="objectCount">0</strong></div>
+              <div class="metric"><span>Types</span><strong id="typeCount">0</strong></div>
+              <div class="metric"><span>Schedules</span><strong id="scheduleCount">0</strong></div>
+              <div class="metric"><span>Unused</span><strong id="unusedCount">0</strong></div>
+            </div>
+            <div class="split-results">
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Type Counts</h2>
+                </div>
+                <div id="typeList" class="compact-list"></div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Zones</h2>
+                </div>
+                <svg id="zoneViz" class="viz" role="img" aria-label="Zone visualization"></svg>
+              </section>
+            </div>
+          </div>
+
+          <div class="tab-pane" id="objectsPane">
+            <div class="panel">
+              <div class="panel-head">
+                <h2>Objects</h2>
+                <input id="objectFilter" type="search" placeholder="Filter objects" />
+              </div>
+              <div id="objectTable" class="table"></div>
+            </div>
+          </div>
+
+          <div class="tab-pane" id="schedulesPane">
+            <div class="split-results">
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Schedules</h2>
+                </div>
+                <div id="scheduleList" class="compact-list"></div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <h2>Unused Objects</h2>
+                </div>
+                <div id="unusedList" class="compact-list warning-list"></div>
+              </section>
+            </div>
+          </div>
+
+          <div class="tab-pane" id="systemsPane">
+            <section class="panel">
+              <div class="panel-head">
+                <h2>HVAC Connections</h2>
+              </div>
+              <svg id="systemViz" class="system-viz" role="img" aria-label="HVAC connection diagram"></svg>
+              <div id="connectionList" class="compact-list"></div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
