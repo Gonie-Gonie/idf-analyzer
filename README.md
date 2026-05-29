@@ -59,7 +59,7 @@ Build artifacts and downloaded runtimes stay ignored by git.
 
 ## User Guide
 
-The app toolbar includes a Guide button that opens `frontend/dist/guide.html` as a web document. Keep that guide cumulative: whenever a workflow, button, limitation, or developer command changes, update the relevant section and append an entry to its update log.
+The app toolbar includes a Guide button that navigates to the bundled `frontend/dist/guide.html` document inside the Wails WebView. Keep that guide cumulative: whenever a workflow, button, limitation, or developer command changes, update the relevant section and append an entry to its update log.
 
 ## Project Layout
 

@@ -393,12 +393,7 @@ function downloadText() {
 }
 
 function openGuide() {
-  const guideURL = new URL("./guide.html", window.location.href).href;
-  if (window.runtime && typeof window.runtime.BrowserOpenURL === "function") {
-    window.runtime.BrowserOpenURL(guideURL);
-    return;
-  }
-  window.open(guideURL, "_blank", "noopener,noreferrer");
+  window.location.assign("./guide.html");
 }
 
 function switchTab(tabName) {
