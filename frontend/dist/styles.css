@@ -29,12 +29,14 @@ body {
 
 button,
 input,
-textarea {
+textarea,
+.toolbar-link {
   font: inherit;
 }
 
 button,
-.file-button {
+.file-button,
+.toolbar-link {
   min-height: 34px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -47,17 +49,20 @@ button,
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 button:hover,
-.file-button:hover {
+.file-button:hover,
+.toolbar-link:hover {
   border-color: var(--teal);
 }
 
 button:focus-visible,
 .file-button:focus-within,
 input:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+.toolbar-link:focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
@@ -350,6 +355,130 @@ textarea {
   font-size: 13px;
 }
 
+.guide-page {
+  min-height: 100vh;
+  background: var(--bg);
+}
+
+.guide-header {
+  min-height: 74px;
+  padding: 14px 22px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.guide-header h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.guide-kicker {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.guide-layout {
+  width: min(1120px, calc(100vw - 28px));
+  margin: 18px auto 40px;
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 18px;
+}
+
+.guide-nav {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 8px;
+}
+
+.guide-nav a {
+  display: block;
+  border-radius: 6px;
+  color: var(--ink);
+  padding: 9px 10px;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.guide-nav a:hover,
+.guide-nav a:focus-visible {
+  background: var(--surface-2);
+  outline: 0;
+}
+
+.guide-content {
+  display: grid;
+  gap: 14px;
+}
+
+.guide-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 18px;
+}
+
+.guide-section h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+  letter-spacing: 0;
+}
+
+.guide-section h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.guide-section p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 10px;
+}
+
+.guide-grid article {
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.guide-section pre {
+  margin: 12px 0 0;
+  overflow: auto;
+  border-radius: 8px;
+  background: #1f2933;
+  color: #f7fafc;
+  padding: 12px;
+}
+
+.guide-log {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
 @media (max-width: 920px) {
   .topbar {
     align-items: flex-start;
@@ -379,7 +508,8 @@ textarea {
   }
 
   button,
-  .file-button {
+  .file-button,
+  .toolbar-link {
     flex: 1 1 45%;
   }
 
@@ -393,5 +523,26 @@ textarea {
 
   .table-row span:nth-child(3) {
     display: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .guide-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-nav {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .guide-grid {
+    grid-template-columns: 1fr;
   }
 }

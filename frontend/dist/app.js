@@ -61,6 +61,7 @@ const elements = {
   analyzeButton: document.querySelector("#analyzeButton"),
   removeUnusedButton: document.querySelector("#removeUnusedButton"),
   downloadButton: document.querySelector("#downloadButton"),
+  guideButton: document.querySelector("#guideButton"),
   idfInput: document.querySelector("#idfInput"),
   textStats: document.querySelector("#textStats"),
   objectCount: document.querySelector("#objectCount"),
@@ -370,6 +371,15 @@ function downloadText() {
   URL.revokeObjectURL(url);
 }
 
+function openGuide() {
+  const guideURL = new URL("./guide.html", window.location.href).href;
+  if (window.runtime && typeof window.runtime.BrowserOpenURL === "function") {
+    window.runtime.BrowserOpenURL(guideURL);
+    return;
+  }
+  window.open(guideURL, "_blank", "noopener,noreferrer");
+}
+
 function switchTab(tabName) {
   state.activeTab = tabName;
   elements.tabs.forEach((tab) => {
@@ -393,6 +403,7 @@ elements.fileInput.addEventListener("change", async (event) => {
 elements.analyzeButton.addEventListener("click", analyze);
 elements.removeUnusedButton.addEventListener("click", removeUnused);
 elements.downloadButton.addEventListener("click", downloadText);
+elements.guideButton.addEventListener("click", openGuide);
 elements.idfInput.addEventListener("input", updateTextStats);
 elements.objectFilter.addEventListener("input", () => {
   if (state.report) {

@@ -24,6 +24,22 @@ Default setup versions:
 
 ## Commands
 
+Use the top-level batch wrapper on Windows. From PowerShell, prefix it with `.\`; from `cmd.exe`, `dev setup` also works.
+
+```bat
+.\dev.bat setup
+.\dev.bat check
+.\dev.bat test
+.\dev.bat run
+.\dev.bat build
+.\dev.bat verify
+.\dev.bat guide
+```
+
+The wrapper calls PowerShell with `-NoProfile -ExecutionPolicy Bypass` and forwards to scripts under `scripts/`.
+
+Direct PowerShell commands are also available:
+
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-env.ps1
@@ -37,10 +53,15 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 
 Build artifacts and downloaded runtimes stay ignored by git.
 
+## User Guide
+
+The app toolbar includes a Guide button that opens `frontend/dist/guide.html` as a web document. Keep that guide cumulative: whenever a workflow, button, limitation, or developer command changes, update the relevant section and append an entry to its update log.
+
 ## Project Layout
 
 - `internal/idf`: IDF parsing, analysis, and editing core.
 - `frontend/dist`: tracked static frontend assets.
+- `frontend/dist/guide.html`: user-facing tool guide maintained cumulatively.
 - `app.go`: Wails-bound application API.
 - `scripts`: repo-local runtime setup, checks, and repeatable commands.
 - `.runtime`: ignored local Go/Wails runtime and caches created by setup.
