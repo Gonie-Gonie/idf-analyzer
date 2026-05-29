@@ -11,30 +11,36 @@ Lightweight desktop tooling for EnergyPlus IDF files, built with Go and Wails us
 
 ## Requirements
 
-- Go 1.24 or newer.
-- Wails v2 CLI for packaged builds.
+- PowerShell.
+- Internet access for the first setup.
 - Platform webview runtime required by Wails.
 
-Install Wails CLI when packaging is needed:
+The Go runtime and Wails CLI are installed into `.runtime/` by setup. That directory is local to each clone and is ignored by git.
 
-```powershell
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-```
+Default setup versions:
+
+- Go 1.24.5
+- Wails CLI v2.12.0
 
 ## Commands
 
 ```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check-env.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\test.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\package.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\verify.ps1
 ```
 
-`scripts/run.ps1` uses `go run .` and does not require Node/npm. `scripts/package.ps1` uses Wails.
+`scripts/setup.ps1` installs the repo-local runtime and a pre-commit hook. The hook runs `scripts/verify.ps1`, which performs whitespace checks, `go test ./...`, and `wails build` using `.runtime/`.
+
+Build artifacts and downloaded runtimes stay ignored by git.
 
 ## Project Layout
 
 - `internal/idf`: IDF parsing, analysis, and editing core.
 - `frontend/dist`: tracked static frontend assets.
 - `app.go`: Wails-bound application API.
-- `scripts`: environment checks and repeatable commands.
+- `scripts`: repo-local runtime setup, checks, and repeatable commands.
+- `.runtime`: ignored local Go/Wails runtime and caches created by setup.

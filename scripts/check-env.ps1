@@ -1,30 +1,29 @@
 $ErrorActionPreference = "Stop"
 
-function Test-Command($Name) {
-    $command = Get-Command $Name -ErrorAction SilentlyContinue
-    if ($null -eq $command) {
-        Write-Host "[missing] $Name"
-        return $false
-    }
+. "$PSScriptRoot\toolchain.ps1"
 
-    Write-Host "[ok] $Name -> $($command.Source)"
-    return $true
-}
+$paths = Use-RepoToolchain
 
-$hasGo = Test-Command "go"
-$hasWails = Test-Command "wails"
+Write-Host "Repo root: $($paths.RepoRoot)"
+Write-Host "Runtime root: $($paths.RuntimeRoot)"
 
-if ($hasGo) {
-    go version
-}
-
-if ($hasWails) {
-    wails version
+$missing = $false
+if (Test-Path -LiteralPath $paths.GoExe) {
+    Write-Host "[ok] repo-local Go -> $($paths.GoExe)"
+    & $paths.GoExe version
 } else {
-    Write-Host "Wails CLI is only required for packaged builds."
-    Write-Host "Install it with: go install github.com/wailsapp/wails/v2/cmd/wails@latest"
+    Write-Host "[missing] repo-local Go -> $($paths.GoExe)"
+    $missing = $true
 }
 
-if (-not $hasGo) {
-    throw "Go is required for tests and local runs."
+if (Test-Path -LiteralPath $paths.WailsExe) {
+    Write-Host "[ok] repo-local Wails -> $($paths.WailsExe)"
+    & $paths.WailsExe version
+} else {
+    Write-Host "[missing] repo-local Wails -> $($paths.WailsExe)"
+    $missing = $true
+}
+
+if ($missing) {
+    throw "Repo-local runtime is incomplete. Run: powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\setup.ps1"
 }
