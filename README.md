@@ -5,6 +5,10 @@ Lightweight desktop tooling for EnergyPlus IDF files, built with Go and Wails us
 ## Current Scope
 
 - Parse IDF objects and field comments.
+- Detect EnergyPlus input format from extension or content.
+- Support EnergyPlus 22+ inputs through version detection from `Version`.
+- Parse and write both IDF and epJSON input text.
+- Convert IDF to epJSON and epJSON/JSON to IDF.
 - Summarize object types, schedules, zones, unused named objects, and simple HVAC node connections.
 - Edit field values and remove unused named objects through the Go API.
 - Run the frontend without a Node/npm build chain.
@@ -60,8 +64,13 @@ The app toolbar includes a Guide button that opens `frontend/dist/guide.html` as
 ## Project Layout
 
 - `internal/idf`: IDF parsing, analysis, and editing core.
+- `internal/epinput`: EnergyPlus input format detection, version detection, common model, and IDF/epJSON conversion.
 - `frontend/dist`: tracked static frontend assets.
 - `frontend/dist/guide.html`: user-facing tool guide maintained cumulatively.
 - `app.go`: Wails-bound application API.
 - `scripts`: repo-local runtime setup, checks, and repeatable commands.
 - `.runtime`: ignored local Go/Wails runtime and caches created by setup.
+
+## EnergyPlus References
+
+The parser currently supports EnergyPlus version 22 or newer when a `Version` object is present. Full IDD/schema validation is intentionally separated from parsing: version-specific files can be added later under `resources/energyplus/<major>.<minor>/Energy+.idd` and `resources/energyplus/<major>.<minor>/Energy+.schema.epJSON`.

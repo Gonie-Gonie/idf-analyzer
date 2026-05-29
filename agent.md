@@ -9,3 +9,5 @@
 - Keep `frontend/dist/guide.html` cumulative. Update it whenever app usage, limitations, or developer commands change.
 - Protect user work in the git tree. Do not revert unrelated changes.
 - Favor small IDF-domain functions that can be tested without launching the desktop shell.
+- Keep EnergyPlus input parsing/conversion in `internal/epinput`; reserve `internal/idf` for low-level IDF parsing and analysis helpers.
+- Support EnergyPlus 22+ as the default compatibility range and keep version-specific IDD/schema integration pluggable.

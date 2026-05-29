@@ -20,6 +20,7 @@
         <a href="#open">Open</a>
         <a href="#analysis">Analysis</a>
         <a href="#edit">Edit</a>
+        <a href="#version">Version</a>
         <a href="#build">Developer Build</a>
         <a href="#updates">Update Log</a>
       </nav>
@@ -28,9 +29,9 @@
         <section id="open" class="guide-section">
           <h2>Open and Analyze</h2>
           <p>
-            Open 버튼으로 `.idf`, `.imf`, `.txt` 파일을 불러오거나 왼쪽 편집기에 IDF
-            텍스트를 붙여넣은 뒤 Analyze를 실행합니다. 현재 분석은 객체 구분자와
-            `!-` 필드 주석을 기준으로 동작합니다.
+            Open 버튼으로 `.idf`, `.imf`, `.epjson`, `.json`, `.txt` 파일을 불러오거나
+            왼쪽 편집기에 입력 텍스트를 붙여넣은 뒤 Analyze를 실행합니다. 앱은 확장자와
+            본문을 보고 IDF 또는 epJSON 형식을 자동 인식합니다.
           </p>
         </section>
 
@@ -57,11 +58,20 @@
         </section>
 
         <section id="edit" class="guide-section">
-          <h2>Edit and Export</h2>
+          <h2>Edit, Convert, and Export</h2>
           <p>
             Remove unused는 schedule, material, construction, curve, table 계열 중 다른
-            필드에서 참조되지 않는 named object만 삭제 후보로 다룹니다. 삭제 후 Download로
-            현재 편집기 내용을 `.idf` 파일로 저장할 수 있습니다.
+            필드에서 참조되지 않는 named object만 삭제 후보로 다룹니다. To IDF와 To epJSON으로
+            현재 입력을 서로 변환할 수 있고, Download로 현재 편집기 내용을 저장할 수 있습니다.
+          </p>
+        </section>
+
+        <section id="version" class="guide-section">
+          <h2>Version and IDD References</h2>
+          <p>
+            Version 객체가 있으면 EnergyPlus 버전을 자동 인식하며 현재 기본 지원 범위는
+            22 이상입니다. 버전별 IDD와 epJSON schema 검증은 `resources/energyplus/&lt;major&gt;.&lt;minor&gt;/`
+            아래에 `Energy+.idd`, `Energy+.schema.epJSON` 파일을 추가해 확장하는 구조입니다.
           </p>
         </section>
 
@@ -81,6 +91,7 @@
         <section id="updates" class="guide-section">
           <h2>Update Log</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-29</strong> Added IDF/epJSON auto-detection, EnergyPlus 22+ version detection, and conversion workflow.</li>
             <li><strong>2026-05-29</strong> Initial guide for open, analysis, edit, and developer build workflow.</li>
           </ul>
         </section>

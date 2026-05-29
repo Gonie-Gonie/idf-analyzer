@@ -9,3 +9,4 @@
 - Before committing, run `scripts/verify.ps1` so tests and `wails build` pass with the repo-local runtime.
 - User guide policy: update `frontend/dist/guide.html` cumulatively, including its update log, when tool usage changes.
 - Treat unused-object deletion conservatively and keep parser round trips covered by tests.
+- EnergyPlus input policy: IDF and epJSON share `internal/epinput` for detection, version metadata, common object structure, and conversion; IDD/schema validation should be added behind that module rather than scattered through UI code.

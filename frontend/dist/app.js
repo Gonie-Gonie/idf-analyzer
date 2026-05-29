@@ -60,6 +60,8 @@ const elements = {
   fileInput: document.querySelector("#fileInput"),
   analyzeButton: document.querySelector("#analyzeButton"),
   removeUnusedButton: document.querySelector("#removeUnusedButton"),
+  toIDFButton: document.querySelector("#toIDFButton"),
+  toEPJSONButton: document.querySelector("#toEPJSONButton"),
   downloadButton: document.querySelector("#downloadButton"),
   guideButton: document.querySelector("#guideButton"),
   idfInput: document.querySelector("#idfInput"),
@@ -108,7 +110,7 @@ async function analyze() {
   const api = backend();
   updateTextStats();
   if (!api) {
-    setStatus("Run with Go/Wails to enable backend analysis", "warn");
+    setStatus("Run with Go/Wails to enable IDF or epJSON analysis", "warn");
     renderEmpty();
     return;
   }
@@ -137,6 +139,25 @@ async function removeUnused() {
     updateTextStats();
     renderReport();
     setStatus("Unused objects removed", "ok");
+  } catch (error) {
+    setStatus(error.message || String(error), "error");
+  }
+}
+
+async function convertInput(targetFormat) {
+  const api = backend();
+  if (!api || typeof api.ConvertInputText !== "function") {
+    setStatus("Backend unavailable", "warn");
+    return;
+  }
+
+  try {
+    const result = await api.ConvertInputText(elements.idfInput.value, targetFormat);
+    elements.idfInput.value = result.text;
+    updateTextStats();
+    await analyze();
+    const label = targetFormat === "epjson" ? "epJSON" : "IDF";
+    setStatus(`Converted to ${label}`, "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
   }
@@ -402,6 +423,8 @@ elements.fileInput.addEventListener("change", async (event) => {
 
 elements.analyzeButton.addEventListener("click", analyze);
 elements.removeUnusedButton.addEventListener("click", removeUnused);
+elements.toIDFButton.addEventListener("click", () => convertInput("idf"));
+elements.toEPJSONButton.addEventListener("click", () => convertInput("epjson"));
 elements.downloadButton.addEventListener("click", downloadText);
 elements.guideButton.addEventListener("click", openGuide);
 elements.idfInput.addEventListener("input", updateTextStats);

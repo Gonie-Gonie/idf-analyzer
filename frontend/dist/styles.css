@@ -109,13 +109,15 @@ textarea:focus-visible,
   display: none;
 }
 
-#analyzeButton {
+#analyzeButton,
+#toEPJSONButton {
   background: var(--teal);
   border-color: var(--teal);
   color: #ffffff;
 }
 
-#analyzeButton:hover {
+#analyzeButton:hover,
+#toEPJSONButton:hover {
   background: var(--teal-dark);
 }
 

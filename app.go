@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 
+	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 )
 
@@ -12,8 +13,18 @@ type App struct {
 }
 
 type TextEditResult struct {
-	Text   string      `json:"text"`
-	Report *idf.Report `json:"report"`
+	Text     string      `json:"text"`
+	Format   string      `json:"format"`
+	Version  string      `json:"version,omitempty"`
+	Report   *idf.Report `json:"report"`
+	Warnings []string    `json:"warnings,omitempty"`
+}
+
+type ConversionResult struct {
+	Text     string   `json:"text"`
+	Format   string   `json:"format"`
+	Version  string   `json:"version,omitempty"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func NewApp() *App {
@@ -25,10 +36,11 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) AnalyzeIDFText(text string) (*idf.Report, error) {
-	doc, err := idf.Parse(text)
+	model, err := epinput.Parse("", []byte(text))
 	if err != nil {
 		return nil, err
 	}
+	doc := epinput.ToIDFDocument(model)
 	report := idf.Analyze(doc)
 	return &report, nil
 }
@@ -46,26 +58,69 @@ func (a *App) SaveIDF(path string, text string) error {
 }
 
 func (a *App) UpdateFieldText(text string, objectIndex int, fieldIndex int, value string) (*TextEditResult, error) {
-	doc, err := idf.Parse(text)
+	model, err := epinput.Parse("", []byte(text))
 	if err != nil {
 		return nil, err
 	}
+	doc := epinput.ToIDFDocument(model)
 	updated, err := idf.UpdateField(doc, objectIndex, fieldIndex, value)
 	if err != nil {
 		return nil, err
 	}
-	resultText := updated.String()
+	resultText := writeDocumentInOriginalFormat(updated, model)
 	report := idf.Analyze(updated)
-	return &TextEditResult{Text: resultText, Report: &report}, nil
+	return &TextEditResult{
+		Text:    resultText,
+		Format:  string(model.Format),
+		Version: model.Version.Raw,
+		Report:  &report,
+	}, nil
 }
 
 func (a *App) RemoveUnusedObjectsText(text string) (*TextEditResult, error) {
-	doc, err := idf.Parse(text)
+	model, err := epinput.Parse("", []byte(text))
 	if err != nil {
 		return nil, err
 	}
+	doc := epinput.ToIDFDocument(model)
 	updated, _ := idf.RemoveUnusedObjects(doc)
-	resultText := updated.String()
+	resultText := writeDocumentInOriginalFormat(updated, model)
 	report := idf.Analyze(updated)
-	return &TextEditResult{Text: resultText, Report: &report}, nil
+	return &TextEditResult{
+		Text:    resultText,
+		Format:  string(model.Format),
+		Version: model.Version.Raw,
+		Report:  &report,
+	}, nil
+}
+
+func (a *App) ConvertInputText(text string, targetFormat string) (*ConversionResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+
+	target := epinput.Format(targetFormat)
+	target = epinput.NormalizeFormat(target)
+	output, err := epinput.Write(model, target)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ConversionResult{
+		Text:    output,
+		Format:  string(target),
+		Version: model.Version.Raw,
+	}, nil
+}
+
+func writeDocumentInOriginalFormat(doc idf.Document, original *epinput.Model) string {
+	if original != nil && original.Format == epinput.FormatEPJSON {
+		model := epinput.FromIDFDocument(doc, epinput.FormatEPJSON)
+		output, err := epinput.Write(model, epinput.FormatEPJSON)
+		if err == nil {
+			return output
+		}
+	}
+	return doc.String()
 }
