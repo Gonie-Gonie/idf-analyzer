@@ -77,61 +77,20 @@
         <div id="workspaceSplitter" class="workspace-splitter" role="separator" aria-orientation="vertical" aria-label="Resize input and analysis panels"></div>
 
         <section class="analysis-panel" aria-label="Analysis results">
-          <nav class="tabs" aria-label="Result tabs">
-            <button class="tab active" data-tab="summary" type="button">Summary</button>
-            <button class="tab" data-tab="schedules" type="button">Schedules</button>
-            <button class="tab" data-tab="systems" type="button">Systems</button>
-          </nav>
-
-          <div class="tab-pane active" id="summaryPane">
-            <div class="metric-grid">
-              <div class="metric"><span>Objects</span><strong id="objectCount">0</strong></div>
-              <div class="metric"><span>Types</span><strong id="typeCount">0</strong></div>
-              <div class="metric"><span>Schedules</span><strong id="scheduleCount">0</strong></div>
-              <div class="metric"><span>Unused</span><strong id="unusedCount">0</strong></div>
+          <div class="summary-head">
+            <div>
+              <h2>Summary</h2>
+              <span id="summaryMetricCount">0 metrics</span>
             </div>
-            <div class="split-results">
-              <section class="panel">
-                <div class="panel-head">
-                  <h2>Type Counts</h2>
-                </div>
-                <div id="typeList" class="compact-list"></div>
-              </section>
-              <section class="panel">
-                <div class="panel-head">
-                  <h2>Zones</h2>
-                </div>
-                <svg id="zoneViz" class="viz" role="img" aria-label="Zone visualization"></svg>
-                <div id="zoneDetails" class="zone-details"></div>
-              </section>
+            <div class="summary-tools">
+              <input id="summaryFilter" type="search" placeholder="Filter metrics" />
+              <button id="exportSummaryJSONButton" type="button">Export JSON</button>
+              <button id="exportSummaryCSVButton" type="button">Export CSV</button>
             </div>
           </div>
 
-          <div class="tab-pane" id="schedulesPane">
-            <div class="split-results">
-              <section class="panel">
-                <div class="panel-head">
-                  <h2>Schedules</h2>
-                </div>
-                <div id="scheduleList" class="compact-list"></div>
-              </section>
-              <section class="panel">
-                <div class="panel-head">
-                  <h2>Unused Objects</h2>
-                </div>
-                <div id="unusedList" class="compact-list warning-list"></div>
-              </section>
-            </div>
-          </div>
-
-          <div class="tab-pane" id="systemsPane">
-            <section class="panel">
-              <div class="panel-head">
-                <h2>HVAC Connections</h2>
-              </div>
-              <svg id="systemViz" class="system-viz" role="img" aria-label="HVAC connection diagram"></svg>
-              <div id="connectionList" class="compact-list"></div>
-            </section>
+          <div class="summary-pane" id="summaryPane">
+            <div id="summaryCategories" class="summary-categories"></div>
           </div>
         </section>
       </section>

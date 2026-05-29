@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
@@ -34,6 +36,13 @@ type ConversionResult struct {
 	Format   string   `json:"format"`
 	Version  string   `json:"version,omitempty"`
 	Warnings []string `json:"warnings,omitempty"`
+}
+
+type SummaryExportResult struct {
+	Text     string `json:"text"`
+	Format   string `json:"format"`
+	Filename string `json:"filename"`
+	MIME     string `json:"mime"`
 }
 
 type ModelPatchResult = InputAnalysisResult
@@ -173,6 +182,45 @@ func (a *App) ConvertInputText(text string, targetFormat string) (*ConversionRes
 		Format:  string(target),
 		Version: model.Version.Raw,
 	}, nil
+}
+
+func (a *App) ExportSummaryText(text string, format string) (*SummaryExportResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	summary := idf.AnalyzeSummary(epinput.ToIDFDocument(model))
+
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "json":
+		output, err := idf.ExportSummaryJSON(summary)
+		if err != nil {
+			return nil, err
+		}
+		return &SummaryExportResult{
+			Text:     output,
+			Format:   "json",
+			Filename: "summary.json",
+			MIME:     "application/json",
+		}, nil
+	case "csv":
+		output, err := idf.ExportSummaryCSV(summary)
+		if err != nil {
+			return nil, err
+		}
+		return &SummaryExportResult{
+			Text:     output,
+			Format:   "csv",
+			Filename: "summary.csv",
+			MIME:     "text/csv",
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported summary export format %q; use json or csv", format)
+	}
+}
+
+func (a *App) GetSummaryMetricGuides() []idf.SummaryGuide {
+	return idf.SummaryGuides()
 }
 
 func writeDocumentInOriginalFormat(doc idf.Document, original *epinput.Model) string {

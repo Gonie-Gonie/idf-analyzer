@@ -1,7 +1,7 @@
 import { sampleIDF } from "./sample.js";
 import { elements, state, updateTextStats } from "./state.js";
-import { analyze, closeToolMenu, convertInput, downloadText, openGuide, removeUnused } from "./actions.js";
-import { renderEmpty, renderReport } from "./analysis-views.js";
+import { analyze, closeToolMenu, convertInput, downloadText, exportSummary, openGuide, removeUnused } from "./actions.js";
+import { renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
 import {
   configureInputViews,
   renderFieldTable,
@@ -10,7 +10,7 @@ import {
   syncTextViewFromRawCaret,
 } from "./input-views.js";
 import { initializeWorkspaceSplitter } from "./layout.js";
-import { handleAnalysisActivation, switchTab } from "./navigation.js";
+import { handleAnalysisActivation } from "./navigation.js";
 
 configureInputViews({ analyze, renderReport });
 
@@ -38,6 +38,8 @@ elements.toEPJSONButton.addEventListener("click", async () => {
   await convertInput("epjson");
 });
 elements.downloadButton.addEventListener("click", downloadText);
+elements.exportSummaryJSONButton.addEventListener("click", () => exportSummary("json"));
+elements.exportSummaryCSVButton.addEventListener("click", () => exportSummary("csv"));
 elements.guideButton.addEventListener("click", openGuide);
 elements.idfInput.addEventListener("input", () => {
   updateTextStats();
@@ -49,9 +51,7 @@ elements.syncRawTextToggle.addEventListener("change", () => {
   state.syncTextRawPosition = elements.syncRawTextToggle.checked;
 });
 elements.fieldFilter.addEventListener("input", renderFieldTable);
-elements.tabs.forEach((tab) => {
-  tab.addEventListener("click", () => switchTab(tab.dataset.tab));
-});
+elements.summaryFilter.addEventListener("input", () => renderSummary());
 elements.inputViewButtons.forEach((button) => {
   button.addEventListener("click", () => switchInputView(button.dataset.inputView));
 });
@@ -63,7 +63,7 @@ elements.analysisPanel.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" && event.key !== " ") {
     return;
   }
-  const target = event.target.closest(".navigable-row, .zone-card, [data-zone-tab]");
+  const target = event.target.closest(".navigable-row");
   if (!target) {
     return;
   }

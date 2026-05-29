@@ -72,9 +72,9 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 
 ## Analysis Navigation
 
-- Result tabs are Summary, Schedules, and Systems.
-- Summary zone cards expose surface and related-object lists.
-- Clickable analysis rows and system paths locate and highlight the matching object inside the left input pane without moving the analysis pane.
+- The right panel currently shows a single Summary metric catalog grouped by model, geometry, envelope, loads, schedules, and HVAC categories.
+- Summary can be filtered and exported as categorized JSON or a two-column `name,value` CSV.
+- Summary metric guide entries are loaded from the same backend catalog as the calculated metrics.
 - Conversion and cleanup commands are grouped under the top toolbar Tools menu.
 
 ## Project Layout

@@ -13,6 +13,7 @@ type Report struct {
 	Zones           []ZoneInfo       `json:"zones"`
 	HVACConnections []HVACConnection `json:"hvacConnections"`
 	UnusedObjects   []NamedObject    `json:"unusedObjects"`
+	Summary         SummaryReport    `json:"summary"`
 }
 
 type TypeCount struct {
@@ -125,6 +126,7 @@ func Analyze(doc Document) Report {
 	})
 
 	report.UnusedObjects = FindUnusedObjects(doc)
+	report.Summary = AnalyzeSummary(doc)
 	return report
 }
 

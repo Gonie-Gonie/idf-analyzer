@@ -20,7 +20,7 @@
 - epJSON conversion should follow the official schema shape where known. Detailed surface and shading coordinate extensibles should appear as a `vertices` array, not as flat `vertex_1_*` keys.
 - Keep Text and Table groups open by default, and maintain stable table row headers.
 - Keep the app window itself from scrolling; use explicit scroll containers inside the input and analysis panels.
-- Keep result navigation focused: Summary, Schedules, and Systems on the right.
-- Clickable analysis items should jump to the matching object in the active left input view without scrolling the right analysis pane.
-- Zone summary should grow into a structured navigation surface with surfaces and related objects first.
+- Keep the right panel focused on the backend-driven Summary metric catalog until additional result tabs are intentionally reintroduced.
+- Summary metric definitions, calculated values, exports, and guide entries should stay tied to the same backend catalog.
+- Keep the Summary export contract stable: categorized JSON and two-column `name,value` CSV.
 - Frontend code organization: keep `frontend/dist/app.js` as a tiny entrypoint and place feature modules under `frontend/dist/js/`.

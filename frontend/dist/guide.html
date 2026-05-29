@@ -20,6 +20,7 @@
         <a href="#open">Open</a>
         <a href="#views">Input Views</a>
         <a href="#analysis">Analysis</a>
+        <a href="#summary-metrics">Summary Metrics</a>
         <a href="#edit">Edit</a>
         <a href="#epjson">epJSON</a>
         <a href="#version">Version</a>
@@ -63,16 +64,23 @@
           <div class="guide-grid">
             <article>
               <h3>Summary</h3>
-              <p>Object counts, type counts, and zone cards with surface and related-object detail tabs.</p>
+              <p>The right panel currently shows one Summary view with categorized model, geometry, envelope, load, schedule, and HVAC metrics.</p>
             </article>
             <article>
-              <h3>Schedules</h3>
-              <p>Schedule objects and conservative unused named-object candidates. Click rows to locate the source object in the left input pane.</p>
+              <h3>Export</h3>
+              <p>Summary exports are available as categorized JSON or a two-column CSV with `name,value` rows.</p>
             </article>
-            <article>
-              <h3>Systems</h3>
-              <p>Simple node-to-node HVAC connection diagrams from inlet and outlet node fields. Click rows or paths to locate the source object without scrolling the analysis pane.</p>
-            </article>
+          </div>
+        </section>
+
+        <section id="summary-metrics" class="guide-section">
+          <h2>Summary Metric Catalog</h2>
+          <p>
+            The metric guide below is loaded from the same backend catalog used by analysis and export.
+            Each item documents its source, method, assumptions, and missing-data behavior.
+          </p>
+          <div id="summaryMetricGuide" class="guide-metric-list">
+            <div class="empty">Loading summary metric guide</div>
           </div>
         </section>
 
@@ -83,7 +91,8 @@
             that are not referenced by other fields. To IDF, To epJSON, and Remove unused are grouped
             under Tools. Text summary, Table, and inline JSON value edits patch the backend model
             or field text and regenerate the source text, epJSON preview, tables, and analysis report.
-            Download exports the current editor text.
+            Download exports the current editor text. Export JSON and Export CSV in the Summary panel
+            export the current model summary.
           </p>
         </section>
 
@@ -121,6 +130,7 @@
         <section id="updates" class="guide-section">
           <h2>Update Log</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-29</strong> Rebuilt the right panel as a single Summary metric catalog with categorized metrics, JSON/CSV export, and backend-sourced metric guide entries.</li>
             <li><strong>2026-05-29</strong> Removed Advanced epJSON text, moved Raw Text into a shared pane for all input views, avoided synthetic Name columns in Table/Text, and added schema-aware `vertices` arrays for detailed surface epJSON output.</li>
             <li><strong>2026-05-29</strong> Made Text view summary fields editable and added optional action-based position sync between the formatted summary and raw text.</li>
             <li><strong>2026-05-29</strong> Locked window-level app scrolling so only panels scroll, and changed JSON value editing from a popup to inline token editing.</li>
@@ -140,5 +150,71 @@
         </section>
       </section>
     </main>
+    <script type="module">
+      const guideContainer = document.querySelector("#summaryMetricGuide");
+
+      function escapeHTML(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function renderGuides(guides) {
+        const grouped = new Map();
+        guides.forEach((guide) => {
+          const category = guide.category || "Uncategorized";
+          if (!grouped.has(category)) {
+            grouped.set(category, []);
+          }
+          grouped.get(category).push(guide);
+        });
+
+        guideContainer.innerHTML = [...grouped.entries()]
+          .map(([category, items]) => `
+            <details class="guide-metric-group" open>
+              <summary>
+                <span>${escapeHTML(category)}</span>
+                <span class="badge">${items.length}</span>
+              </summary>
+              <div class="guide-metric-cards">
+                ${items
+                  .map((item) => `
+                    <article class="guide-metric-card">
+                      <h3>${escapeHTML(item.name)} <code>${escapeHTML(item.id)}</code></h3>
+                      <dl>
+                        <dt>Source</dt>
+                        <dd>${escapeHTML(item.source)}</dd>
+                        <dt>Method</dt>
+                        <dd>${escapeHTML(item.method)}</dd>
+                        <dt>Assumptions</dt>
+                        <dd>${escapeHTML(item.assumptions)}</dd>
+                        <dt>Missing Data</dt>
+                        <dd>${escapeHTML(item.missingData)}</dd>
+                      </dl>
+                    </article>`)
+                  .join("")}
+              </div>
+            </details>`)
+          .join("");
+      }
+
+      async function loadSummaryMetricGuide() {
+        const api = window.go && window.go.main && window.go.main.App;
+        if (!api || typeof api.GetSummaryMetricGuides !== "function") {
+          guideContainer.innerHTML = `<div class="empty">Run inside the desktop app to load the backend metric catalog.</div>`;
+          return;
+        }
+        try {
+          renderGuides(await api.GetSummaryMetricGuides());
+        } catch (error) {
+          guideContainer.innerHTML = `<div class="empty">${escapeHTML(error.message || String(error))}</div>`;
+        }
+      }
+
+      loadSummaryMetricGuide();
+    </script>
   </body>
 </html>

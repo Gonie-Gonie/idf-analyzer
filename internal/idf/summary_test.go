@@ -1,0 +1,430 @@
+package idf
+
+import (
+	"encoding/csv"
+	"encoding/json"
+	"math"
+	"strings"
+	"testing"
+)
+
+const summaryFixtureIDF = `
+Version,
+  24.1;                    !- Version Identifier
+
+GlobalGeometryRules,
+  UpperLeftCorner,         !- Starting Vertex Position
+  CounterClockWise,        !- Vertex Entry Direction
+  World;                   !- Coordinate System
+
+Building,
+  Summary Test Building,   !- Name
+  0;                       !- North Axis
+
+Schedule:Constant,
+  AlwaysOn,                !- Name
+  Fraction,                !- Schedule Type Limits Name
+  1;                       !- Hourly Value
+
+Schedule:Compact,
+  HalfDay,                 !- Name
+  Fraction,                !- Schedule Type Limits Name
+  Through: 12/31,          !- Field 1
+  For: AllDays,            !- Field 2
+  Until: 12:00,            !- Field 3
+  1,                       !- Field 4
+  Until: 24:00,            !- Field 5
+  0;                       !- Field 6
+
+Zone,
+  Zone 1,                  !- Name
+  0,                       !- Direction of Relative North
+  0,                       !- X Origin
+  0,                       !- Y Origin
+  0,                       !- Z Origin
+  1,                       !- Type
+  1,                       !- Multiplier
+  3,                       !- Ceiling Height
+  600;                     !- Volume
+
+BuildingSurface:Detailed,
+  Zone 1 Floor,            !- Name
+  Floor,                   !- Surface Type
+  Floor Construction,      !- Construction Name
+  Zone 1,                  !- Zone Name
+  Ground,                  !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  NoSun,                   !- Sun Exposure
+  NoWind,                  !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  0,                       !- Vertex 1 X-coordinate
+  0,                       !- Vertex 1 Y-coordinate
+  0,                       !- Vertex 1 Z-coordinate
+  10,                      !- Vertex 2 X-coordinate
+  0,                       !- Vertex 2 Y-coordinate
+  0,                       !- Vertex 2 Z-coordinate
+  10,                      !- Vertex 3 X-coordinate
+  20,                      !- Vertex 3 Y-coordinate
+  0,                       !- Vertex 3 Z-coordinate
+  0,                       !- Vertex 4 X-coordinate
+  20,                      !- Vertex 4 Y-coordinate
+  0;                       !- Vertex 4 Z-coordinate
+
+BuildingSurface:Detailed,
+  Zone 1 Roof,             !- Name
+  Roof,                    !- Surface Type
+  Roof Construction,       !- Construction Name
+  Zone 1,                  !- Zone Name
+  Outdoors,                !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  SunExposed,              !- Sun Exposure
+  WindExposed,             !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  0,                       !- Vertex 1 X-coordinate
+  20,                      !- Vertex 1 Y-coordinate
+  3,                       !- Vertex 1 Z-coordinate
+  10,                      !- Vertex 2 X-coordinate
+  20,                      !- Vertex 2 Y-coordinate
+  3,                       !- Vertex 2 Z-coordinate
+  10,                      !- Vertex 3 X-coordinate
+  0,                       !- Vertex 3 Y-coordinate
+  3,                       !- Vertex 3 Z-coordinate
+  0,                       !- Vertex 4 X-coordinate
+  0,                       !- Vertex 4 Y-coordinate
+  3;                       !- Vertex 4 Z-coordinate
+
+BuildingSurface:Detailed,
+  South Wall,              !- Name
+  Wall,                    !- Surface Type
+  Wall Construction,       !- Construction Name
+  Zone 1,                  !- Zone Name
+  Outdoors,                !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  SunExposed,              !- Sun Exposure
+  WindExposed,             !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  0,                       !- Vertex 1 X-coordinate
+  0,                       !- Vertex 1 Y-coordinate
+  0,                       !- Vertex 1 Z-coordinate
+  10,                      !- Vertex 2 X-coordinate
+  0,                       !- Vertex 2 Y-coordinate
+  0,                       !- Vertex 2 Z-coordinate
+  10,                      !- Vertex 3 X-coordinate
+  0,                       !- Vertex 3 Y-coordinate
+  3,                       !- Vertex 3 Z-coordinate
+  0,                       !- Vertex 4 X-coordinate
+  0,                       !- Vertex 4 Y-coordinate
+  3;                       !- Vertex 4 Z-coordinate
+
+BuildingSurface:Detailed,
+  East Wall,               !- Name
+  Wall,                    !- Surface Type
+  Wall Construction,       !- Construction Name
+  Zone 1,                  !- Zone Name
+  Outdoors,                !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  SunExposed,              !- Sun Exposure
+  WindExposed,             !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  10,                      !- Vertex 1 X-coordinate
+  0,                       !- Vertex 1 Y-coordinate
+  0,                       !- Vertex 1 Z-coordinate
+  10,                      !- Vertex 2 X-coordinate
+  20,                      !- Vertex 2 Y-coordinate
+  0,                       !- Vertex 2 Z-coordinate
+  10,                      !- Vertex 3 X-coordinate
+  20,                      !- Vertex 3 Y-coordinate
+  3,                       !- Vertex 3 Z-coordinate
+  10,                      !- Vertex 4 X-coordinate
+  0,                       !- Vertex 4 Y-coordinate
+  3;                       !- Vertex 4 Z-coordinate
+
+BuildingSurface:Detailed,
+  North Wall,              !- Name
+  Wall,                    !- Surface Type
+  Wall Construction,       !- Construction Name
+  Zone 1,                  !- Zone Name
+  Outdoors,                !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  SunExposed,              !- Sun Exposure
+  WindExposed,             !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  10,                      !- Vertex 1 X-coordinate
+  20,                      !- Vertex 1 Y-coordinate
+  0,                       !- Vertex 1 Z-coordinate
+  0,                       !- Vertex 2 X-coordinate
+  20,                      !- Vertex 2 Y-coordinate
+  0,                       !- Vertex 2 Z-coordinate
+  0,                       !- Vertex 3 X-coordinate
+  20,                      !- Vertex 3 Y-coordinate
+  3,                       !- Vertex 3 Z-coordinate
+  10,                      !- Vertex 4 X-coordinate
+  20,                      !- Vertex 4 Y-coordinate
+  3;                       !- Vertex 4 Z-coordinate
+
+BuildingSurface:Detailed,
+  West Wall,               !- Name
+  Wall,                    !- Surface Type
+  Wall Construction,       !- Construction Name
+  Zone 1,                  !- Zone Name
+  Outdoors,                !- Outside Boundary Condition
+  ,                        !- Outside Boundary Condition Object
+  SunExposed,              !- Sun Exposure
+  WindExposed,             !- Wind Exposure
+  0.5,                     !- View Factor to Ground
+  4,                       !- Number of Vertices
+  0,                       !- Vertex 1 X-coordinate
+  20,                      !- Vertex 1 Y-coordinate
+  0,                       !- Vertex 1 Z-coordinate
+  0,                       !- Vertex 2 X-coordinate
+  0,                       !- Vertex 2 Y-coordinate
+  0,                       !- Vertex 2 Z-coordinate
+  0,                       !- Vertex 3 X-coordinate
+  0,                       !- Vertex 3 Y-coordinate
+  3,                       !- Vertex 3 Z-coordinate
+  0,                       !- Vertex 4 X-coordinate
+  20,                      !- Vertex 4 Y-coordinate
+  3;                       !- Vertex 4 Z-coordinate
+
+FenestrationSurface:Detailed,
+  South Window,            !- Name
+  Window,                  !- Surface Type
+  Window Construction,     !- Construction Name
+  South Wall,              !- Building Surface Name
+  ,                        !- Outside Boundary Condition Object
+  0.5,                     !- View Factor to Ground
+  ,                        !- Frame and Divider Name
+  1,                       !- Multiplier
+  4,                       !- Number of Vertices
+  4,                       !- Vertex 1 X-coordinate
+  0,                       !- Vertex 1 Y-coordinate
+  1,                       !- Vertex 1 Z-coordinate
+  6,                       !- Vertex 2 X-coordinate
+  0,                       !- Vertex 2 Y-coordinate
+  1,                       !- Vertex 2 Z-coordinate
+  6,                       !- Vertex 3 X-coordinate
+  0,                       !- Vertex 3 Y-coordinate
+  2,                       !- Vertex 3 Z-coordinate
+  4,                       !- Vertex 4 X-coordinate
+  0,                       !- Vertex 4 Y-coordinate
+  2;                       !- Vertex 4 Z-coordinate
+
+FenestrationSurface:Detailed,
+  East Window,             !- Name
+  Window,                  !- Surface Type
+  Window Construction,     !- Construction Name
+  East Wall,               !- Building Surface Name
+  ,                        !- Outside Boundary Condition Object
+  0.5,                     !- View Factor to Ground
+  ,                        !- Frame and Divider Name
+  1,                       !- Multiplier
+  4,                       !- Number of Vertices
+  10,                      !- Vertex 1 X-coordinate
+  8,                       !- Vertex 1 Y-coordinate
+  1,                       !- Vertex 1 Z-coordinate
+  10,                      !- Vertex 2 X-coordinate
+  12,                      !- Vertex 2 Y-coordinate
+  1,                       !- Vertex 2 Z-coordinate
+  10,                      !- Vertex 3 X-coordinate
+  12,                      !- Vertex 3 Y-coordinate
+  2,                       !- Vertex 3 Z-coordinate
+  10,                      !- Vertex 4 X-coordinate
+  8,                       !- Vertex 4 Y-coordinate
+  2;                       !- Vertex 4 Z-coordinate
+
+People,
+  Zone People,             !- Name
+  Zone 1,                  !- Zone or ZoneList Name
+  HalfDay,                 !- Number of People Schedule Name
+  People,                  !- Number of People Calculation Method
+  10;                      !- Number of People
+
+Lights,
+  Zone Lights,             !- Name
+  Zone 1,                  !- Zone or ZoneList Name
+  HalfDay,                 !- Schedule Name
+  LightingLevel,           !- Design Level Calculation Method
+  1000;                    !- Lighting Level
+
+ElectricEquipment,
+  Zone Equipment,          !- Name
+  Zone 1,                  !- Zone or ZoneList Name
+  HalfDay,                 !- Schedule Name
+  EquipmentLevel,          !- Design Level Calculation Method
+  2000;                    !- Design Level
+
+ThermostatSetpoint:DualSetpoint,
+  Dual Setpoint,           !- Name
+  AlwaysOn,                !- Heating Setpoint Temperature Schedule Name
+  AlwaysOn;                !- Cooling Setpoint Temperature Schedule Name
+
+ZoneControl:Thermostat,
+  Zone Thermostat,         !- Name
+  Zone 1,                  !- Zone or ZoneList Name
+  AlwaysOn,                !- Control Type Schedule Name
+  ThermostatSetpoint:DualSetpoint, !- Control 1 Object Type
+  Dual Setpoint;           !- Control 1 Name
+
+Fan:ConstantVolume,
+  Supply Fan,              !- Name
+  AlwaysOn,                !- Availability Schedule Name
+  0.7,                     !- Fan Total Efficiency
+  500,                     !- Pressure Rise
+  1.0,                     !- Maximum Flow Rate
+  0.9,                     !- Motor Efficiency
+  1.0,                     !- Motor In Airstream Fraction
+  Inlet Node,              !- Air Inlet Node Name
+  Outlet Node;             !- Air Outlet Node Name
+`
+
+func TestSummaryRegistryAndGuideCoverage(t *testing.T) {
+	definitions := SummaryDefinitions()
+	guides := SummaryGuides()
+	if len(definitions) != 50 {
+		t.Fatalf("definition count = %d, want 50", len(definitions))
+	}
+	if len(guides) != len(definitions) {
+		t.Fatalf("guide count = %d, want %d", len(guides), len(definitions))
+	}
+
+	seen := map[string]bool{}
+	for index, definition := range definitions {
+		if definition.ID == "" || definition.Category == "" || definition.Name == "" {
+			t.Fatalf("definition %d has empty required metadata: %#v", index, definition)
+		}
+		if definition.Source == "" || definition.Method == "" || definition.Assumptions == "" || definition.MissingData == "" {
+			t.Fatalf("definition %s is missing guide metadata", definition.ID)
+		}
+		if seen[definition.ID] {
+			t.Fatalf("duplicate definition id %q", definition.ID)
+		}
+		seen[definition.ID] = true
+		if guides[index].ID != definition.ID {
+			t.Fatalf("guide %d id = %q, want %q", index, guides[index].ID, definition.ID)
+		}
+	}
+}
+
+func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
+	doc, err := Parse(summaryFixtureIDF)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	summary := AnalyzeSummary(doc)
+	if summary.MetricCount != 50 {
+		t.Fatalf("summary metric count = %d, want 50", summary.MetricCount)
+	}
+	if got := countMetrics(summary); got != 50 {
+		t.Fatalf("rendered metric count = %d, want 50", got)
+	}
+
+	assertMetricClose(t, summary, "gross_floor_area_m2", 200, 0.001)
+	assertMetricClose(t, summary, "conditioned_floor_area_m2", 200, 0.001)
+	assertMetricClose(t, summary, "unconditioned_floor_area_m2", 0, 0.001)
+	assertMetricClose(t, summary, "total_zone_volume_m3", 600, 0.001)
+	assertMetricClose(t, summary, "average_floor_height_m", 3, 0.001)
+	assertMetricClose(t, summary, "building_long_side_m", 20, 0.001)
+	assertMetricClose(t, summary, "building_short_side_m", 10, 0.001)
+	assertMetricClose(t, summary, "footprint_aspect_ratio", 2, 0.001)
+	assertMetricClose(t, summary, "exterior_wall_area_m2", 180, 0.001)
+	assertMetricClose(t, summary, "window_area_m2", 6, 0.001)
+	assertMetricClose(t, summary, "total_wwr_percent", 3.3, 0.05)
+	assertMetricClose(t, summary, "east_wwr_percent", 6.7, 0.05)
+	assertMetricClose(t, summary, "south_wwr_percent", 6.7, 0.05)
+	assertMetricClose(t, summary, "north_wwr_percent", 0, 0.001)
+	assertMetricClose(t, summary, "west_wwr_percent", 0, 0.001)
+	assertMetricClose(t, summary, "total_lighting_power_w", 1000, 0.001)
+	assertMetricClose(t, summary, "average_lighting_power_density_w_per_m2", 5, 0.001)
+	assertMetricClose(t, summary, "total_equipment_power_w", 2000, 0.001)
+	assertMetricClose(t, summary, "average_equipment_power_density_w_per_m2", 10, 0.001)
+	assertMetricClose(t, summary, "total_people", 10, 0.001)
+	assertMetricClose(t, summary, "people_density_per_100m2", 5, 0.001)
+	assertMetricClose(t, summary, "model_operating_hours_h", 8760, 0.001)
+	assertMetricClose(t, summary, "average_schedule_operating_hours_h", 6570, 0.001)
+
+	if got := metricByID(t, summary, "supported_schedule_count").Value; got != 2 {
+		t.Fatalf("supported schedule count = %#v, want 2", got)
+	}
+	if got := metricByID(t, summary, "conditioned_zone_count").Value; got != 1 {
+		t.Fatalf("conditioned zone count = %#v, want 1", got)
+	}
+	if got := metricByID(t, summary, "hvac_node_connection_count").Value; got != 1 {
+		t.Fatalf("hvac node connection count = %#v, want 1", got)
+	}
+
+	jsonText, err := ExportSummaryJSON(summary)
+	if err != nil {
+		t.Fatalf("ExportSummaryJSON() error = %v", err)
+	}
+	var exported map[string]map[string]struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Value  any    `json:"value"`
+		Unit   string `json:"unit"`
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal([]byte(jsonText), &exported); err != nil {
+		t.Fatalf("summary JSON did not parse: %v\n%s", err, jsonText)
+	}
+	if exported["Geometry & Areas"]["gross_floor_area_m2"].Name != "Gross floor area" {
+		t.Fatalf("summary JSON missing categorized gross floor area metric: %#v", exported["Geometry & Areas"]["gross_floor_area_m2"])
+	}
+
+	csvText, err := ExportSummaryCSV(summary)
+	if err != nil {
+		t.Fatalf("ExportSummaryCSV() error = %v", err)
+	}
+	records, err := csv.NewReader(strings.NewReader(csvText)).ReadAll()
+	if err != nil {
+		t.Fatalf("summary CSV did not parse: %v\n%s", err, csvText)
+	}
+	if len(records) != 51 {
+		t.Fatalf("CSV rows = %d, want 51", len(records))
+	}
+	if len(records[0]) != 2 || records[0][0] != "name" || records[0][1] != "value" {
+		t.Fatalf("CSV header = %#v, want name,value", records[0])
+	}
+	for index, record := range records {
+		if len(record) != 2 {
+			t.Fatalf("CSV row %d has %d columns, want 2: %#v", index, len(record), record)
+		}
+	}
+}
+
+func countMetrics(summary SummaryReport) int {
+	count := 0
+	for _, category := range summary.Categories {
+		count += len(category.Metrics)
+	}
+	return count
+}
+
+func metricByID(t *testing.T, summary SummaryReport, id string) SummaryMetric {
+	t.Helper()
+	for _, category := range summary.Categories {
+		for _, metric := range category.Metrics {
+			if metric.ID == id {
+				return metric
+			}
+		}
+	}
+	t.Fatalf("metric %q not found", id)
+	return SummaryMetric{}
+}
+
+func assertMetricClose(t *testing.T, summary SummaryReport, id string, want float64, tolerance float64) {
+	t.Helper()
+	metric := metricByID(t, summary, id)
+	got, ok := metric.Value.(float64)
+	if !ok {
+		t.Fatalf("metric %s value = %#v (%T), want float64", id, metric.Value, metric.Value)
+	}
+	if math.Abs(got-want) > tolerance {
+		t.Fatalf("metric %s = %v, want %v +/- %v", id, got, want, tolerance)
+	}
+}

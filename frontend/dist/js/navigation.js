@@ -1,6 +1,5 @@
 import { elements, setStatus, state } from "./state.js";
 import { analyze } from "./actions.js";
-import { renderZoneDetails, renderZoneViz } from "./analysis-views.js";
 import { renderFieldTable, renderInputViews, switchInputView } from "./input-views.js";
 
 function currentInputViewElement() {
@@ -101,28 +100,10 @@ export async function focusInputObject(target) {
   setStatus("Input object located", "ok");
 }
 
-export function selectZone(zoneName) {
-  state.selectedZoneName = zoneName;
-  renderZoneViz(state.report?.zones || []);
-  renderZoneDetails(state.report?.zones || []);
-}
-
 export function handleAnalysisActivation(element) {
   if (!element) {
     return;
   }
-  const zoneTab = element.closest("[data-zone-tab]");
-  if (zoneTab) {
-    state.selectedZoneTab = zoneTab.dataset.zoneTab;
-    renderZoneDetails(state.report?.zones || []);
-    return;
-  }
-
-  const zoneTarget = element.closest("[data-zone-name]");
-  if (zoneTarget) {
-    selectZone(zoneTarget.dataset.zoneName);
-  }
-
   const jumpTarget = element.closest("[data-jump-object-index], [data-jump-object-type]");
   if (jumpTarget) {
     focusInputObject({
@@ -130,14 +111,4 @@ export function handleAnalysisActivation(element) {
       objectType: jumpTarget.dataset.jumpObjectType,
     });
   }
-}
-
-export function switchTab(tabName) {
-  state.activeTab = tabName;
-  elements.tabs.forEach((tab) => {
-    tab.classList.toggle("active", tab.dataset.tab === tabName);
-  });
-  elements.panes.forEach((pane) => {
-    pane.classList.toggle("active", pane.id === `${tabName}Pane`);
-  });
 }

@@ -74,6 +74,28 @@ export function downloadText() {
   URL.revokeObjectURL(url);
 }
 
+export async function exportSummary(format) {
+  const api = backend();
+  if (!api || typeof api.ExportSummaryText !== "function") {
+    setStatus("Backend unavailable", "warn");
+    return;
+  }
+
+  try {
+    const result = await api.ExportSummaryText(elements.idfInput.value, format);
+    const blob = new Blob([result.text], { type: result.mime || "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = result.filename || `summary.${format}`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setStatus(`Summary ${String(format).toUpperCase()} exported`, "ok");
+  } catch (error) {
+    setStatus(error.message || String(error), "error");
+  }
+}
+
 export function openGuide() {
   window.location.assign("./guide.html");
 }
@@ -83,4 +105,3 @@ export function closeToolMenu() {
     elements.toolMenu.open = false;
   }
 }
-
