@@ -19,10 +19,15 @@
             <input id="fileInput" type="file" accept=".idf,.imf,.epjson,.json,.txt" />
           </label>
           <button id="analyzeButton" type="button">Analyze</button>
-          <button id="removeUnusedButton" type="button">Remove unused</button>
-          <button id="toIDFButton" type="button">To IDF</button>
-          <button id="toEPJSONButton" type="button">To epJSON</button>
           <button id="downloadButton" type="button">Download</button>
+          <details class="tool-menu">
+            <summary>Tools</summary>
+            <div class="tool-menu-popover">
+              <button id="toEPJSONButton" type="button">To epJSON</button>
+              <button id="toIDFButton" type="button">To IDF</button>
+              <button id="removeUnusedButton" type="button">Remove unused</button>
+            </div>
+          </details>
           <button id="guideButton" type="button">Guide</button>
         </div>
       </header>
@@ -77,7 +82,6 @@
         <section class="analysis-panel" aria-label="Analysis results">
           <nav class="tabs" aria-label="Result tabs">
             <button class="tab active" data-tab="summary" type="button">Summary</button>
-            <button class="tab" data-tab="objects" type="button">Objects</button>
             <button class="tab" data-tab="schedules" type="button">Schedules</button>
             <button class="tab" data-tab="systems" type="button">Systems</button>
           </nav>
@@ -101,17 +105,8 @@
                   <h2>Zones</h2>
                 </div>
                 <svg id="zoneViz" class="viz" role="img" aria-label="Zone visualization"></svg>
+                <div id="zoneDetails" class="zone-details"></div>
               </section>
-            </div>
-          </div>
-
-          <div class="tab-pane" id="objectsPane">
-            <div class="panel">
-              <div class="panel-head">
-                <h2>Objects</h2>
-                <input id="objectFilter" type="search" placeholder="Filter objects" />
-              </div>
-              <div id="objectTable" class="table"></div>
             </div>
           </div>
 

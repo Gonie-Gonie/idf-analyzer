@@ -62,19 +62,15 @@
           <div class="guide-grid">
             <article>
               <h3>Summary</h3>
-              <p>Object counts, type counts, schedules, unused candidates, and zone cards.</p>
-            </article>
-            <article>
-              <h3>Objects</h3>
-              <p>Searchable object list with index, type, name, and field count.</p>
+              <p>Object counts, type counts, and zone cards with surface and related-object detail tabs.</p>
             </article>
             <article>
               <h3>Schedules</h3>
-              <p>Schedule objects and conservative unused named-object candidates.</p>
+              <p>Schedule objects and conservative unused named-object candidates. Click rows to locate the source object in the input view.</p>
             </article>
             <article>
               <h3>Systems</h3>
-              <p>Simple node-to-node HVAC connection diagrams from inlet and outlet node fields.</p>
+              <p>Simple node-to-node HVAC connection diagrams from inlet and outlet node fields. Click rows or paths to locate the source object.</p>
             </article>
           </div>
         </section>
@@ -83,8 +79,8 @@
           <h2>Edit, Convert, and Export</h2>
           <p>
             Remove unused currently targets schedule, material, construction, curve, and table objects
-            that are not referenced by other fields. To IDF and To epJSON convert the current text.
-            Download exports the current editor text.
+            that are not referenced by other fields. To IDF, To epJSON, and Remove unused are grouped
+            under Tools. Download exports the current editor text.
           </p>
         </section>
 
@@ -112,6 +108,7 @@
         <section id="updates" class="guide-section">
           <h2>Update Log</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-29</strong> Reorganized the toolbar, removed the Objects result tab, added analysis-to-input object jumps, and expanded zone details with surface and related-object lists.</li>
             <li><strong>2026-05-29</strong> Restyled JSON structured view as an epJSON-shaped tree with quoted keys, braces, colons, and literal values.</li>
             <li><strong>2026-05-29</strong> Flattened the JSON structured view so IDF objects start at the top of the tree and use smaller indentation.</li>
             <li><strong>2026-05-29</strong> Improved input view readability with semantic JSON tree labels, shallower indentation, fully expanded Text/Table groups, and steadier table row headers.</li>

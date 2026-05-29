@@ -36,9 +36,11 @@ type ScheduleInfo struct {
 }
 
 type ZoneInfo struct {
-	Index        int    `json:"index"`
-	Name         string `json:"name"`
-	SurfaceCount int    `json:"surfaceCount"`
+	Index          int             `json:"index"`
+	Name           string          `json:"name"`
+	SurfaceCount   int             `json:"surfaceCount"`
+	Surfaces       []RelatedObject `json:"surfaces,omitempty"`
+	RelatedObjects []RelatedObject `json:"relatedObjects,omitempty"`
 }
 
 type HVACConnection struct {
@@ -55,10 +57,18 @@ type NamedObject struct {
 	Name  string `json:"name"`
 }
 
+type RelatedObject struct {
+	Index int    `json:"index"`
+	Type  string `json:"type"`
+	Name  string `json:"name,omitempty"`
+	Role  string `json:"role,omitempty"`
+}
+
 func Analyze(doc Document) Report {
 	report := Report{ObjectCount: len(doc.Objects)}
 	typeCounts := map[string]int{}
-	zoneSurfaces := map[string]int{}
+	zoneSurfaces := map[string][]RelatedObject{}
+	zoneRelatedObjects := map[string][]RelatedObject{}
 
 	for _, obj := range doc.Objects {
 		typeCounts[obj.Type]++
@@ -85,8 +95,12 @@ func Analyze(doc Document) Report {
 		}
 
 		if strings.EqualFold(obj.Type, "BuildingSurface:Detailed") {
-			if zoneName := findFieldByComment(obj, "zone name"); zoneName != "" {
-				zoneSurfaces[normalizeName(zoneName)]++
+			if zoneName := findFieldByCommentWords(obj, "zone", "name"); zoneName != "" {
+				zoneSurfaces[normalizeName(zoneName)] = append(zoneSurfaces[normalizeName(zoneName)], relatedObject(obj, "surface"))
+			}
+		} else if !strings.EqualFold(obj.Type, "Zone") {
+			if zoneName := findFieldByCommentWords(obj, "zone", "name"); zoneName != "" {
+				zoneRelatedObjects[normalizeName(zoneName)] = append(zoneRelatedObjects[normalizeName(zoneName)], relatedObject(obj, "zone reference"))
 			}
 		}
 
@@ -94,7 +108,10 @@ func Analyze(doc Document) Report {
 	}
 
 	for i := range report.Zones {
-		report.Zones[i].SurfaceCount = zoneSurfaces[normalizeName(report.Zones[i].Name)]
+		zoneKey := normalizeName(report.Zones[i].Name)
+		report.Zones[i].Surfaces = zoneSurfaces[zoneKey]
+		report.Zones[i].SurfaceCount = len(report.Zones[i].Surfaces)
+		report.Zones[i].RelatedObjects = zoneRelatedObjects[zoneKey]
 	}
 
 	for objectType, count := range typeCounts {
@@ -159,6 +176,32 @@ func findFieldByComment(obj Object, commentNeedle string) string {
 		}
 	}
 	return ""
+}
+
+func findFieldByCommentWords(obj Object, words ...string) string {
+	for _, field := range obj.Fields {
+		comment := strings.ToLower(field.Comment)
+		matched := true
+		for _, word := range words {
+			if !strings.Contains(comment, strings.ToLower(word)) {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return strings.TrimSpace(field.Value)
+		}
+	}
+	return ""
+}
+
+func relatedObject(obj Object, role string) RelatedObject {
+	return RelatedObject{
+		Index: obj.Index,
+		Type:  obj.Type,
+		Name:  objectName(obj),
+		Role:  role,
+	}
 }
 
 type nodeField struct {

@@ -11,6 +11,7 @@ Lightweight desktop tooling for EnergyPlus IDF files, built with Go and Wails us
 - Convert IDF to epJSON and epJSON/JSON to IDF.
 - View input as editable text, structured JSON, or a spreadsheet-style field table.
 - Summarize object types, schedules, zones, unused named objects, and simple HVAC node connections.
+- Jump from summary, schedule, unused, zone, and system analysis items to the matching object in the active input view.
 - Edit field values and remove unused named objects through the Go API.
 - Run the frontend without a Node/npm build chain.
 
@@ -68,6 +69,13 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 - JSON: epJSON-shaped tree first, using object type keys, object name keys, JSON punctuation, and compact indentation, editable epJSON text below.
 - Table: fully expanded IDF object type tables with fixed row headers plus global and per-table row/column orientation controls.
 - Workspace: resizable input and analysis panes with separate scroll areas.
+
+## Analysis Navigation
+
+- Result tabs are Summary, Schedules, and Systems.
+- Summary zone cards expose surface and related-object lists.
+- Clickable analysis rows and system paths locate and highlight the matching object in Text, JSON, or Table view.
+- Conversion and cleanup commands are grouped under the top toolbar Tools menu.
 
 ## Project Layout
 

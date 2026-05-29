@@ -291,6 +291,8 @@ const state = {
   lastAnalyzedText: "",
   tableOrientation: "objects",
   tableGroupOrientations: new Map(),
+  selectedZoneName: "",
+  selectedZoneTab: "surfaces",
 };
 
 const elements = {
@@ -302,6 +304,7 @@ const elements = {
   toEPJSONButton: document.querySelector("#toEPJSONButton"),
   downloadButton: document.querySelector("#downloadButton"),
   guideButton: document.querySelector("#guideButton"),
+  toolMenu: document.querySelector(".tool-menu"),
   idfInput: document.querySelector("#idfInput"),
   jsonTextInput: document.querySelector("#jsonTextInput"),
   applyJSONButton: document.querySelector("#applyJSONButton"),
@@ -316,15 +319,15 @@ const elements = {
   workspaceSplitter: document.querySelector("#workspaceSplitter"),
   inputViewButtons: document.querySelectorAll(".view-tab"),
   inputViews: document.querySelectorAll(".input-view"),
+  analysisPanel: document.querySelector(".analysis-panel"),
   objectCount: document.querySelector("#objectCount"),
   typeCount: document.querySelector("#typeCount"),
   scheduleCount: document.querySelector("#scheduleCount"),
   unusedCount: document.querySelector("#unusedCount"),
   typeList: document.querySelector("#typeList"),
   zoneViz: document.querySelector("#zoneViz"),
+  zoneDetails: document.querySelector("#zoneDetails"),
   systemViz: document.querySelector("#systemViz"),
-  objectTable: document.querySelector("#objectTable"),
-  objectFilter: document.querySelector("#objectFilter"),
   scheduleList: document.querySelector("#scheduleList"),
   unusedList: document.querySelector("#unusedList"),
   connectionList: document.querySelector("#connectionList"),
@@ -438,8 +441,8 @@ function renderReport() {
   elements.unusedCount.textContent = report.unusedObjects?.length ?? 0;
 
   renderTypeList(report.typeCounts || []);
+  renderZoneDetails(report.zones || []);
   renderZoneViz(report.zones || []);
-  renderObjectTable(report.objects || []);
   renderScheduleList(report.schedules || []);
   renderUnusedList(report.unusedObjects || []);
   renderSystemViz(report.hvacConnections || []);
@@ -453,7 +456,7 @@ function renderEmpty() {
   elements.scheduleCount.textContent = "0";
   elements.unusedCount.textContent = "0";
   elements.typeList.innerHTML = `<div class="empty">No analysis yet</div>`;
-  elements.objectTable.innerHTML = `<div class="empty">No objects yet</div>`;
+  elements.zoneDetails.innerHTML = `<div class="empty">No zone details yet</div>`;
   elements.scheduleList.innerHTML = `<div class="empty">No schedules yet</div>`;
   elements.unusedList.innerHTML = `<div class="empty">No unused objects yet</div>`;
   elements.connectionList.innerHTML = `<div class="empty">No connections yet</div>`;
@@ -471,7 +474,7 @@ function renderTypeList(typeCounts) {
     ? typeCounts
         .map(
           (item) => `
-            <div class="list-row">
+            <div class="list-row navigable-row" data-jump-object-type="${escapeHTML(item.type)}" role="button" tabindex="0">
               <span class="row-main" title="${escapeHTML(item.type)}">${escapeHTML(item.type)}</span>
               <span class="badge">${escapeHTML(item.count)}</span>
             </div>`,
@@ -480,42 +483,12 @@ function renderTypeList(typeCounts) {
     : `<div class="empty">No object types</div>`;
 }
 
-function renderObjectTable(objects) {
-  const filter = elements.objectFilter.value.trim().toLowerCase();
-  const filtered = objects.filter((object) => {
-    const haystack = `${object.index} ${object.type} ${object.name || ""}`.toLowerCase();
-    return haystack.includes(filter);
-  });
-
-  const rows = filtered
-    .map(
-      (object) => `
-        <div class="table-row">
-          <span class="row-sub">#${escapeHTML(object.index)}</span>
-          <span class="row-main" title="${escapeHTML(object.type)}">${escapeHTML(object.type)}</span>
-          <span class="row-main" title="${escapeHTML(object.name || "")}">${escapeHTML(object.name || "-")}</span>
-          <span class="badge">${escapeHTML(object.fieldCount)}</span>
-        </div>`,
-    )
-    .join("");
-
-  elements.objectTable.innerHTML = `
-    <div class="table-row table-head">
-      <span>Index</span>
-      <span>Type</span>
-      <span>Name</span>
-      <span>Fields</span>
-    </div>
-    ${rows || `<div class="empty">No matching objects</div>`}
-  `;
-}
-
 function renderScheduleList(schedules) {
   elements.scheduleList.innerHTML = schedules.length
     ? schedules
         .map(
           (schedule) => `
-            <div class="list-row">
+            <div class="list-row navigable-row" data-jump-object-index="${escapeHTML(schedule.index)}" data-jump-object-type="${escapeHTML(schedule.type)}" role="button" tabindex="0">
               <span>
                 <span class="row-main" title="${escapeHTML(schedule.name)}">${escapeHTML(schedule.name)}</span>
                 <span class="row-sub">${escapeHTML(schedule.type)}</span>
@@ -532,7 +505,7 @@ function renderUnusedList(unusedObjects) {
     ? unusedObjects
         .map(
           (object) => `
-            <div class="list-row">
+            <div class="list-row navigable-row" data-jump-object-index="${escapeHTML(object.index)}" data-jump-object-type="${escapeHTML(object.type)}" role="button" tabindex="0">
               <span>
                 <span class="row-main" title="${escapeHTML(object.name)}">${escapeHTML(object.name)}</span>
                 <span class="row-sub">${escapeHTML(object.type)}</span>
@@ -549,7 +522,7 @@ function renderConnectionList(connections) {
     ? connections
         .map(
           (connection) => `
-            <div class="list-row">
+            <div class="list-row navigable-row" data-jump-object-index="${escapeHTML(connection.objectIndex)}" data-jump-object-type="${escapeHTML(connection.objectType)}" role="button" tabindex="0">
               <span>
                 <span class="row-main">${escapeHTML(connection.fromNode)} -> ${escapeHTML(connection.toNode)}</span>
                 <span class="row-sub">${escapeHTML(connection.objectType)} ${escapeHTML(connection.objectName || "")}</span>
@@ -611,7 +584,7 @@ function renderFormattedTextView() {
       ${groups
         .map(
           (group) => `
-            <details class="json-group" open>
+            <details class="json-group" data-object-type="${escapeHTML(group.type)}" open>
               <summary>
                 <span>${escapeHTML(group.type)}</span>
                 <span class="badge">${escapeHTML(group.objects.length)}</span>
@@ -672,7 +645,7 @@ function renderJSONObjectsTree(objects) {
 
 function renderJSONTypeGroup(group, isLastGroup) {
   return `
-    <details class="json-node json-type-group" open>
+    <details class="json-node json-type-group" data-object-type="${escapeHTML(group.type)}" open>
       <summary>
         <span class="json-line"><span class="json-key">${formatJSONKey(group.type)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="badge">${escapeHTML(group.objects.length)} objects</span>
@@ -693,7 +666,7 @@ function renderJSONInstance(object, isLastObject) {
   const objectName = object.name || `${objectType} ${fallbackOrdinal}`;
   const sourceLabel = sourceIndex === "" ? "" : `<span class="row-sub">#${escapeHTML(sourceIndex)}</span>`;
   return `
-    <details class="json-node json-instance" open>
+    <details class="json-node json-instance" data-object-index="${escapeHTML(sourceIndex)}" data-object-type="${escapeHTML(objectType)}" open>
       <summary>
         <span class="json-line" title="${escapeHTML(objectName)}"><span class="json-key">${formatJSONKey(objectName)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="json-summary-meta">
@@ -725,7 +698,7 @@ function renderJSONFieldRow(field, index, isLastField) {
 function renderFormattedObject(object) {
   const fields = object.fields || [];
   return `
-    <section class="json-object">
+    <section class="json-object" data-object-index="${escapeHTML(object.sourceIndex ?? "")}" data-object-type="${escapeHTML(object.type || "")}">
       <div class="json-object-head">
         <strong title="${escapeHTML(object.name || "")}">${escapeHTML(object.name || "(unnamed)")}</strong>
         <span class="row-sub">#${escapeHTML(object.sourceIndex ?? "")}</span>
@@ -897,7 +870,7 @@ function renderObjectTypeTable(group, groupIndex) {
   const columns = buildObjectTypeColumns(group.objects);
   const nextOrientation = orientation === "objects" ? "fields" : "objects";
   return `
-    <details class="object-table-group" open>
+    <details class="object-table-group" data-object-type="${escapeHTML(group.type)}" open>
       <summary>
         <span>${escapeHTML(group.type)}</span>
         <span class="object-table-actions">
@@ -928,7 +901,7 @@ function renderObjectsAsRowsTable(group, columns) {
         ${group.objects
           .map(
             (object) => `
-              <tr>
+              <tr data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}">
                 <td class="sticky-col">#${escapeHTML(object.index)}</td>
                 <td title="${escapeHTML(object.name || "")}">${escapeHTML(object.name || "-")}</td>
                 ${columns.map((column) => renderObjectTypeCell(object, column.index)).join("")}
@@ -949,7 +922,7 @@ function renderFieldsAsRowsTable(group, columns) {
           ${group.objects
             .map(
               (object) => `
-                <th title="${escapeHTML(object.name || "")}">
+                <th title="${escapeHTML(object.name || "")}" data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}">
                   #${escapeHTML(object.index)} ${escapeHTML(object.name || "-")}
                 </th>`,
             )
@@ -993,7 +966,7 @@ function renderObjectTypeCell(object, fieldIndex) {
   const value = field.value || "";
   const label = field.comment || `Field ${fieldIndex + 1}`;
   return `
-    <td title="${escapeHTML(label)}">
+    <td title="${escapeHTML(label)}" data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}">
       <input class="field-value-input" data-object-index="${escapeHTML(object.index)}"
         data-field-index="${escapeHTML(fieldIndex)}" data-original="${escapeHTML(value)}"
         value="${escapeHTML(value)}" />
@@ -1051,15 +1024,68 @@ function renderZoneViz(zones) {
       const x = 24 + col * cellWidth;
       const y = 28 + row * (cellHeight + 18);
       const surfaceText = `${zone.surfaceCount || 0} surfaces`;
+      const selected = state.selectedZoneName === zone.name;
       return `
-        <g>
-          <rect x="${x}" y="${y}" width="${cellWidth - 14}" height="${cellHeight}" rx="6" fill="#e9f5f6" stroke="#007c89" />
+        <g class="zone-card ${selected ? "selected" : ""}" data-zone-name="${escapeHTML(zone.name)}"
+          data-jump-object-index="${escapeHTML(zone.index)}" data-jump-object-type="Zone" role="button" tabindex="0">
+          <rect x="${x}" y="${y}" width="${cellWidth - 14}" height="${cellHeight}" rx="6" fill="${selected ? "#dff1f2" : "#e9f5f6"}" stroke="${selected ? "#005d66" : "#007c89"}" stroke-width="${selected ? "2" : "1"}" />
           <text x="${x + 12}" y="${y + 30}" fill="#18222b" font-size="14" font-weight="700">${escapeHTML(zone.name)}</text>
           <text x="${x + 12}" y="${y + 54}" fill="#60707c" font-size="12">${escapeHTML(surfaceText)}</text>
         </g>`;
     })
     .join("");
   svg.innerHTML = content;
+}
+
+function renderZoneDetails(zones) {
+  if (!zones.length) {
+    state.selectedZoneName = "";
+    elements.zoneDetails.innerHTML = `<div class="empty">No zones</div>`;
+    return;
+  }
+
+  let zone = zones.find((item) => item.name === state.selectedZoneName);
+  if (!zone) {
+    zone = zones[0];
+    state.selectedZoneName = zone.name;
+  }
+
+  const activeTab = state.selectedZoneTab === "related" ? "related" : "surfaces";
+  const surfaces = zone.surfaces || [];
+  const relatedObjects = zone.relatedObjects || [];
+  const items = activeTab === "surfaces" ? surfaces : relatedObjects;
+  const emptyLabel = activeTab === "surfaces" ? "No surfaces linked to this zone" : "No related objects linked to this zone";
+
+  elements.zoneDetails.innerHTML = `
+    <div class="zone-detail-head">
+      <button class="zone-title navigable-row" data-jump-object-index="${escapeHTML(zone.index)}" data-jump-object-type="Zone" type="button">
+        <span>${escapeHTML(zone.name)}</span>
+        <span class="badge">#${escapeHTML(zone.index)}</span>
+      </button>
+      <div class="zone-detail-tabs" role="tablist" aria-label="Zone details">
+        <button class="zone-detail-tab ${activeTab === "surfaces" ? "active" : ""}" data-zone-tab="surfaces" type="button">Surfaces</button>
+        <button class="zone-detail-tab ${activeTab === "related" ? "active" : ""}" data-zone-tab="related" type="button">Related</button>
+      </div>
+    </div>
+    <div class="zone-detail-list">
+      ${
+        items.length
+          ? items
+              .map(
+                (item) => `
+                  <div class="list-row navigable-row" data-jump-object-index="${escapeHTML(item.index)}" data-jump-object-type="${escapeHTML(item.type)}" role="button" tabindex="0">
+                    <span>
+                      <span class="row-main" title="${escapeHTML(item.name || item.type)}">${escapeHTML(item.name || item.type)}</span>
+                      <span class="row-sub">${escapeHTML(item.type)}${item.role ? ` - ${escapeHTML(item.role)}` : ""}</span>
+                    </span>
+                    <span class="badge">#${escapeHTML(item.index)}</span>
+                  </div>`,
+              )
+              .join("")
+          : `<div class="empty">${emptyLabel}</div>`
+      }
+    </div>
+  `;
 }
 
 function renderSystemViz(connections) {
@@ -1085,8 +1111,11 @@ function renderSystemViz(connections) {
       const x2 = nodeX.get(connection.toNode);
       const mid = (x1 + x2) / 2;
       return `
-        <path d="M ${x1} ${y} C ${mid} ${y - 52}, ${mid} ${y - 52}, ${x2} ${y}"
-          fill="none" stroke="#a85f00" stroke-width="2" marker-end="url(#arrow)" />`;
+        <path class="system-link" data-jump-object-index="${escapeHTML(connection.objectIndex)}" data-jump-object-type="${escapeHTML(connection.objectType)}"
+          d="M ${x1} ${y} C ${mid} ${y - 52}, ${mid} ${y - 52}, ${x2} ${y}"
+          fill="none" stroke="#a85f00" stroke-width="2" marker-end="url(#arrow)">
+          <title>${escapeHTML(connection.objectType)} ${escapeHTML(connection.objectName || "")}</title>
+        </path>`;
     })
     .join("");
 
@@ -1125,6 +1154,121 @@ function downloadText() {
 
 function openGuide() {
   window.location.assign("./guide.html");
+}
+
+function closeToolMenu() {
+  if (elements.toolMenu) {
+    elements.toolMenu.open = false;
+  }
+}
+
+function currentInputViewElement() {
+  return document.querySelector(`#${state.activeInputView}InputView`);
+}
+
+function findInputTarget(target) {
+  const view = currentInputViewElement();
+  if (!view) {
+    return null;
+  }
+
+  const objectIndex = target.objectIndex === undefined || target.objectIndex === null ? "" : String(target.objectIndex);
+  if (objectIndex !== "") {
+    const byIndex = [...view.querySelectorAll("[data-object-index]")].find(
+      (element) => element.dataset.objectIndex === objectIndex,
+    );
+    if (byIndex) {
+      return byIndex;
+    }
+  }
+
+  if (target.objectType) {
+    return [...view.querySelectorAll("[data-object-type]")].find(
+      (element) => element.dataset.objectType === target.objectType,
+    );
+  }
+  return null;
+}
+
+function expandDetailsFor(element) {
+  let current = element;
+  while (current) {
+    if (current.tagName && current.tagName.toLowerCase() === "details") {
+      current.open = true;
+    }
+    current = current.parentElement;
+  }
+}
+
+function highlightInputTarget(element) {
+  element.classList.remove("input-jump-highlight");
+  // Force the class restart so repeated jumps to the same object are visible.
+  void element.offsetWidth;
+  element.classList.add("input-jump-highlight");
+  window.setTimeout(() => element.classList.remove("input-jump-highlight"), 1800);
+}
+
+async function focusInputObject(target) {
+  const hasObjectIndex = target.objectIndex !== undefined && target.objectIndex !== null && String(target.objectIndex) !== "";
+  if (!hasObjectIndex && !target.objectType) {
+    return;
+  }
+  if (state.lastAnalyzedText !== elements.idfInput.value) {
+    await analyze();
+  } else {
+    renderInputViews();
+  }
+
+  let element = findInputTarget(target);
+  if (!element && state.activeInputView === "table" && elements.fieldFilter.value) {
+    elements.fieldFilter.value = "";
+    renderFieldTable();
+    element = findInputTarget(target);
+  }
+  if (!element && state.activeInputView !== "text") {
+    await switchInputView("text");
+    element = findInputTarget(target);
+  }
+  if (!element) {
+    setStatus("Object target not found in input view", "warn");
+    return;
+  }
+
+  expandDetailsFor(element);
+  element.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
+  highlightInputTarget(element);
+  setStatus("Input object located", "ok");
+}
+
+function selectZone(zoneName) {
+  state.selectedZoneName = zoneName;
+  renderZoneViz(state.report?.zones || []);
+  renderZoneDetails(state.report?.zones || []);
+}
+
+function handleAnalysisActivation(element) {
+  if (!element) {
+    return;
+  }
+  const zoneTab = element.closest("[data-zone-tab]");
+  if (zoneTab) {
+    state.selectedZoneTab = zoneTab.dataset.zoneTab;
+    renderZoneDetails(state.report?.zones || []);
+    return;
+  }
+
+  const zoneTarget = element.closest("[data-zone-name]");
+  if (zoneTarget) {
+    selectZone(zoneTarget.dataset.zoneName);
+  }
+
+  const jumpTarget = element.closest("[data-jump-object-index], [data-jump-object-type]");
+  if (jumpTarget) {
+    focusInputObject({
+      objectIndex: jumpTarget.dataset.jumpObjectIndex,
+      objectType: jumpTarget.dataset.jumpObjectType,
+    });
+  }
 }
 
 function switchTab(tabName) {
@@ -1230,9 +1374,18 @@ elements.fileInput.addEventListener("change", async (event) => {
 });
 
 elements.analyzeButton.addEventListener("click", analyze);
-elements.removeUnusedButton.addEventListener("click", removeUnused);
-elements.toIDFButton.addEventListener("click", () => convertInput("idf"));
-elements.toEPJSONButton.addEventListener("click", () => convertInput("epjson"));
+elements.removeUnusedButton.addEventListener("click", async () => {
+  closeToolMenu();
+  await removeUnused();
+});
+elements.toIDFButton.addEventListener("click", async () => {
+  closeToolMenu();
+  await convertInput("idf");
+});
+elements.toEPJSONButton.addEventListener("click", async () => {
+  closeToolMenu();
+  await convertInput("epjson");
+});
 elements.downloadButton.addEventListener("click", downloadText);
 elements.guideButton.addEventListener("click", openGuide);
 elements.applyJSONButton.addEventListener("click", applyJSONText);
@@ -1243,11 +1396,6 @@ elements.idfInput.addEventListener("input", () => {
 elements.jsonTextInput.addEventListener("input", () => {
   state.lastAnalyzedText = "";
 });
-elements.objectFilter.addEventListener("input", () => {
-  if (state.report) {
-    renderObjectTable(state.report.objects || []);
-  }
-});
 elements.fieldFilter.addEventListener("input", renderFieldTable);
 elements.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
@@ -1257,6 +1405,18 @@ elements.inputViewButtons.forEach((button) => {
 });
 elements.tableOrientationButtons.forEach((button) => {
   button.addEventListener("click", () => setTableOrientation(button.dataset.tableOrientation));
+});
+elements.analysisPanel.addEventListener("click", (event) => handleAnalysisActivation(event.target));
+elements.analysisPanel.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  const target = event.target.closest(".navigable-row, .zone-card, [data-zone-tab]");
+  if (!target) {
+    return;
+  }
+  event.preventDefault();
+  handleAnalysisActivation(target);
 });
 
 initializeWorkspaceSplitter();

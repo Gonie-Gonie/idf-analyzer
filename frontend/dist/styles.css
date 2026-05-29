@@ -60,6 +60,7 @@ button:hover,
 
 button:focus-visible,
 .file-button:focus-within,
+.tool-menu summary:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 .toolbar-link:focus-visible {
@@ -109,16 +110,63 @@ textarea:focus-visible,
   display: none;
 }
 
-#analyzeButton,
-#toEPJSONButton {
+#analyzeButton {
   background: var(--teal);
   border-color: var(--teal);
   color: #ffffff;
 }
 
-#analyzeButton:hover,
-#toEPJSONButton:hover {
+#analyzeButton:hover {
   background: var(--teal-dark);
+}
+
+.tool-menu {
+  position: relative;
+}
+
+.tool-menu summary {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  list-style: none;
+}
+
+.tool-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-menu[open] summary,
+.tool-menu summary:hover {
+  border-color: var(--teal);
+}
+
+.tool-menu-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  width: 180px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 24px rgba(24, 34, 43, 0.14);
+  padding: 6px;
+  display: grid;
+  gap: 4px;
+}
+
+.tool-menu-popover button {
+  width: 100%;
+  justify-content: flex-start;
 }
 
 .workspace {
@@ -756,6 +804,26 @@ textarea {
   border-bottom: 0;
 }
 
+.navigable-row {
+  cursor: pointer;
+}
+
+.navigable-row:hover {
+  background: #f3fafb;
+}
+
+.input-jump-highlight {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+  background: #fff7e6;
+}
+
+tr.input-jump-highlight > td,
+td.input-jump-highlight,
+th.input-jump-highlight {
+  background: #fff7e6;
+}
+
 .row-main {
   min-width: 0;
   overflow: hidden;
@@ -781,40 +849,72 @@ textarea {
   color: var(--amber);
 }
 
-#objectFilter {
-  width: min(220px, 48vw);
-  min-height: 32px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 0 10px;
-}
-
-.table {
-  max-height: calc(100vh - 178px);
-  overflow: auto;
-}
-
-.table-row {
-  grid-template-columns: 74px minmax(140px, 1fr) minmax(120px, 1fr) 76px;
-  min-height: 38px;
-  padding: 0 12px;
-}
-
-.table-head {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-2);
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
 .viz {
   width: 100%;
   height: 260px;
   display: block;
   background: #fbfcfd;
+}
+
+.zone-card {
+  cursor: pointer;
+}
+
+.zone-card:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.zone-details {
+  border-top: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.zone-detail-head {
+  min-height: 42px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.zone-title {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  justify-content: flex-start;
+  font-weight: 700;
+}
+
+.zone-title span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zone-detail-tabs {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.zone-detail-tab {
+  min-height: 28px;
+  padding: 0 9px;
+  color: var(--muted);
+}
+
+.zone-detail-tab.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #ffffff;
+}
+
+.zone-detail-list {
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px 10px;
 }
 
 .system-viz {
@@ -823,6 +923,10 @@ textarea {
   display: block;
   border-bottom: 1px solid var(--line);
   background: #fbfcfd;
+}
+
+.system-link {
+  cursor: pointer;
 }
 
 .empty {

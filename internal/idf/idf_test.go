@@ -47,6 +47,33 @@ Fan:ConstantVolume,
   Air Outlet Node;          !- Air Outlet Node Name
 `
 
+const zoneDetailsIDF = `
+Zone,
+  Office;                   !- Name
+
+BuildingSurface:Detailed,
+  Office Floor,             !- Name
+  Floor,                    !- Surface Type
+  Office,                   !- Zone Name
+  ,                         !- Outside Boundary Condition
+  ,                         !- Outside Boundary Condition Object
+  NoSun,                    !- Sun Exposure
+  NoWind,                   !- Wind Exposure
+  0.5,                      !- View Factor to Ground
+  4,                        !- Number of Vertices
+  0, 0, 0,
+  10, 0, 0,
+  10, 10, 0,
+  0, 10, 0;
+
+Lights,
+  Office Lights,            !- Name
+  Office,                   !- Zone or ZoneList Name
+  AlwaysOn,                 !- Schedule Name
+  LightingLevel,            !- Design Level Calculation Method
+  500;                      !- Lighting Level
+`
+
 func TestParseKeepsFieldComments(t *testing.T) {
 	doc, err := Parse(sampleIDF)
 	if err != nil {
@@ -88,6 +115,28 @@ func TestAnalyzeFindsSchedulesConnectionsAndUnusedObjects(t *testing.T) {
 	}
 	if report.UnusedObjects[0].Name != "UnusedSchedule" {
 		t.Fatalf("unused name = %q, want UnusedSchedule", report.UnusedObjects[0].Name)
+	}
+}
+
+func TestAnalyzeBuildsZoneDetails(t *testing.T) {
+	doc, err := Parse(zoneDetailsIDF)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	report := Analyze(doc)
+
+	if len(report.Zones) != 1 {
+		t.Fatalf("zone count = %d, want 1", len(report.Zones))
+	}
+	zone := report.Zones[0]
+	if zone.SurfaceCount != 1 || len(zone.Surfaces) != 1 {
+		t.Fatalf("zone surfaces = %#v, want one surface", zone.Surfaces)
+	}
+	if zone.Surfaces[0].Name != "Office Floor" {
+		t.Fatalf("surface name = %q, want Office Floor", zone.Surfaces[0].Name)
+	}
+	if len(zone.RelatedObjects) != 1 || zone.RelatedObjects[0].Name != "Office Lights" {
+		t.Fatalf("related objects = %#v, want Office Lights", zone.RelatedObjects)
 	}
 }
 
