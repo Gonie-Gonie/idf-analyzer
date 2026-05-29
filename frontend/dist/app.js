@@ -643,7 +643,46 @@ function renderJSONView() {
       <span class="badge">Version ${escapeHTML(versionLabel)}</span>
       <span class="badge">${escapeHTML(model.objects.length)} objects</span>
     </div>
-    <div class="json-tree primary-tree">${renderJSONTree(model, 0, "model")}</div>
+    <div class="json-tree primary-tree json-object-tree">${renderJSONObjectsTree(model.objects)}</div>
+  `;
+}
+
+function renderJSONObjectsTree(objects) {
+  if (!objects.length) {
+    return `<div class="empty">No objects</div>`;
+  }
+  return objects.map(renderJSONModelObject).join("");
+}
+
+function renderJSONModelObject(object) {
+  const fields = object.fields || [];
+  const objectType = object.type || "Object";
+  const objectLabel = object.name ? `${objectType} - ${object.name}` : objectType;
+  const sourceIndex = object.sourceIndex ?? object.index ?? "";
+  const sourceLabel = sourceIndex === "" ? "" : `<span class="row-sub">#${escapeHTML(sourceIndex)}</span>`;
+  return `
+    <details class="json-node json-model-object" open>
+      <summary>
+        <span title="${escapeHTML(objectLabel)}">${escapeHTML(objectLabel)}</span>
+        <span class="json-summary-meta">
+          ${sourceLabel}
+          <span class="badge">${escapeHTML(fields.length)} fields</span>
+        </span>
+      </summary>
+      <ol>
+        ${fields
+          .map(
+            (field, index) => `
+              <li>
+                <span class="json-key" title="${escapeHTML(field.key || field.comment || "")}">
+                  ${escapeHTML(field.key || field.comment || `Field ${index + 1}`)}
+                </span>
+                ${renderJSONTree(field.value, 1, field.key || field.comment || "value")}
+              </li>`,
+          )
+          .join("")}
+      </ol>
+    </details>
   `;
 }
 

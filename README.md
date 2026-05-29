@@ -65,7 +65,7 @@ The app toolbar includes a Guide button that navigates to the bundled `frontend/
 ## Input Views
 
 - Text: fully expanded formatted object summary first, editable raw source below.
-- JSON: compact structured model tree first, using EnergyPlus object type/name and field labels, editable epJSON text below.
+- JSON: compact IDF object tree first, using EnergyPlus object type/name and field labels without extra model-wrapper indentation, editable epJSON text below.
 - Table: fully expanded IDF object type tables with fixed row headers plus global and per-table row/column orientation controls.
 - Workspace: resizable input and analysis panes with separate scroll areas.
 

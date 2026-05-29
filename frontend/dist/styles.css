@@ -382,7 +382,7 @@ textarea {
 }
 
 .json-tree {
-  min-width: 640px;
+  min-width: 560px;
   min-height: 100%;
   overflow: auto;
   padding: 8px;
@@ -410,8 +410,45 @@ textarea {
   font-weight: 600;
 }
 
+.json-object-tree {
+  display: grid;
+  gap: 2px;
+}
+
+.json-model-object {
+  margin: 0;
+  padding: 2px 0 5px;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.json-model-object:last-child {
+  border-bottom: 0;
+}
+
+.json-model-object > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.json-model-object > summary > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.json-summary-meta {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+}
+
 .json-node ol {
-  margin: 1px 0 1px 8px;
+  margin: 1px 0 1px 6px;
   padding: 0;
   list-style: none;
   display: grid;
@@ -420,8 +457,8 @@ textarea {
 
 .json-node li {
   display: grid;
-  grid-template-columns: minmax(72px, 22%) minmax(0, 1fr);
-  gap: 6px;
+  grid-template-columns: minmax(64px, 20%) minmax(0, 1fr);
+  gap: 5px;
   align-items: start;
 }
 
