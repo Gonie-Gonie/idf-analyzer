@@ -9,6 +9,7 @@ Lightweight desktop tooling for EnergyPlus IDF files, built with Go and Wails us
 - Support EnergyPlus 22+ inputs through version detection from `Version`.
 - Parse and write both IDF and epJSON input text.
 - Convert IDF to epJSON and epJSON/JSON to IDF.
+- View input as editable text, structured JSON, or a spreadsheet-style field table.
 - Summarize object types, schedules, zones, unused named objects, and simple HVAC node connections.
 - Edit field values and remove unused named objects through the Go API.
 - Run the frontend without a Node/npm build chain.
@@ -60,6 +61,12 @@ Build artifacts and downloaded runtimes stay ignored by git.
 ## User Guide
 
 The app toolbar includes a Guide button that navigates to the bundled `frontend/dist/guide.html` document inside the Wails WebView. Keep that guide cumulative: whenever a workflow, button, limitation, or developer command changes, update the relevant section and append an entry to its update log.
+
+## Input Views
+
+- Text: editable source input for IDF or epJSON.
+- JSON: grouped object view backed by the cached parsed model and epJSON conversion.
+- Table: field-level table with editable values for spreadsheet-style workflows.
 
 ## Project Layout
 

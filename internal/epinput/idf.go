@@ -34,7 +34,7 @@ func FromIDFDocument(doc idf.Document, format Format) *Model {
 		typeIndex := typeCounts[object.Type]
 		typeCounts[object.Type]++
 		name, remaining := objectInstanceName(object.Type, fields, typeIndex)
-		model.Objects = append(model.Objects, Object{
+		model.Objects = append(model.Objects, InputObject{
 			Type:        object.Type,
 			Name:        name,
 			Fields:      remaining,
@@ -81,7 +81,7 @@ func WriteIDF(model *Model) string {
 	return ToIDFDocument(model).String()
 }
 
-func shouldWriteObjectName(object Object) bool {
+func shouldWriteObjectName(object InputObject) bool {
 	if object.Name == "" || isNamelessObjectType(object.Type) {
 		return false
 	}

@@ -52,7 +52,11 @@ Fan:ConstantVolume,
 
 const state = {
   report: null,
+  model: null,
+  epjsonText: "",
   activeTab: "summary",
+  activeInputView: "text",
+  lastAnalyzedText: "",
 };
 
 const elements = {
@@ -66,6 +70,12 @@ const elements = {
   guideButton: document.querySelector("#guideButton"),
   idfInput: document.querySelector("#idfInput"),
   textStats: document.querySelector("#textStats"),
+  fieldStats: document.querySelector("#fieldStats"),
+  jsonStructuredView: document.querySelector("#jsonStructuredView"),
+  fieldFilter: document.querySelector("#fieldFilter"),
+  fieldTable: document.querySelector("#fieldTable"),
+  inputViewButtons: document.querySelectorAll(".view-tab"),
+  inputViews: document.querySelectorAll(".input-view"),
   objectCount: document.querySelector("#objectCount"),
   typeCount: document.querySelector("#typeCount"),
   scheduleCount: document.querySelector("#scheduleCount"),
@@ -116,8 +126,15 @@ async function analyze() {
   }
 
   try {
-    const report = await api.AnalyzeIDFText(elements.idfInput.value);
-    state.report = report;
+    const text = elements.idfInput.value;
+    const result =
+      typeof api.AnalyzeInputText === "function"
+        ? await api.AnalyzeInputText(text)
+        : { report: await api.AnalyzeIDFText(text), model: null, epjson: "" };
+    state.report = result.report;
+    state.model = result.model || null;
+    state.epjsonText = result.epjson || "";
+    state.lastAnalyzedText = text;
     renderReport();
     setStatus("Analysis complete", "ok");
   } catch (error) {
@@ -135,9 +152,8 @@ async function removeUnused() {
   try {
     const result = await api.RemoveUnusedObjectsText(elements.idfInput.value);
     elements.idfInput.value = result.text;
-    state.report = result.report;
     updateTextStats();
-    renderReport();
+    await analyze();
     setStatus("Unused objects removed", "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
@@ -188,6 +204,7 @@ function renderReport() {
   renderUnusedList(report.unusedObjects || []);
   renderSystemViz(report.hvacConnections || []);
   renderConnectionList(report.hvacConnections || []);
+  renderInputViews();
 }
 
 function renderEmpty() {
@@ -202,6 +219,9 @@ function renderEmpty() {
   elements.connectionList.innerHTML = `<div class="empty">No connections yet</div>`;
   elements.zoneViz.innerHTML = "";
   elements.systemViz.innerHTML = "";
+  elements.jsonStructuredView.innerHTML = `<div class="empty">No structured input yet</div>`;
+  elements.fieldTable.innerHTML = `<div class="empty">No field table yet</div>`;
+  elements.fieldStats.textContent = "0 fields";
 }
 
 function renderTypeList(typeCounts) {
@@ -299,6 +319,203 @@ function renderConnectionList(connections) {
     : `<div class="empty">No node-to-node connections</div>`;
 }
 
+function renderInputViews() {
+  if (state.activeInputView === "json") {
+    renderJSONView();
+  }
+  if (state.activeInputView === "table") {
+    renderFieldTable();
+  }
+}
+
+function renderJSONView() {
+  const model = state.model;
+  if (!model || !Array.isArray(model.objects)) {
+    elements.jsonStructuredView.innerHTML = `<div class="empty">Analyze input to build JSON view</div>`;
+    return;
+  }
+
+  const groups = [];
+  const byType = new Map();
+  model.objects.forEach((object) => {
+    if (!byType.has(object.type)) {
+      const group = { type: object.type, objects: [] };
+      groups.push(group);
+      byType.set(object.type, group);
+    }
+    byType.get(object.type).objects.push(object);
+  });
+
+  const versionLabel = model.version?.raw || "unknown";
+  const epjsonPreview = state.epjsonText
+    ? `<details class="json-code">
+        <summary>epJSON</summary>
+        <pre>${escapeHTML(state.epjsonText)}</pre>
+      </details>`
+    : "";
+
+  elements.jsonStructuredView.innerHTML = `
+    <div class="json-meta">
+      <span class="badge">${escapeHTML(model.format || "unknown")}</span>
+      <span class="badge">Version ${escapeHTML(versionLabel)}</span>
+      <span class="badge">${escapeHTML(model.objects.length)} objects</span>
+    </div>
+    <div class="json-groups">
+      ${groups
+        .map(
+          (group, index) => `
+            <details class="json-group" ${index < 4 ? "open" : ""}>
+              <summary>
+                <span>${escapeHTML(group.type)}</span>
+                <span class="badge">${escapeHTML(group.objects.length)}</span>
+              </summary>
+              ${group.objects.map(renderJSONObject).join("")}
+            </details>`,
+        )
+        .join("")}
+    </div>
+    ${epjsonPreview}
+  `;
+}
+
+function renderJSONObject(object) {
+  const fields = object.fields || [];
+  return `
+    <section class="json-object">
+      <div class="json-object-head">
+        <strong title="${escapeHTML(object.name || "")}">${escapeHTML(object.name || "(unnamed)")}</strong>
+        <span class="row-sub">#${escapeHTML(object.sourceIndex ?? "")}</span>
+      </div>
+      <dl>
+        ${fields
+          .map(
+            (field) => `
+              <dt title="${escapeHTML(field.key || field.comment || "")}">${escapeHTML(field.key || field.comment || "field")}</dt>
+              <dd title="${escapeHTML(formatJSONValue(field.value))}">${escapeHTML(formatJSONValue(field.value))}</dd>`,
+          )
+          .join("")}
+      </dl>
+    </section>
+  `;
+}
+
+function formatJSONValue(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  if (typeof value === "object") {
+    return JSON.stringify(value);
+  }
+  return String(value);
+}
+
+function renderFieldTable() {
+  const report = state.report;
+  if (!report || !Array.isArray(report.objects)) {
+    elements.fieldTable.innerHTML = `<div class="empty">Analyze input to build table view</div>`;
+    elements.fieldStats.textContent = "0 fields";
+    return;
+  }
+
+  const filter = elements.fieldFilter.value.trim().toLowerCase();
+  const rows = [];
+  report.objects.forEach((object) => {
+    (object.fields || []).forEach((field, fieldIndex) => {
+      const value = field.value || "";
+      const comment = field.comment || "";
+      const haystack = `${object.index} ${object.type} ${object.name || ""} ${fieldIndex} ${comment} ${value}`.toLowerCase();
+      if (filter && !haystack.includes(filter)) {
+        return;
+      }
+      rows.push({ object, field, fieldIndex });
+    });
+  });
+
+  elements.fieldStats.textContent = `${rows.length} fields`;
+  if (!rows.length) {
+    elements.fieldTable.innerHTML = `<div class="empty">No matching fields</div>`;
+    return;
+  }
+
+  elements.fieldTable.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Obj</th>
+          <th>Type</th>
+          <th>Name</th>
+          <th>Field</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows
+          .map(({ object, field, fieldIndex }) => {
+            const value = field.value || "";
+            const label = field.comment || `Field ${fieldIndex + 1}`;
+            return `
+              <tr>
+                <td>#${escapeHTML(object.index)}</td>
+                <td title="${escapeHTML(object.type)}">${escapeHTML(object.type)}</td>
+                <td title="${escapeHTML(object.name || "")}">${escapeHTML(object.name || "-")}</td>
+                <td title="${escapeHTML(label)}">${escapeHTML(label)}</td>
+                <td>
+                  <input class="field-value-input" data-object-index="${escapeHTML(object.index)}"
+                    data-field-index="${escapeHTML(fieldIndex)}" data-original="${escapeHTML(value)}"
+                    value="${escapeHTML(value)}" />
+                </td>
+              </tr>`;
+          })
+          .join("")}
+      </tbody>
+    </table>
+  `;
+
+  elements.fieldTable.querySelectorAll(".field-value-input").forEach((input) => {
+    input.addEventListener("blur", () => applyTableValue(input));
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        input.blur();
+      }
+      if (event.key === "Escape") {
+        input.value = input.dataset.original || "";
+        input.blur();
+      }
+    });
+  });
+}
+
+async function applyTableValue(input) {
+  const nextValue = input.value;
+  if (nextValue === input.dataset.original) {
+    return;
+  }
+
+  const api = backend();
+  if (!api || typeof api.UpdateFieldText !== "function") {
+    setStatus("Backend unavailable", "warn");
+    input.value = input.dataset.original || "";
+    return;
+  }
+
+  try {
+    const result = await api.UpdateFieldText(
+      elements.idfInput.value,
+      Number(input.dataset.objectIndex),
+      Number(input.dataset.fieldIndex),
+      nextValue,
+    );
+    elements.idfInput.value = result.text;
+    updateTextStats();
+    await analyze();
+    setStatus("Field updated", "ok");
+  } catch (error) {
+    input.value = input.dataset.original || "";
+    setStatus(error.message || String(error), "error");
+  }
+}
+
 function renderZoneViz(zones) {
   const svg = elements.zoneViz;
   const width = 560;
@@ -387,7 +604,7 @@ function downloadText() {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "model.idf";
+  link.download = state.model?.format === "epjson" ? "model.epJSON" : "model.idf";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -406,6 +623,22 @@ function switchTab(tabName) {
   });
 }
 
+async function switchInputView(viewName) {
+  state.activeInputView = viewName;
+  elements.inputViewButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.inputView === viewName);
+  });
+  elements.inputViews.forEach((view) => {
+    view.classList.toggle("active", view.id === `${viewName}InputView`);
+  });
+
+  if (viewName !== "text" && state.lastAnalyzedText !== elements.idfInput.value) {
+    await analyze();
+    return;
+  }
+  renderInputViews();
+}
+
 elements.fileInput.addEventListener("change", async (event) => {
   const [file] = event.target.files || [];
   if (!file) {
@@ -422,14 +655,21 @@ elements.toIDFButton.addEventListener("click", () => convertInput("idf"));
 elements.toEPJSONButton.addEventListener("click", () => convertInput("epjson"));
 elements.downloadButton.addEventListener("click", downloadText);
 elements.guideButton.addEventListener("click", openGuide);
-elements.idfInput.addEventListener("input", updateTextStats);
+elements.idfInput.addEventListener("input", () => {
+  updateTextStats();
+  state.lastAnalyzedText = "";
+});
 elements.objectFilter.addEventListener("input", () => {
   if (state.report) {
     renderObjectTable(state.report.objects || []);
   }
 });
+elements.fieldFilter.addEventListener("input", renderFieldTable);
 elements.tabs.forEach((tab) => {
   tab.addEventListener("click", () => switchTab(tab.dataset.tab));
+});
+elements.inputViewButtons.forEach((button) => {
+  button.addEventListener("click", () => switchInputView(button.dataset.inputView));
 });
 
 elements.idfInput.value = sampleIDF;

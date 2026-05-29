@@ -13,9 +13,9 @@ const MinSupportedMajor = 22
 var versionPattern = regexp.MustCompile(`^(\d+)(?:\.(\d+))?`)
 
 type Model struct {
-	Format  Format      `json:"format"`
-	Version VersionInfo `json:"version"`
-	Objects []Object    `json:"objects"`
+	Format  Format        `json:"format"`
+	Version VersionInfo   `json:"version"`
+	Objects []InputObject `json:"objects"`
 }
 
 type VersionInfo struct {
@@ -26,7 +26,7 @@ type VersionInfo struct {
 	Supported bool   `json:"supported"`
 }
 
-type Object struct {
+type InputObject struct {
 	Type        string         `json:"type"`
 	Name        string         `json:"name,omitempty"`
 	Fields      []Field        `json:"fields"`
@@ -65,7 +65,7 @@ func ParseVersion(raw string) VersionInfo {
 	return info
 }
 
-func DetectVersion(objects []Object) VersionInfo {
+func DetectVersion(objects []InputObject) VersionInfo {
 	for _, object := range objects {
 		if !strings.EqualFold(object.Type, "Version") {
 			continue

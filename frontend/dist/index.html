@@ -29,11 +29,30 @@
 
       <section class="workspace">
         <aside class="editor-panel" aria-label="IDF editor">
-          <div class="panel-head">
-            <h2>IDF Text</h2>
-            <span id="textStats">0 lines</span>
+          <div class="panel-head editor-head">
+            <div>
+              <h2>Input View</h2>
+              <span id="textStats">0 lines</span>
+            </div>
+            <div class="view-tabs" role="tablist" aria-label="Input views">
+              <button class="view-tab active" data-input-view="text" type="button">Text</button>
+              <button class="view-tab" data-input-view="json" type="button">JSON</button>
+              <button class="view-tab" data-input-view="table" type="button">Table</button>
+            </div>
           </div>
-          <textarea id="idfInput" spellcheck="false"></textarea>
+          <div class="input-view active" id="textInputView">
+            <textarea id="idfInput" spellcheck="false"></textarea>
+          </div>
+          <div class="input-view" id="jsonInputView">
+            <div id="jsonStructuredView" class="json-view"></div>
+          </div>
+          <div class="input-view" id="tableInputView">
+            <div class="table-tools">
+              <input id="fieldFilter" type="search" placeholder="Filter fields" />
+              <span id="fieldStats">0 fields</span>
+            </div>
+            <div id="fieldTable" class="field-table"></div>
+          </div>
         </aside>
 
         <section class="analysis-panel" aria-label="Analysis results">

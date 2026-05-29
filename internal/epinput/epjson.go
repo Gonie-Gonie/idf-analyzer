@@ -45,7 +45,7 @@ func ParseEPJSON(content []byte) (*Model, error) {
 				return nil, fmt.Errorf("epJSON object %q/%q must contain field object", typeMember.Key, instanceMember.Key)
 			}
 			fields, metadata := parseEPJSONFields(instanceFields)
-			model.Objects = append(model.Objects, Object{
+			model.Objects = append(model.Objects, InputObject{
 				Type:        typeMember.Key,
 				Name:        instanceMember.Key,
 				Fields:      fields,
@@ -112,7 +112,7 @@ func WriteEPJSON(model *Model) (string, error) {
 		return "{}\n", nil
 	}
 
-	grouped := map[string][]Object{}
+	grouped := map[string][]InputObject{}
 	typeOrder := make([]string, 0)
 	for _, object := range model.Objects {
 		if _, ok := grouped[object.Type]; !ok {
@@ -147,7 +147,7 @@ func WriteEPJSON(model *Model) (string, error) {
 	return b.String(), nil
 }
 
-func writeEPJSONFields(b *strings.Builder, object Object) {
+func writeEPJSONFields(b *strings.Builder, object InputObject) {
 	wrote := false
 	for _, field := range object.Fields {
 		if wrote {
@@ -185,7 +185,7 @@ func writeEPJSONFields(b *strings.Builder, object Object) {
 	}
 }
 
-func jsonObjectName(object Object, fallbackIndex int) string {
+func jsonObjectName(object InputObject, fallbackIndex int) string {
 	if object.Name != "" {
 		return object.Name
 	}

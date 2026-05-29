@@ -20,6 +20,14 @@ type TextEditResult struct {
 	Warnings []string    `json:"warnings,omitempty"`
 }
 
+type InputAnalysisResult struct {
+	Format  string         `json:"format"`
+	Version string         `json:"version,omitempty"`
+	Model   *epinput.Model `json:"model"`
+	EPJSON  string         `json:"epjson,omitempty"`
+	Report  *idf.Report    `json:"report"`
+}
+
 type ConversionResult struct {
 	Text     string   `json:"text"`
 	Format   string   `json:"format"`
@@ -36,13 +44,32 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) AnalyzeIDFText(text string) (*idf.Report, error) {
+	result, err := a.AnalyzeInputText(text)
+	if err != nil {
+		return nil, err
+	}
+	return result.Report, nil
+}
+
+func (a *App) AnalyzeInputText(text string) (*InputAnalysisResult, error) {
 	model, err := epinput.Parse("", []byte(text))
 	if err != nil {
 		return nil, err
 	}
 	doc := epinput.ToIDFDocument(model)
 	report := idf.Analyze(doc)
-	return &report, nil
+	epjsonText, err := epinput.Write(model, epinput.FormatEPJSON)
+	if err != nil {
+		return nil, err
+	}
+
+	return &InputAnalysisResult{
+		Format:  string(model.Format),
+		Version: model.Version.Raw,
+		Model:   model,
+		EPJSON:  epjsonText,
+		Report:  &report,
+	}, nil
 }
 
 func (a *App) OpenIDF(path string) (*idf.Report, error) {
