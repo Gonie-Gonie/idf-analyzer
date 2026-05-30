@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -70,5 +71,48 @@ func TestAppAssetHandlerServesSummaryMetricGuides(t *testing.T) {
 	}
 	if len(guides) != 50 {
 		t.Fatalf("summary metric guide API returned %d guides, want 50", len(guides))
+	}
+}
+
+func TestAnalyzeMultiSummaryPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	first := filepath.Join(tempDir, "first.idf")
+	second := filepath.Join(tempDir, "second.idf")
+	if err := os.WriteFile(first, []byte(`Version, 24.1;
+Building, Alpha;
+Zone, Office;
+`), 0o644); err != nil {
+		t.Fatalf("write first fixture: %v", err)
+	}
+	if err := os.WriteFile(second, []byte(`Version, 24.1;
+Building, Beta;
+Zone, Core;
+Zone, Perimeter;
+`), 0o644); err != nil {
+		t.Fatalf("write second fixture: %v", err)
+	}
+
+	var progress []MultiSummaryProgress
+	result := analyzeMultiSummaryPaths([]string{first, second}, "test-run", func(item MultiSummaryProgress) {
+		progress = append(progress, item)
+	})
+
+	if result.Total != 2 || result.Completed != 2 || result.Succeeded != 2 || result.Failed != 0 {
+		t.Fatalf("multi summary counts = total:%d completed:%d succeeded:%d failed:%d", result.Total, result.Completed, result.Succeeded, result.Failed)
+	}
+	if len(progress) != 2 {
+		t.Fatalf("progress events = %d, want 2", len(progress))
+	}
+	if len(result.Metrics) != 50 {
+		t.Fatalf("multi summary metrics = %d, want 50", len(result.Metrics))
+	}
+	if result.Files[0].Label != "Alpha" || result.Files[1].Label != "Beta" {
+		t.Fatalf("multi summary labels = %q, %q; want Alpha, Beta", result.Files[0].Label, result.Files[1].Label)
+	}
+	if got := result.Files[1].MetricValues["zone_count"].DisplayValue; got != "2" {
+		t.Fatalf("second zone_count = %q, want 2", got)
+	}
+	if result.Metrics[0].CSVName != "energyplus_version [-]" {
+		t.Fatalf("first CSV metric name = %q, want energyplus_version [-]", result.Metrics[0].CSVName)
 	}
 }

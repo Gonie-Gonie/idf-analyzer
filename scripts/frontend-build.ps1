@@ -37,7 +37,8 @@ $modules = @(
     "main.js",
     "navigation.js",
     "sample.js",
-    "state.js"
+    "state.js",
+    "tools.js"
 )
 
 foreach ($module in $modules) {

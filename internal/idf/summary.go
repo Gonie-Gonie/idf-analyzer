@@ -254,7 +254,7 @@ func ExportSummaryCSV(summary SummaryReport) (string, error) {
 	if err := writer.Write([]string{"name", "value"}); err != nil {
 		return "", err
 	}
-	names := summaryCSVNames(summary)
+	names := SummaryCSVMetricNames(summary)
 	for _, category := range summary.Categories {
 		for _, metric := range category.Metrics {
 			if err := writer.Write([]string{names[metric.ID], metric.DisplayValue}); err != nil {
@@ -267,6 +267,10 @@ func ExportSummaryCSV(summary SummaryReport) (string, error) {
 		return "", err
 	}
 	return b.String(), nil
+}
+
+func SummaryCSVMetricNames(summary SummaryReport) map[string]string {
+	return summaryCSVNames(summary)
 }
 
 func summaryCSVNames(summary SummaryReport) map[string]string {
@@ -606,6 +610,12 @@ func (facts *summaryFacts) captureInventoryObject(obj Object) {
 	if strings.EqualFold(obj.Type, "Building") {
 		if facts.buildingName == "" {
 			facts.buildingName = name
+			if facts.buildingName == "" {
+				facts.buildingName = findFieldByCommentWords(obj, "name")
+			}
+			if facts.buildingName == "" && len(obj.Fields) > 0 {
+				facts.buildingName = strings.TrimSpace(obj.Fields[0].Value)
+			}
 		}
 		if value, ok := parseFloatField(findFieldByCommentWords(obj, "north", "axis")); ok {
 			facts.buildingNorthAxis = value

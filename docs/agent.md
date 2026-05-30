@@ -28,6 +28,7 @@
 - Keep the Summary export contract stable: categorized JSON and two-column `name,value` CSV, with CSV names based on variable IDs and units appended in brackets instead of values. Unitless CSV metrics use `[-]`.
 - Geometry should keep parsed zone/surface/window data in the backend report and render from that shared structure in 3D and plan views; 3D defaults to all levels, story filtering is optional, selected-object details should show metrics plus related objects instead of duplicating IDF fields, and Sync locate controls automatic jumps to matching input objects.
 - Keep toolbar semantics split: top-level file actions for Open/Save/Revert, top-level Tools/Guide/Settings page navigation, and Actions for immediate model operations such as conversion and cleanup.
+- Tools page workflows should be full-page task surfaces. Multi-IDF Summary selects multiple inputs through the desktop dialog, analyzes them with a bounded worker pool, emits progress events, shows a transposable comparison table, and exports CSV in the selected orientation.
 - Raw text edits should trigger debounced automatic analysis rather than requiring a manual Analyze button; structured edits can analyze immediately after backend patches.
 - App settings should persist through the backend settings API under the local app data/config directory, with `frontend/dist/settings.html` as the settings page frame.
 - Frontend code organization: keep `frontend/dist/app.js` as a tiny entrypoint and place feature modules under `frontend/dist/js/`.

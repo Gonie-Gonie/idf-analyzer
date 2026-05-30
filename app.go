@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
@@ -68,6 +70,53 @@ type AppSettings struct {
 type SettingsResult struct {
 	Path     string      `json:"path"`
 	Settings AppSettings `json:"settings"`
+}
+
+type MultiSummaryResult struct {
+	Canceled    bool                 `json:"canceled,omitempty"`
+	RunID       string               `json:"runId,omitempty"`
+	Total       int                  `json:"total"`
+	Completed   int                  `json:"completed"`
+	Succeeded   int                  `json:"succeeded"`
+	Failed      int                  `json:"failed"`
+	Concurrency int                  `json:"concurrency"`
+	Metrics     []MultiSummaryMetric `json:"metrics"`
+	Files       []MultiSummaryFile   `json:"files"`
+}
+
+type MultiSummaryMetric struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Category string `json:"category"`
+	Unit     string `json:"unit"`
+	CSVName  string `json:"csvName"`
+}
+
+type MultiSummaryFile struct {
+	Index        int                          `json:"index"`
+	Path         string                       `json:"path"`
+	Filename     string                       `json:"filename"`
+	Label        string                       `json:"label"`
+	Format       string                       `json:"format,omitempty"`
+	Version      string                       `json:"version,omitempty"`
+	Status       string                       `json:"status"`
+	Error        string                       `json:"error,omitempty"`
+	ObjectCount  int                          `json:"objectCount,omitempty"`
+	MetricValues map[string]MultiSummaryValue `json:"metricValues,omitempty"`
+}
+
+type MultiSummaryValue struct {
+	DisplayValue string `json:"displayValue"`
+	Status       string `json:"status"`
+}
+
+type MultiSummaryProgress struct {
+	RunID     string           `json:"runId"`
+	Total     int              `json:"total"`
+	Completed int              `json:"completed"`
+	Succeeded int              `json:"succeeded"`
+	Failed    int              `json:"failed"`
+	File      MultiSummaryFile `json:"file"`
 }
 
 type ModelPatchResult = InputAnalysisResult
@@ -168,6 +217,25 @@ func (a *App) OpenInputFile() (*InputFileResult, error) {
 		Filename: filepath.Base(path),
 		Text:     string(content),
 	}, nil
+}
+
+func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) {
+	paths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:   "Open EnergyPlus inputs for Multi-IDF Summary",
+		Filters: inputFileFilters(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return &MultiSummaryResult{Canceled: true, RunID: runID}, nil
+	}
+
+	return analyzeMultiSummaryPaths(paths, runID, func(progress MultiSummaryProgress) {
+		if a.ctx != nil {
+			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:multiSummaryProgress", progress)
+		}
+	}), nil
 }
 
 func (a *App) SaveIDF(path string, text string) error {
@@ -301,6 +369,165 @@ func (a *App) ExportSummaryText(text string, format string) (*SummaryExportResul
 
 func (a *App) GetSummaryMetricGuides() []idf.SummaryGuide {
 	return idf.SummaryGuides()
+}
+
+func analyzeMultiSummaryPaths(paths []string, runID string, emit func(MultiSummaryProgress)) *MultiSummaryResult {
+	result := &MultiSummaryResult{
+		RunID:       runID,
+		Total:       len(paths),
+		Completed:   0,
+		Concurrency: multiSummaryConcurrency(len(paths)),
+		Metrics:     multiSummaryMetrics(idf.AnalyzeSummary(idf.Document{})),
+		Files:       make([]MultiSummaryFile, len(paths)),
+	}
+	if len(paths) == 0 {
+		return result
+	}
+
+	type job struct {
+		index int
+		path  string
+	}
+
+	jobs := make(chan job)
+	results := make(chan MultiSummaryFile)
+	var wg sync.WaitGroup
+	for worker := 0; worker < result.Concurrency; worker++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for item := range jobs {
+				results <- analyzeMultiSummaryFile(item.index, item.path)
+			}
+		}()
+	}
+
+	go func() {
+		for index, path := range paths {
+			jobs <- job{index: index, path: path}
+		}
+		close(jobs)
+		wg.Wait()
+		close(results)
+	}()
+
+	for file := range results {
+		result.Files[file.Index] = file
+		result.Completed++
+		if file.Status == "ok" {
+			result.Succeeded++
+		} else {
+			result.Failed++
+		}
+		if emit != nil {
+			emit(MultiSummaryProgress{
+				RunID:     runID,
+				Total:     result.Total,
+				Completed: result.Completed,
+				Succeeded: result.Succeeded,
+				Failed:    result.Failed,
+				File:      file,
+			})
+		}
+	}
+
+	ensureUniqueMultiSummaryLabels(result.Files)
+	return result
+}
+
+func analyzeMultiSummaryFile(index int, path string) MultiSummaryFile {
+	file := MultiSummaryFile{
+		Index:    index,
+		Path:     path,
+		Filename: filepath.Base(path),
+		Label:    filepath.Base(path),
+		Status:   "ok",
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		file.Status = "error"
+		file.Error = err.Error()
+		return file
+	}
+
+	model, err := epinput.Parse(path, content)
+	if err != nil {
+		file.Status = "error"
+		file.Error = err.Error()
+		return file
+	}
+
+	doc := epinput.ToIDFDocument(model)
+	summary := idf.AnalyzeSummary(doc)
+	file.Format = string(model.Format)
+	file.Version = model.Version.Raw
+	file.ObjectCount = len(doc.Objects)
+	file.MetricValues = map[string]MultiSummaryValue{}
+	for _, category := range summary.Categories {
+		for _, metric := range category.Metrics {
+			file.MetricValues[metric.ID] = MultiSummaryValue{
+				DisplayValue: metric.DisplayValue,
+				Status:       metric.Status,
+			}
+		}
+	}
+	if buildingName := strings.TrimSpace(file.MetricValues["building_name"].DisplayValue); buildingName != "" && !strings.EqualFold(buildingName, "N/A") {
+		file.Label = buildingName
+	}
+	return file
+}
+
+func multiSummaryMetrics(summary idf.SummaryReport) []MultiSummaryMetric {
+	names := idf.SummaryCSVMetricNames(summary)
+	metrics := make([]MultiSummaryMetric, 0, summary.MetricCount)
+	for _, category := range summary.Categories {
+		for _, metric := range category.Metrics {
+			metrics = append(metrics, MultiSummaryMetric{
+				ID:       metric.ID,
+				Name:     metric.Name,
+				Category: metric.Category,
+				Unit:     metric.Unit,
+				CSVName:  names[metric.ID],
+			})
+		}
+	}
+	return metrics
+}
+
+func multiSummaryConcurrency(count int) int {
+	if count <= 0 {
+		return 0
+	}
+	limit := runtime.NumCPU()
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 8 {
+		limit = 8
+	}
+	if limit > count {
+		limit = count
+	}
+	return limit
+}
+
+func ensureUniqueMultiSummaryLabels(files []MultiSummaryFile) {
+	seen := map[string]int{}
+	for index := range files {
+		label := strings.TrimSpace(files[index].Label)
+		if label == "" {
+			label = files[index].Filename
+		}
+		if label == "" {
+			label = fmt.Sprintf("File %d", files[index].Index+1)
+		}
+		seen[label]++
+		if seen[label] > 1 {
+			label = fmt.Sprintf("%s (%d)", label, seen[label])
+		}
+		files[index].Label = label
+	}
 }
 
 func (a *App) GetSettings() (*SettingsResult, error) {

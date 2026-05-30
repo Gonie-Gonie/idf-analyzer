@@ -322,6 +322,9 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if got := countMetrics(summary); got != 50 {
 		t.Fatalf("rendered metric count = %d, want 50", got)
 	}
+	if got := metricByID(t, summary, "building_name").DisplayValue; got != "Summary Test Building" {
+		t.Fatalf("building name = %q, want Summary Test Building", got)
+	}
 
 	assertMetricClose(t, summary, "gross_floor_area_m2", 200, 0.001)
 	assertMetricClose(t, summary, "conditioned_floor_area_m2", 200, 0.001)

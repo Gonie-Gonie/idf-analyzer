@@ -19,17 +19,50 @@
       </div>
     </header>
 
-    <main class="guide-layout settings-layout">
+    <main class="guide-layout tools-layout">
       <nav class="guide-nav" aria-label="Tools sections">
-        <a href="#available">Available Tools</a>
+        <a href="#multi-idf-summary">Multi-IDF Summary</a>
       </nav>
 
       <section class="guide-content">
-        <section id="available" class="guide-section">
-          <h2>Available Tools</h2>
-          <p>Additional full-page tools will appear here when they are added to the app.</p>
+        <section id="multi-idf-summary" class="guide-section tool-section">
+          <div class="tool-title-row">
+            <div>
+              <h2>Multi-IDF Summary</h2>
+              <p>Analyze several EnergyPlus input files and compare their Summary metrics in one table.</p>
+            </div>
+            <div class="tool-actions">
+              <button id="multiSummarySelect" type="button">Select Files</button>
+              <button id="multiSummaryExport" type="button" disabled>Export CSV</button>
+            </div>
+          </div>
+
+          <div class="tool-control-row">
+            <div class="orientation-controls" role="group" aria-label="Multi-IDF summary orientation">
+              <button class="orientation-button active" data-summary-orientation="metrics" type="button">Metrics as rows</button>
+              <button class="orientation-button" data-summary-orientation="files" type="button">Buildings as rows</button>
+            </div>
+            <span id="multiSummaryStats" class="tool-muted">No files selected</span>
+          </div>
+
+          <div class="tool-progress" aria-live="polite">
+            <div class="tool-progress-header">
+              <span id="multiSummaryStatus">Waiting for files</span>
+              <span id="multiSummaryPercent">0%</span>
+            </div>
+            <div class="tool-progress-track">
+              <div id="multiSummaryProgressBar" class="tool-progress-bar"></div>
+            </div>
+          </div>
+
+          <div id="multiSummaryFiles" class="tool-file-list"></div>
+          <div id="multiSummaryTable" class="tool-table-wrap">
+            <div class="empty">Select one or more IDF or epJSON files to build a comparison table.</div>
+          </div>
         </section>
       </section>
     </main>
+
+    <script type="module" src="./js/tools.js"></script>
   </body>
 </html>
