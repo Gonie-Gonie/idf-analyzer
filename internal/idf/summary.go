@@ -254,13 +254,10 @@ func ExportSummaryCSV(summary SummaryReport) (string, error) {
 	if err := writer.Write([]string{"name", "value"}); err != nil {
 		return "", err
 	}
+	names := summaryCSVNames(summary)
 	for _, category := range summary.Categories {
 		for _, metric := range category.Metrics {
-			value := metric.DisplayValue
-			if metric.Unit != "" && value != "N/A" {
-				value = value + " " + metric.Unit
-			}
-			if err := writer.Write([]string{category.Name + " / " + metric.Name, value}); err != nil {
+			if err := writer.Write([]string{names[metric.ID], metric.DisplayValue}); err != nil {
 				return "", err
 			}
 		}
@@ -270,6 +267,65 @@ func ExportSummaryCSV(summary SummaryReport) (string, error) {
 		return "", err
 	}
 	return b.String(), nil
+}
+
+func summaryCSVNames(summary SummaryReport) map[string]string {
+	out := map[string]string{}
+	seen := map[string]int{}
+	for _, category := range summary.Categories {
+		for _, metric := range category.Metrics {
+			name := summaryCSVMetricName(metric)
+			seen[name]++
+			if seen[name] > 1 {
+				name = fmt.Sprintf("%s_%d", name, seen[name])
+			}
+			out[metric.ID] = name
+		}
+	}
+	return out
+}
+
+func summaryCSVMetricName(metric SummaryMetric) string {
+	name := trimSummaryCSVUnitSuffix(metric.ID, metric.Unit)
+	if strings.TrimSpace(metric.Unit) == "" {
+		return name
+	}
+	return name + " [" + metric.Unit + "]"
+}
+
+func trimSummaryCSVUnitSuffix(id string, unit string) string {
+	suffixes := summaryCSVUnitSuffixes(unit)
+	for _, suffix := range suffixes {
+		if strings.HasSuffix(id, suffix) {
+			return strings.TrimSuffix(id, suffix)
+		}
+	}
+	return id
+}
+
+func summaryCSVUnitSuffixes(unit string) []string {
+	switch strings.ToLower(strings.TrimSpace(unit)) {
+	case "%":
+		return []string{"_percent", "_pct"}
+	case "deg":
+		return []string{"_deg"}
+	case "h":
+		return []string{"_h"}
+	case "m":
+		return []string{"_m"}
+	case "m2":
+		return []string{"_m2"}
+	case "m3":
+		return []string{"_m3"}
+	case "w":
+		return []string{"_w"}
+	case "w/m2":
+		return []string{"_w_per_m2"}
+	case "people/100m2":
+		return []string{"_people_per_100m2", "_per_100m2"}
+	default:
+		return nil
+	}
 }
 
 type summaryMetricValue struct {

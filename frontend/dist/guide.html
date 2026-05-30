@@ -76,7 +76,7 @@
             </article>
             <article>
               <h3>Export</h3>
-              <p>Summary exports are available as categorized JSON or a two-column CSV with `name,value` rows.</p>
+              <p>Summary exports are available as categorized JSON or a two-column CSV with variable-style `name,value` rows and units in name brackets.</p>
             </article>
           </div>
         </section>
@@ -100,7 +100,7 @@
             under Actions. Guide and Settings are grouped under Tools because they navigate to full-page views.
             Text summary, Table, and inline JSON value edits patch the backend model
             or field text and regenerate the source text, epJSON preview, tables, and analysis report.
-            Export JSON and Export CSV in the Summary panel export the current model summary.
+            Export JSON and Export CSV in the Summary panel export the current model summary; CSV keeps values unit-free and places units in name brackets.
           </p>
         </section>
 
@@ -138,6 +138,7 @@
         <section id="updates" class="guide-section">
           <h2>Update Log</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-31</strong> Changed Summary CSV export to variable-style names with units in brackets and unit-free values.</li>
             <li><strong>2026-05-30</strong> Reworked the top toolbar with Open, Save, Revert, Tools, Actions, automatic analysis, and a Settings page frame.</li>
             <li><strong>2026-05-30</strong> Replaced Geometry selected-object IDF field lists with related zone, surface, and opening links.</li>
             <li><strong>2026-05-30</strong> Unified the left-panel input filter across Text, JSON, and Table views.</li>

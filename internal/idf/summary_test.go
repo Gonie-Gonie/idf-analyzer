@@ -389,10 +389,30 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if len(records[0]) != 2 || records[0][0] != "name" || records[0][1] != "value" {
 		t.Fatalf("CSV header = %#v, want name,value", records[0])
 	}
+	csvValues := map[string]string{}
 	for index, record := range records {
 		if len(record) != 2 {
 			t.Fatalf("CSV row %d has %d columns, want 2: %#v", index, len(record), record)
 		}
+		if index == 0 {
+			continue
+		}
+		if strings.Contains(record[0], " / ") {
+			t.Fatalf("CSV row %d includes category in name: %#v", index, record)
+		}
+		if strings.Contains(record[1], " m2") || strings.Contains(record[1], " %") {
+			t.Fatalf("CSV row %d includes unit in value: %#v", index, record)
+		}
+		if _, exists := csvValues[record[0]]; exists {
+			t.Fatalf("duplicate CSV metric name %q", record[0])
+		}
+		csvValues[record[0]] = record[1]
+	}
+	if got := csvValues["gross_floor_area [m2]"]; got != "200" {
+		t.Fatalf("CSV gross floor area = %q, want 200", got)
+	}
+	if got := csvValues["total_wwr [%]"]; got != "3.3" {
+		t.Fatalf("CSV total WWR = %q, want 3.3", got)
 	}
 }
 

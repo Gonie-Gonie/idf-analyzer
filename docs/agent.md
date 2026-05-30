@@ -25,7 +25,7 @@
 - Keep vertical splitter behavior for Raw Text and Geometry details persistent via localStorage.
 - Keep right-panel result tabs purposeful: Summary for backend-driven metrics and Geometry for parsed building shape review.
 - Summary metric definitions, calculated values, exports, and guide entries should stay tied to the same backend catalog.
-- Keep the Summary export contract stable: categorized JSON and two-column `name,value` CSV.
+- Keep the Summary export contract stable: categorized JSON and two-column `name,value` CSV, with CSV names based on variable IDs and units appended in brackets instead of values.
 - Geometry should keep parsed zone/surface/window data in the backend report and render from that shared structure in 3D and plan views; 3D defaults to all levels, story filtering is optional, selected-object details should show metrics plus related objects instead of duplicating IDF fields, and Sync locate controls automatic jumps to matching input objects.
 - Keep toolbar semantics split: top-level file actions for Open/Save/Revert, Tools for full-page navigation such as Guide and Settings, and Actions for immediate model operations such as conversion and cleanup.
 - Raw text edits should trigger debounced automatic analysis rather than requiring a manual Analyze button; structured edits can analyze immediately after backend patches.
