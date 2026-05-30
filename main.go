@@ -23,7 +23,7 @@ func main() {
 		Height: 900,
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
-			Handler: appAssetHandler(),
+			Handler: appAssetHandler(app),
 		},
 		BackgroundColour: &options.RGBA{R: 247, G: 249, B: 251, A: 1},
 		OnStartup:        app.startup,
@@ -36,26 +36,49 @@ func main() {
 	}
 }
 
-func appAssetHandler() http.Handler {
+func appAssetHandler(app *App) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/summary-metric-guides":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			if err := json.NewEncoder(w).Encode(idf.SummaryGuides()); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		case "/api/settings":
+			if r.Method != http.MethodGet {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
 			path, settings, err := loadAppSettings()
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 			if err := json.NewEncoder(w).Encode(SettingsResult{Path: path, Settings: settings}); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+		case "/api/multi-idf-summary":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var request struct {
+				RunID string `json:"runId"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			result, err := app.AnalyzeMultiIDFSummary(request.RunID)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if err := json.NewEncoder(w).Encode(result); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
 		default:

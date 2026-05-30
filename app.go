@@ -220,6 +220,9 @@ func (a *App) OpenInputFile() (*InputFileResult, error) {
 }
 
 func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("desktop runtime is not ready")
+	}
 	paths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
 		Title:   "Open EnergyPlus inputs for Multi-IDF Summary",
 		Filters: inputFileFilters(),

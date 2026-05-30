@@ -56,6 +56,16 @@ function registerProgressListener() {
   }
 }
 
+async function waitForProgressRuntime() {
+  for (let attempt = 0; attempt < 40 && !state.progressListenerRegistered; attempt += 1) {
+    registerProgressListener();
+    if (state.progressListenerRegistered) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 function handleProgress(payload) {
   const progress = Array.isArray(payload) ? payload[0] : payload;
   if (!progress || progress.runId !== state.activeRunID) {
@@ -84,26 +94,19 @@ function setRunning(running) {
 }
 
 async function runMultiSummary() {
-  registerProgressListener();
-  const api = await waitForAppAPI("AnalyzeMultiIDFSummary");
-  if (!api) {
-    elements.status.textContent = "Multi-IDF Summary is available in the desktop app.";
-    return;
-  }
-  registerProgressListener();
-
   state.result = null;
   state.progressFiles.clear();
   state.activeRunID = `multi-summary-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   setRunning(true);
   elements.stats.textContent = "Waiting for file selection";
-  elements.status.textContent = "Choose input files in the file dialog";
+  elements.status.textContent = "Opening file dialog";
   elements.table.innerHTML = `<div class="empty">Analysis will start after files are selected.</div>`;
   elements.fileList.innerHTML = "";
   updateProgress(0, 0);
+  waitForProgressRuntime();
 
   try {
-    const result = await api.AnalyzeMultiIDFSummary(state.activeRunID);
+    const result = await analyzeMultiSummary(state.activeRunID);
     if (result?.canceled) {
       elements.stats.textContent = "No files selected";
       elements.status.textContent = "File selection canceled";
@@ -120,6 +123,30 @@ async function runMultiSummary() {
   } finally {
     setRunning(false);
   }
+}
+
+async function analyzeMultiSummary(runID) {
+  let responseError = "";
+  try {
+    const response = await fetch("/api/multi-idf-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ runId: runID }),
+    });
+    if (response.ok) {
+      return response.json();
+    }
+    responseError = await response.text();
+  } catch (error) {
+    responseError = error?.message || String(error);
+  }
+
+  const api = await waitForAppAPI("AnalyzeMultiIDFSummary");
+  if (api) {
+    return api.AnalyzeMultiIDFSummary(runID);
+  }
+
+  throw new Error(responseError || "Multi-IDF Summary is available in the desktop app.");
 }
 
 function renderResult() {

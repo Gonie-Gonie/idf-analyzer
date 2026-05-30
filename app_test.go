@@ -58,7 +58,7 @@ func TestAppAssetHandlerServesSummaryMetricGuides(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/summary-metric-guides", nil)
 	response := httptest.NewRecorder()
 
-	appAssetHandler().ServeHTTP(response, request)
+	appAssetHandler(NewApp()).ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("summary metric guide API status = %d, want %d", response.Code, http.StatusOK)
