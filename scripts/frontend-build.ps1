@@ -2,6 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $dist = Join-Path $PSScriptRoot "..\frontend\dist"
 $index = Join-Path $dist "index.html"
+$tools = Join-Path $dist "tools.html"
 $guide = Join-Path $dist "guide.html"
 $settings = Join-Path $dist "settings.html"
 $entry = Join-Path $dist "app.js"
@@ -9,6 +10,10 @@ $moduleDir = Join-Path $dist "js"
 
 if (-not (Test-Path $index)) {
     throw "Missing frontend/dist/index.html"
+}
+
+if (-not (Test-Path $tools)) {
+    throw "Missing frontend/dist/tools.html"
 }
 
 if (-not (Test-Path $guide)) {

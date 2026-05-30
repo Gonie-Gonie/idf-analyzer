@@ -205,6 +205,10 @@ export function openGuide() {
   window.location.assign("./guide.html");
 }
 
+export function openTools() {
+  window.location.assign("./tools.html");
+}
+
 export function openSettings() {
   window.location.assign("./settings.html");
 }

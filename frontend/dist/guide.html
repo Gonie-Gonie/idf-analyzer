@@ -10,157 +10,148 @@
     <header class="guide-header">
       <div>
         <p class="guide-kicker">IDF Analyzer</p>
-        <h1>Tool Guide</h1>
+        <h1>User Guide</h1>
       </div>
-      <a class="toolbar-link" href="./index.html">Back to App</a>
+      <div class="guide-header-actions">
+        <a class="toolbar-link" href="./index.html">Back to App</a>
+        <a class="toolbar-link" href="./tools.html">Tools</a>
+        <a class="toolbar-link" href="./settings.html">Settings</a>
+      </div>
     </header>
 
     <main class="guide-layout">
       <nav class="guide-nav" aria-label="Guide sections">
-        <a href="#open">Open</a>
-        <a href="#views">Input Views</a>
-        <a href="#analysis">Analysis</a>
-        <a href="#summary-metrics">Summary Metrics</a>
-        <a href="#edit">Edit</a>
-        <a href="#epjson">epJSON</a>
-        <a href="#version">Version</a>
-        <a href="#build">Developer Build</a>
-        <a href="#updates">Update Log</a>
+        <a href="#start">Start</a>
+        <a href="#files">Files</a>
+        <a href="#input-views">Input Views</a>
+        <a href="#summary">Summary</a>
+        <a href="#geometry">Geometry</a>
+        <a href="#summary-metrics">Metric Catalog</a>
+        <a href="#actions">Actions</a>
+        <a href="#settings">Settings</a>
+        <a href="#updates">Recent Changes</a>
       </nav>
 
       <section class="guide-content">
-        <section id="open" class="guide-section">
-          <h2>Open, Save, and Analyze</h2>
+        <section id="start" class="guide-section">
+          <h2>Start</h2>
           <p>
-            Open uses the desktop file dialog and supports `.idf`, `.imf`, `.epjson`, `.json`, and `.txt` files.
-            Save writes the current editor text back to the opened file or asks for a path when no file path exists.
-            Revert restores the text from the most recent opened input snapshot.
-            Analysis detects IDF or epJSON from the content and runs automatically after opening files or after debounced editor changes.
-            The startup sample is the official EnergyPlus `RefBldgLargeOfficeNew2004_Chicago.idf`
-            example from NREL/EnergyPlus.
+            IDF Analyzer opens EnergyPlus IDF, IMF, and epJSON-style files, shows the input in synchronized Text,
+            JSON, and Table views, and calculates Summary and Geometry checks in the right panel. A reference office
+            model loads at startup so the interface is usable before you open a project file.
           </p>
         </section>
 
-        <section id="views" class="guide-section">
+        <section id="files" class="guide-section">
+          <h2>Files</h2>
+          <div class="guide-grid">
+            <article>
+              <h3>Open</h3>
+              <p>Loads `.idf`, `.imf`, `.epjson`, `.json`, or `.txt` from the desktop file picker and analyzes it automatically.</p>
+            </article>
+            <article>
+              <h3>Save</h3>
+              <p>Writes the current editor text back to the opened file. If there is no original file path, the app asks where to save.</p>
+            </article>
+            <article>
+              <h3>Revert</h3>
+              <p>Restores the input text to the snapshot from the most recent open operation.</p>
+            </article>
+            <article>
+              <h3>Automatic Analysis</h3>
+              <p>Analysis runs after opening a file and after editor changes pause briefly, so repeated edits do not need a separate Analyze button.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="input-views" class="guide-section">
           <h2>Input Views</h2>
           <div class="guide-grid">
             <article>
               <h3>Text</h3>
-              <p>A fully expanded editable object summary first, with raw IDF or epJSON text below it, shared object filtering, and optional position sync from editable fields and analysis selections.</p>
+              <p>Shows editable object summaries above the raw source text. The raw text area remains the final source that will be saved.</p>
             </article>
             <article>
               <h3>JSON</h3>
-              <p>A structured epJSON-like editor with read-only syntax, inline-editable value tokens, shared object filtering, collapse depth, object focus, and the shared raw text pane below.</p>
+              <p>Shows an epJSON-shaped structured view. Value tokens can be edited inline while syntax tokens remain read-only.</p>
             </article>
             <article>
               <h3>Table</h3>
-              <p>Fully expanded object type tables with shared object filtering, fixed row headers, switchable objects-as-rows or fields-as-rows layout, and shared raw text position sync.</p>
+              <p>Shows object-type tables with switchable row and column orientation for scanning fields across similar objects.</p>
             </article>
             <article>
-              <h3>Resizable Split</h3>
-              <p>The input and analysis panels have separate scroll areas, a locked app window, draggable left/right divider, and draggable vertical dividers for Raw Text and Geometry details.</p>
+              <h3>Filter</h3>
+              <p>The left-panel filter works the same way across Text, JSON, and Table views by matching object type, object name, field label, and value text.</p>
             </article>
           </div>
         </section>
 
-        <section id="analysis" class="guide-section">
-          <h2>Analysis Views</h2>
-          <div class="guide-grid">
-            <article>
-              <h3>Summary</h3>
-              <p>The right panel currently shows one Summary view with categorized model, geometry, envelope, load, schedule, and HVAC metrics.</p>
-            </article>
-            <article>
-              <h3>Geometry</h3>
-              <p>Geometry parses detailed zones, walls, roofs, floors, and fenestration into a 3D view that defaults to all levels, optional story filtering, a story plan view, selectable metrics, related object links, and Sync locate jumps to the matching input object.</p>
-            </article>
-            <article>
-              <h3>Export</h3>
-              <p>Summary exports are available as categorized JSON or a two-column CSV with variable-style `name,value` rows and units in name brackets.</p>
-            </article>
-          </div>
+        <section id="summary" class="guide-section">
+          <h2>Summary</h2>
+          <p>
+            Summary groups model inventory, area, envelope, load, schedule, and HVAC metrics. Use the Summary filter to
+            narrow the metric list. Export JSON keeps the grouped structure, while Export CSV creates `name,value` rows.
+            CSV names use variable-style names with units in brackets, including `[-]` for values without a physical unit.
+          </p>
+        </section>
+
+        <section id="geometry" class="guide-section">
+          <h2>Geometry</h2>
+          <p>
+            Geometry shows parsed zones, surfaces, and fenestration in 3D and plan views. Selecting an item shows key
+            metrics and related objects such as parent zones, base surfaces, child windows, adjacent zones, and matching
+            surfaces. Sync locate can move the input view to the selected model object.
+          </p>
         </section>
 
         <section id="summary-metrics" class="guide-section">
-          <h2>Summary Metric Catalog</h2>
+          <h2>Metric Catalog</h2>
           <p>
-            The metric guide below is loaded from the same backend catalog used by analysis and export.
-            Each item documents its source, method, assumptions, and missing-data behavior.
+            The catalog below lists how Summary metrics are interpreted, including source fields, calculation method,
+            assumptions, and missing-data behavior.
           </p>
           <div id="summaryMetricGuide" class="guide-metric-list">
-            <div class="empty">Loading summary metric guide</div>
+            <div class="empty">Loading metric catalog</div>
           </div>
         </section>
 
-        <section id="edit" class="guide-section">
-          <h2>Edit, Convert, and Export</h2>
-          <p>
-            Remove unused currently targets schedule, material, construction, curve, and table objects
-            that are not referenced by other fields. To IDF, To epJSON, and Remove unused are grouped
-            under Actions. Guide and Settings are grouped under Tools because they navigate to full-page views.
-            Text summary, Table, and inline JSON value edits patch the backend model
-            or field text and regenerate the source text, epJSON preview, tables, and analysis report.
-            Export JSON and Export CSV in the Summary panel export the current model summary; CSV keeps values unit-free and places units in name brackets.
-          </p>
+        <section id="actions" class="guide-section">
+          <h2>Actions</h2>
+          <div class="guide-grid">
+            <article>
+              <h3>To IDF</h3>
+              <p>Converts the current input to IDF text and refreshes the views.</p>
+            </article>
+            <article>
+              <h3>To epJSON</h3>
+              <p>Converts the current input to epJSON text and refreshes the views.</p>
+            </article>
+            <article>
+              <h3>Remove unused</h3>
+              <p>Removes supported unused resource objects such as schedules, materials, constructions, curves, and tables.</p>
+            </article>
+            <article>
+              <h3>Tools</h3>
+              <p>Opens a separate page reserved for larger workflows that need more screen space than a menu action.</p>
+            </article>
+          </div>
         </section>
 
-        <section id="epjson" class="guide-section">
-          <h2>epJSON Shape Notes</h2>
+        <section id="settings" class="guide-section">
+          <h2>Settings</h2>
           <p>
-            EnergyPlus epJSON is schema-driven. The current converter preserves object groups and
-            now emits detailed surface and shading vertices as a `vertices` array of coordinate
-            objects. Broader IDD/schema-aware typing and extensible-field handling remains an
-            implementation target.
+            Settings opens as its own page. The current page shows where app settings are stored; additional preferences
+            will be added there as they become available.
           </p>
-        </section>
-
-        <section id="version" class="guide-section">
-          <h2>Version and IDD References</h2>
-          <p>
-            When a Version object is present, EnergyPlus version 22 or newer is accepted.
-            Future version-specific IDD and epJSON schema validation can be added under
-            `resources/energyplus/&lt;major&gt;.&lt;minor&gt;/`.
-          </p>
-        </section>
-
-        <section id="build" class="guide-section">
-          <h2>Developer Build</h2>
-          <p>
-            Use `dev.bat` from the repository root to run setup, tests, builds, and verification
-            through PowerShell with the required execution-policy bypass flags.
-          </p>
-          <pre><code>.\dev.bat setup
-.\dev.bat test
-.\dev.bat build
-.\dev.bat verify</code></pre>
         </section>
 
         <section id="updates" class="guide-section">
-          <h2>Update Log</h2>
+          <h2>Recent Changes</h2>
           <ul class="guide-log">
-            <li><strong>2026-05-31</strong> Changed Summary CSV export to variable-style names with units in brackets and unit-free values.</li>
-            <li><strong>2026-05-30</strong> Reworked the top toolbar with Open, Save, Revert, Tools, Actions, automatic analysis, and a Settings page frame.</li>
-            <li><strong>2026-05-30</strong> Replaced Geometry selected-object IDF field lists with related zone, surface, and opening links.</li>
-            <li><strong>2026-05-30</strong> Unified the left-panel input filter across Text, JSON, and Table views.</li>
-            <li><strong>2026-05-29</strong> Made Geometry 3D default to all levels, changed locate into a Sync locate checkbox, and synced Raw Text position for right-panel object jumps when enabled.</li>
-            <li><strong>2026-05-29</strong> Switched the startup model to the official EnergyPlus large office reference IDF and added vertical splitters for Raw Text and Geometry details.</li>
-            <li><strong>2026-05-29</strong> Added a Geometry result tab with Three.js 3D massing, story plan view, zone/wall/window toggles, and selected-object property details.</li>
-            <li><strong>2026-05-29</strong> Rebuilt the right panel as a single Summary metric catalog with categorized metrics, JSON/CSV export, and backend-sourced metric guide entries.</li>
-            <li><strong>2026-05-29</strong> Removed Advanced epJSON text, moved Raw Text into a shared pane for all input views, avoided synthetic Name columns in Table/Text, and added schema-aware `vertices` arrays for detailed surface epJSON output.</li>
-            <li><strong>2026-05-29</strong> Made Text view summary fields editable and added optional action-based position sync between the formatted summary and raw text.</li>
-            <li><strong>2026-05-29</strong> Locked window-level app scrolling so only panels scroll, and changed JSON value editing from a popup to inline token editing.</li>
-            <li><strong>2026-05-29</strong> Rebuilt JSON view as a structured editor with read-only syntax tokens, inline-editable value tokens, search, collapse depth, backend model patching, and raw text editing.</li>
-            <li><strong>2026-05-29</strong> Split the frontend script into ES modules under `frontend/dist/js/` and consolidated agent notes into `docs/agent.md`.</li>
-            <li><strong>2026-05-29</strong> Reorganized the toolbar, removed the Objects result tab, added analysis-to-input object jumps, and expanded zone details with surface and related-object lists.</li>
-            <li><strong>2026-05-29</strong> Restyled JSON structured view as an epJSON-shaped tree with quoted keys, braces, colons, and literal values.</li>
-            <li><strong>2026-05-29</strong> Flattened the JSON structured view so IDF objects start at the top of the tree and use smaller indentation.</li>
-            <li><strong>2026-05-29</strong> Improved input view readability with semantic JSON tree labels, shallower indentation, fully expanded Text/Table groups, and steadier table row headers.</li>
-            <li><strong>2026-05-29</strong> Reworked Text and JSON view hierarchy, added table transpose controls, and added the resizable input-analysis splitter.</li>
-            <li><strong>2026-05-29</strong> Replaced the starter sample with a larger multi-zone model and changed Table view to object-type tables.</li>
-            <li><strong>2026-05-29</strong> Added Text, JSON, and Table input views with cached structured model rendering.</li>
-            <li><strong>2026-05-29</strong> Guide navigation now stays inside the Wails WebView to avoid external `wails.localhost` connection failures.</li>
-            <li><strong>2026-05-29</strong> Added IDF/epJSON auto-detection, EnergyPlus 22+ version detection, and conversion workflow.</li>
-            <li><strong>2026-05-29</strong> Initial guide for open, analysis, edit, and developer build workflow.</li>
+            <li><strong>2026-05-31</strong> Summary CSV now writes every metric as `variable [unit],value`, using `[-]` when no unit applies.</li>
+            <li><strong>2026-05-31</strong> Tools, Guide, and Settings are separate top-level navigation buttons.</li>
+            <li><strong>2026-05-30</strong> Geometry details show related zones, surfaces, and openings for the selected object.</li>
+            <li><strong>2026-05-30</strong> The left-panel filter now works consistently across Text, JSON, and Table views.</li>
           </ul>
         </section>
       </section>
@@ -178,6 +169,11 @@
       }
 
       function renderGuides(guides) {
+        if (!Array.isArray(guides) || guides.length === 0) {
+          guideContainer.innerHTML = `<div class="empty">No metric definitions available.</div>`;
+          return;
+        }
+
         const grouped = new Map();
         guides.forEach((guide) => {
           const category = guide.category || "Uncategorized";
@@ -216,16 +212,31 @@
           .join("");
       }
 
-      async function loadSummaryMetricGuide() {
-        const api = window.go && window.go.main && window.go.main.App;
-        if (!api || typeof api.GetSummaryMetricGuides !== "function") {
-          guideContainer.innerHTML = `<div class="empty">Run inside the desktop app to load the backend metric catalog.</div>`;
-          return;
+      async function waitForAppAPI(methodName) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const api = window.go && window.go.main && window.go.main.App;
+          if (api && typeof api[methodName] === "function") {
+            return api;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
+        return null;
+      }
+
+      async function loadSummaryMetricGuide() {
+        const api = await waitForAppAPI("GetSummaryMetricGuides");
         try {
-          renderGuides(await api.GetSummaryMetricGuides());
+          if (api) {
+            renderGuides(await api.GetSummaryMetricGuides());
+            return;
+          }
+          const response = await fetch("/api/summary-metric-guides");
+          if (!response.ok) {
+            throw new Error(`Metric catalog request failed: ${response.status}`);
+          }
+          renderGuides(await response.json());
         } catch (error) {
-          guideContainer.innerHTML = `<div class="empty">${escapeHTML(error.message || String(error))}</div>`;
+          guideContainer.innerHTML = `<div class="empty">Metric catalog is available in the desktop app.</div>`;
         }
       }
 

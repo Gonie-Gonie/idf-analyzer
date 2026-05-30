@@ -61,7 +61,7 @@ Build artifacts and downloaded runtimes stay ignored by git.
 
 ## User Guide
 
-The app toolbar includes a Tools menu that navigates to bundled `frontend/dist/guide.html` and `frontend/dist/settings.html` documents inside the Wails WebView. Keep the guide cumulative: whenever a workflow, button, limitation, or developer command changes, update the relevant section and append an entry to its update log.
+The app toolbar includes top-level Tools, Guide, and Settings navigation buttons that open bundled full-page views inside the Wails WebView. Keep `frontend/dist/guide.html` focused on end-user workflows; developer commands and repository maintenance notes belong in this README or `docs/agent.md`.
 
 ## Input Views
 
@@ -75,12 +75,12 @@ The app toolbar includes a Tools menu that navigates to bundled `frontend/dist/g
 
 - The right panel has Summary and Geometry result tabs.
 - Summary shows a metric catalog grouped by model, geometry, envelope, loads, schedules, and HVAC categories.
-- Summary can be filtered and exported as categorized JSON or a two-column `name,value` CSV whose names are variable IDs with units in brackets.
+- Summary can be filtered and exported as categorized JSON or a two-column `name,value` CSV whose names are variable IDs with units in brackets, including `[-]` for unitless values.
 - Geometry parses detailed zones, walls, roofs, floors, and fenestration into a 3D view that defaults to all levels, optional story filtering, a story-by-story plan view, selectable metrics, related object links, and Sync locate jumps to the matching input object.
 - Summary metric guide entries are loaded from the same backend catalog as the calculated metrics.
 - The startup sample is the official EnergyPlus `RefBldgLargeOfficeNew2004_Chicago.idf` example vendored under `frontend/dist/samples/`.
 - Open uses the desktop file dialog, Save writes the current text back to the opened file or asks for a path, and Revert restores the text from the last opened input snapshot.
-- Analysis runs automatically after file open and after debounced editor changes; conversion and cleanup commands are grouped under the top toolbar Actions menu.
+- Analysis runs automatically after file open and after debounced editor changes; conversion and cleanup commands are grouped under the top toolbar Actions menu, while larger workflows belong under Tools.
 - Settings are stored under the local app data/config directory and currently expose only the page frame for future options.
 
 ## Project Layout

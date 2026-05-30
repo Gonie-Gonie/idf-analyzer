@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 )
@@ -47,5 +50,25 @@ func TestDefaultEnergyPlusSampleAnalyzes(t *testing.T) {
 	}
 	if result.Report.Geometry.ZoneCount < 10 || result.Report.Geometry.SurfaceCount < 50 || result.Report.Geometry.WindowCount < 10 {
 		t.Fatalf("default sample geometry too small: zones=%d surfaces=%d windows=%d", result.Report.Geometry.ZoneCount, result.Report.Geometry.SurfaceCount, result.Report.Geometry.WindowCount)
+	}
+}
+
+func TestAppAssetHandlerServesSummaryMetricGuides(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/summary-metric-guides", nil)
+	response := httptest.NewRecorder()
+
+	appAssetHandler().ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("summary metric guide API status = %d, want %d", response.Code, http.StatusOK)
+	}
+	var guides []struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&guides); err != nil {
+		t.Fatalf("summary metric guide API did not return JSON: %v", err)
+	}
+	if len(guides) != 50 {
+		t.Fatalf("summary metric guide API returned %d guides, want 50", len(guides))
 	}
 }

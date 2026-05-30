@@ -274,27 +274,38 @@ func summaryCSVNames(summary SummaryReport) map[string]string {
 	seen := map[string]int{}
 	for _, category := range summary.Categories {
 		for _, metric := range category.Metrics {
-			name := summaryCSVMetricName(metric)
+			name := summaryCSVVariableName(metric)
 			seen[name]++
 			if seen[name] > 1 {
 				name = fmt.Sprintf("%s_%d", name, seen[name])
 			}
-			out[metric.ID] = name
+			out[metric.ID] = summaryCSVMetricName(name, summaryCSVUnitLabel(metric.Unit))
 		}
 	}
 	return out
 }
 
-func summaryCSVMetricName(metric SummaryMetric) string {
-	name := trimSummaryCSVUnitSuffix(metric.ID, metric.Unit)
-	if strings.TrimSpace(metric.Unit) == "" {
-		return name
+func summaryCSVVariableName(metric SummaryMetric) string {
+	return trimSummaryCSVUnitSuffix(metric.ID, metric.Unit)
+}
+
+func summaryCSVMetricName(name string, unit string) string {
+	return name + " [" + unit + "]"
+}
+
+func summaryCSVUnitLabel(unit string) string {
+	unit = strings.TrimSpace(unit)
+	if strings.HasPrefix(unit, "[") && strings.HasSuffix(unit, "]") {
+		unit = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(unit, "["), "]"))
 	}
-	return name + " [" + metric.Unit + "]"
+	if unit == "" {
+		return "-"
+	}
+	return unit
 }
 
 func trimSummaryCSVUnitSuffix(id string, unit string) string {
-	suffixes := summaryCSVUnitSuffixes(unit)
+	suffixes := summaryCSVUnitSuffixes(summaryCSVUnitLabel(unit))
 	for _, suffix := range suffixes {
 		if strings.HasSuffix(id, suffix) {
 			return strings.TrimSuffix(id, suffix)
@@ -305,6 +316,8 @@ func trimSummaryCSVUnitSuffix(id string, unit string) string {
 
 func summaryCSVUnitSuffixes(unit string) []string {
 	switch strings.ToLower(strings.TrimSpace(unit)) {
+	case "-":
+		return nil
 	case "%":
 		return []string{"_percent", "_pct"}
 	case "deg":

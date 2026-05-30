@@ -12,7 +12,11 @@
         <p class="guide-kicker">IDF Analyzer</p>
         <h1>Settings</h1>
       </div>
-      <a class="toolbar-link" href="./index.html">Back to App</a>
+      <div class="guide-header-actions">
+        <a class="toolbar-link" href="./index.html">Back to App</a>
+        <a class="toolbar-link" href="./tools.html">Tools</a>
+        <a class="toolbar-link" href="./guide.html">Guide</a>
+      </div>
     </header>
 
     <main class="guide-layout settings-layout">
@@ -42,14 +46,28 @@
           .replaceAll("'", "&#039;");
       }
 
-      async function loadSettings() {
-        const api = window.go && window.go.main && window.go.main.App;
-        if (!api || typeof api.GetSettings !== "function") {
-          container.innerHTML = `<div class="empty">Settings are available in the desktop app.</div>`;
-          return;
+      async function waitForAppAPI(methodName) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          const api = window.go && window.go.main && window.go.main.App;
+          if (api && typeof api[methodName] === "function") {
+            return api;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 50));
         }
+        return null;
+      }
+
+      async function loadSettings() {
+        const api = await waitForAppAPI("GetSettings");
         try {
-          const result = await api.GetSettings();
+          const result = api
+            ? await api.GetSettings()
+            : await fetch("/api/settings").then((response) => {
+                if (!response.ok) {
+                  throw new Error(`Settings request failed: ${response.status}`);
+                }
+                return response.json();
+              });
           container.innerHTML = `
             <dl class="settings-list">
               <div>

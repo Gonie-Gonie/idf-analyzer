@@ -10,6 +10,7 @@ import {
   openGuide,
   openInputFile,
   openSettings,
+  openTools,
   registerLoadedDocument,
   removeUnused,
   revertToLoadedDocument,
@@ -57,6 +58,7 @@ elements.toEPJSONButton.addEventListener("click", async () => {
 });
 elements.exportSummaryJSONButton.addEventListener("click", () => exportSummary("json"));
 elements.exportSummaryCSVButton.addEventListener("click", () => exportSummary("csv"));
+elements.toolsButton.addEventListener("click", openTools);
 elements.guideButton.addEventListener("click", () => {
   closeToolbarMenus();
   openGuide();

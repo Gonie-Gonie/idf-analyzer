@@ -390,6 +390,7 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 		t.Fatalf("CSV header = %#v, want name,value", records[0])
 	}
 	csvValues := map[string]string{}
+	csvBaseNames := map[string]bool{}
 	for index, record := range records {
 		if len(record) != 2 {
 			t.Fatalf("CSV row %d has %d columns, want 2: %#v", index, len(record), record)
@@ -403,10 +404,24 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 		if strings.Contains(record[1], " m2") || strings.Contains(record[1], " %") {
 			t.Fatalf("CSV row %d includes unit in value: %#v", index, record)
 		}
+		if !strings.Contains(record[0], " [") || !strings.HasSuffix(record[0], "]") {
+			t.Fatalf("CSV row %d does not include bracketed unit: %#v", index, record)
+		}
+		baseName, _, ok := strings.Cut(record[0], " [")
+		if !ok {
+			t.Fatalf("CSV row %d has unparsable bracketed unit: %#v", index, record)
+		}
+		if csvBaseNames[baseName] {
+			t.Fatalf("duplicate CSV metric base name %q", baseName)
+		}
+		csvBaseNames[baseName] = true
 		if _, exists := csvValues[record[0]]; exists {
 			t.Fatalf("duplicate CSV metric name %q", record[0])
 		}
 		csvValues[record[0]] = record[1]
+	}
+	if _, ok := csvValues["object_count [-]"]; !ok {
+		t.Fatalf("CSV missing unitless object count name with [-] unit")
 	}
 	if got := csvValues["gross_floor_area [m2]"]; got != "200" {
 		t.Fatalf("CSV gross floor area = %q, want 200", got)
@@ -422,6 +437,18 @@ func countMetrics(summary SummaryReport) int {
 		count += len(category.Metrics)
 	}
 	return count
+}
+
+func TestSummaryCSVMetricNameNormalizesUnits(t *testing.T) {
+	unitless := SummaryMetric{ID: "object_count"}
+	if got := summaryCSVMetricName(summaryCSVVariableName(unitless), summaryCSVUnitLabel(unitless.Unit)); got != "object_count [-]" {
+		t.Fatalf("unitless CSV metric name = %q, want object_count [-]", got)
+	}
+
+	bracketed := SummaryMetric{ID: "total_wwr_percent", Unit: "[%]"}
+	if got := summaryCSVMetricName(summaryCSVVariableName(bracketed), summaryCSVUnitLabel(bracketed.Unit)); got != "total_wwr [%]" {
+		t.Fatalf("bracketed-unit CSV metric name = %q, want total_wwr [%%]", got)
+	}
 }
 
 func metricByID(t *testing.T, summary SummaryReport, id string) SummaryMetric {
