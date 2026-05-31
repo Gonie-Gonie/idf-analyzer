@@ -172,3 +172,108 @@ func TestUpdateFieldAndRemoveUnusedObjects(t *testing.T) {
 		t.Fatalf("round trip count = %d, want 6", len(roundTrip.Objects))
 	}
 }
+
+func TestAnalyzeDiagnosticsFindsCommonIssues(t *testing.T) {
+	doc, err := Parse(`
+Version, 24.1;
+
+Zone,
+  Office;                   !- Name
+
+Zone,
+  Office;                   !- Name
+
+Lights,
+  Bad Lights,               !- Name
+  Missing Zone,             !- Zone or ZoneList Name
+  Missing Schedule,         !- Schedule Name
+  LightingLevel,            !- Design Level Calculation Method
+  100;                      !- Lighting Level
+
+BuildingSurface:Detailed,
+  Bad Surface,              !- Name
+  Wall,                     !- Surface Type
+  Missing Zone,             !- Zone Name
+  Outdoors,                 !- Outside Boundary Condition
+  ,                         !- Outside Boundary Condition Object
+  SunExposed,               !- Sun Exposure
+  WindExposed,              !- Wind Exposure
+  0.5,                      !- View Factor to Ground
+  3,                        !- Number of Vertices
+  0, 0, 0,
+  0, 0, 0,
+  0, 0, 0;
+`)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	diagnostics := AnalyzeDiagnostics(doc)
+	assertDiagnosticCode(t, diagnostics, "missing_required_object")
+	assertDiagnosticCode(t, diagnostics, "duplicate_name")
+	assertDiagnosticCode(t, diagnostics, "missing_schedule_reference")
+	assertDiagnosticCode(t, diagnostics, "missing_zone_reference")
+	assertDiagnosticCode(t, diagnostics, "zero_area")
+}
+
+func TestCleanupPreviewAppliesSelectedRules(t *testing.T) {
+	doc, err := Parse(`
+Version, 24.1;
+
+Schedule:Compact,
+  Used,                     !- Name
+  ,                         !- Schedule Type Limits Name
+  Through: 12/31,           !- Field 1
+  For: AllDays,             !- Field 2
+  Until: 24:00,             !- Field 3
+  1;                        !- Field 4
+
+Schedule:Compact,
+  Unused,                   !- Name
+  ,                         !- Schedule Type Limits Name
+  Through: 12/31,           !- Field 1
+  For: AllDays,             !- Field 2
+  Until: 24:00,             !- Field 3
+  0;                        !- Field 4
+
+Lights,
+  Lights,                   !- Name
+  Zone A,                   !- Zone or ZoneList Name
+  Used,                     !- Schedule Name
+  LightingLevel,            !- Design Level Calculation Method
+  100;                      !- Lighting Level
+
+Output:Variable,
+  *,                        !- Key Value
+  Zone Mean Air Temperature,!- Variable Name
+  Hourly;                   !- Reporting Frequency
+
+Output:Variable,
+  *,                        !- Key Value
+  Zone Mean Air Temperature,!- Variable Name
+  Hourly;                   !- Reporting Frequency
+`)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	scan := ScanCleanup(doc)
+	if len(scan.Candidates) != 2 {
+		t.Fatalf("cleanup candidates = %d, want 2: %#v", len(scan.Candidates), scan.Candidates)
+	}
+	updated, preview := ApplyCleanup(doc, []string{CleanupRuleUnusedSchedules, CleanupRuleDuplicateOutputVars})
+	if preview.RemovedCount != 2 {
+		t.Fatalf("removed count = %d, want 2", preview.RemovedCount)
+	}
+	if len(updated.Objects) != len(doc.Objects)-2 {
+		t.Fatalf("updated object count = %d, want %d", len(updated.Objects), len(doc.Objects)-2)
+	}
+}
+
+func assertDiagnosticCode(t *testing.T, diagnostics []Diagnostic, code string) {
+	t.Helper()
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Code == code {
+			return
+		}
+	}
+	t.Fatalf("diagnostic code %q not found in %#v", code, diagnostics)
+}

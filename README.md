@@ -12,7 +12,7 @@ Lightweight desktop tooling for EnergyPlus IDF files, built with Go and Wails us
 - View input as editable text, structured JSON, or a spreadsheet-style field table.
 - Summarize object types, schedules, zones, unused named objects, and simple HVAC node connections.
 - Jump from summary, schedule, unused, zone, and system analysis items to the matching object in the active input view.
-- Edit field values and remove unused named objects through the Go API.
+- Edit field values, diagnose common modeling issues, and run cleanup workflows through the Go API.
 - Run the frontend without a Node/npm build chain.
 
 ## Requirements
@@ -73,16 +73,18 @@ The app toolbar includes top-level Tools, Guide, and Settings navigation buttons
 
 ## Analysis Navigation
 
-- The right panel has Summary and Geometry result tabs.
+- The right panel has Summary, Diagnose, and Geometry result tabs.
 - Summary shows a metric catalog grouped by model, geometry, envelope, loads, schedules, and HVAC categories.
 - Summary can be filtered and exported as categorized JSON or a two-column `name,value` CSV whose names are variable IDs with units in brackets, including `[-]` for unitless values.
+- Diagnose reports error/warning issues such as missing references, duplicate names, orphan resources, required-object gaps, geometry problems, schedule-hour limits, and HVAC node graph hints.
 - Geometry parses detailed zones, walls, roofs, floors, and fenestration into a 3D view that defaults to all levels, optional story filtering, a story-by-story plan view, selectable metrics, related object links, and Sync locate jumps to the matching input object.
 - Summary metric guide entries are loaded from the same backend catalog as the calculated metrics.
 - The startup sample is the official EnergyPlus `RefBldgLargeOfficeNew2004_Chicago.idf` example vendored under `frontend/dist/samples/`.
 - The startup sample text is shown first, then analysis and Geometry rendering work are deferred until the UI can respond.
 - Open uses the desktop file dialog, Save writes the current text back to the opened file or asks for a path, and Revert restores the text from the last opened input snapshot.
-- Analysis runs automatically after file open and after debounced editor changes; conversion and cleanup commands are grouped under the top toolbar Actions menu, while larger workflows belong under Tools.
+- Analysis runs automatically after file open and after debounced editor changes; conversion commands are grouped under the top toolbar Actions menu, while larger workflows belong under Tools.
 - Tools includes Multi-IDF Summary, which opens several EnergyPlus inputs, analyzes them concurrently, displays progress, compares Summary metrics in a transposable table, and exports CSV in the selected table direction.
+- Tools includes Cleanup Wizard, which scans a file, shows cleanup candidates, lets users choose rules, previews removals, and applies or exports the cleaned copy.
 - Settings are stored under the local app data/config directory and currently expose only the page frame for future options.
 
 ## Project Layout

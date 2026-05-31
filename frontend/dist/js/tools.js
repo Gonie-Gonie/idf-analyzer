@@ -5,6 +5,8 @@ const state = {
   running: false,
   progressFiles: new Map(),
   progressListenerRegistered: false,
+  cleanup: null,
+  cleanupPreview: null,
 };
 
 const elements = {
@@ -17,6 +19,14 @@ const elements = {
   fileList: document.querySelector("#multiSummaryFiles"),
   table: document.querySelector("#multiSummaryTable"),
   orientationButtons: document.querySelectorAll("[data-summary-orientation]"),
+  cleanupScan: document.querySelector("#cleanupScan"),
+  cleanupPreview: document.querySelector("#cleanupPreview"),
+  cleanupApply: document.querySelector("#cleanupApply"),
+  cleanupExport: document.querySelector("#cleanupExport"),
+  cleanupStatus: document.querySelector("#cleanupStatus"),
+  cleanupRules: document.querySelector("#cleanupRules"),
+  cleanupPreviewPane: document.querySelector("#cleanupPreviewPane"),
+  cleanupCandidates: document.querySelector("#cleanupCandidates"),
 };
 
 function appAPI() {
@@ -302,3 +312,214 @@ elements.orientationButtons.forEach((button) => {
 });
 
 registerProgressListener();
+
+elements.cleanupScan.addEventListener("click", scanCleanup);
+elements.cleanupPreview.addEventListener("click", previewCleanup);
+elements.cleanupApply.addEventListener("click", applyCleanup);
+elements.cleanupExport.addEventListener("click", exportCleanupCopy);
+
+async function scanCleanup() {
+  setCleanupBusy(true);
+  elements.cleanupStatus.textContent = "Opening file dialog";
+  try {
+    const result = await postJSON("/api/cleanup-scan", {});
+    if (result?.canceled) {
+      elements.cleanupStatus.textContent = "File selection canceled";
+      return;
+    }
+    state.cleanup = result;
+    state.cleanupPreview = null;
+    renderCleanupScan();
+  } catch (error) {
+    elements.cleanupStatus.textContent = error?.message || String(error);
+  } finally {
+    setCleanupBusy(false);
+  }
+}
+
+async function previewCleanup() {
+  if (!state.cleanup) {
+    return;
+  }
+  setCleanupBusy(true);
+  elements.cleanupStatus.textContent = "Building cleanup preview";
+  try {
+    state.cleanupPreview = await postJSON("/api/cleanup-preview", {
+      text: state.cleanup.text,
+      ruleIds: selectedCleanupRuleIDs(),
+    });
+    renderCleanupPreview();
+  } catch (error) {
+    elements.cleanupStatus.textContent = error?.message || String(error);
+  } finally {
+    setCleanupBusy(false);
+  }
+}
+
+async function applyCleanup() {
+  if (!state.cleanup) {
+    return;
+  }
+  if (!window.confirm(`Apply selected cleanup rules to ${state.cleanup.filename || "the original file"}?`)) {
+    return;
+  }
+  if (!state.cleanupPreview) {
+    await previewCleanup();
+  }
+  setCleanupBusy(true);
+  elements.cleanupStatus.textContent = "Applying cleanup to original file";
+  try {
+    const result = await postJSON("/api/cleanup-apply", {
+      path: state.cleanup.path,
+      text: state.cleanup.text,
+      ruleIds: selectedCleanupRuleIDs(),
+    });
+    if (!result?.canceled) {
+      elements.cleanupStatus.textContent = `Applied cleanup to ${result.filename || "original file"} (${result.removedCount || 0} removed)`;
+    }
+  } catch (error) {
+    elements.cleanupStatus.textContent = error?.message || String(error);
+  } finally {
+    setCleanupBusy(false);
+  }
+}
+
+async function exportCleanupCopy() {
+  if (!state.cleanup) {
+    return;
+  }
+  setCleanupBusy(true);
+  elements.cleanupStatus.textContent = "Exporting cleaned copy";
+  try {
+    const result = await postJSON("/api/cleanup-export", {
+      text: state.cleanup.text,
+      suggestedFilename: cleanedFilename(state.cleanup.filename),
+      ruleIds: selectedCleanupRuleIDs(),
+    });
+    if (result?.canceled) {
+      elements.cleanupStatus.textContent = "Export canceled";
+    } else {
+      elements.cleanupStatus.textContent = `Exported ${result.filename || "cleaned copy"} (${result.removedCount || 0} removed)`;
+    }
+  } catch (error) {
+    elements.cleanupStatus.textContent = error?.message || String(error);
+  } finally {
+    setCleanupBusy(false);
+  }
+}
+
+function renderCleanupScan() {
+  const cleanup = state.cleanup;
+  const candidates = cleanup?.scan?.candidates || [];
+  const rules = cleanup?.scan?.rules || [];
+  elements.cleanupStatus.textContent = `${cleanup.filename || "Input file"} scanned: ${candidates.length} cleanup candidates`;
+  elements.cleanupRules.innerHTML = rules.map(renderCleanupRule).join("");
+  elements.cleanupRules.querySelectorAll("input[data-cleanup-rule]").forEach((input) => {
+    input.addEventListener("change", () => {
+      state.cleanupPreview = null;
+      renderCleanupPreview();
+    });
+  });
+  renderCleanupCandidates(candidates);
+  renderCleanupPreview();
+}
+
+function renderCleanupRule(rule) {
+  const disabled = !rule.available ? "disabled" : "";
+  const checked = rule.default && rule.available ? "checked" : "";
+  const status = rule.future ? "Future" : rule.available ? "Available" : "No candidates";
+  return `
+    <label class="cleanup-rule ${rule.available ? "" : "disabled"}">
+      <input data-cleanup-rule="${escapeHTML(rule.id)}" type="checkbox" ${checked} ${disabled} />
+      <span>
+        <strong>${escapeHTML(rule.name)}</strong>
+        <small>${escapeHTML(rule.description)}</small>
+        <em>${escapeHTML(status)}</em>
+      </span>
+    </label>`;
+}
+
+function renderCleanupCandidates(candidates) {
+  if (!candidates.length) {
+    elements.cleanupCandidates.innerHTML = `<div class="empty">No cleanup candidates found.</div>`;
+    return;
+  }
+  elements.cleanupCandidates.innerHTML = `
+    <table class="tool-table">
+      <thead>
+        <tr>
+          <th>rule</th>
+          <th>object</th>
+          <th>reason</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${candidates
+          .map((candidate) => `
+            <tr>
+              <td>${escapeHTML(candidate.ruleId)}</td>
+              <td><strong>${escapeHTML(candidate.objectType)}</strong><span>${escapeHTML(candidate.objectName || `#${Number(candidate.objectIndex) + 1}`)}</span></td>
+              <td>${escapeHTML(candidate.reason)}</td>
+            </tr>`)
+          .join("")}
+      </tbody>
+    </table>`;
+}
+
+function renderCleanupPreview() {
+  const canPreview = Boolean(state.cleanup);
+  elements.cleanupPreview.disabled = !canPreview;
+  elements.cleanupApply.disabled = !canPreview;
+  elements.cleanupExport.disabled = !canPreview;
+  if (!state.cleanupPreview) {
+    elements.cleanupPreviewPane.innerHTML = `<div class="empty">Choose rules and click Preview.</div>`;
+    return;
+  }
+  const removed = state.cleanupPreview.removedCandidates || [];
+  elements.cleanupPreviewPane.innerHTML = `
+    <div class="cleanup-preview-summary">
+      <strong>${escapeHTML(state.cleanupPreview.removedCount || 0)} objects removed</strong>
+      <span>${escapeHTML(state.cleanupPreview.objectCount || 0)} objects remain after cleanup</span>
+    </div>
+    ${
+      removed.length
+        ? `<div class="cleanup-preview-list">
+            ${removed
+              .slice(0, 80)
+              .map((candidate) => `<div><span>${escapeHTML(candidate.objectType)}</span><strong>${escapeHTML(candidate.objectName || `#${Number(candidate.objectIndex) + 1}`)}</strong></div>`)
+              .join("")}
+          </div>`
+        : `<div class="empty">Selected rules do not remove objects.</div>`
+    }`;
+}
+
+function selectedCleanupRuleIDs() {
+  return [...elements.cleanupRules.querySelectorAll("input[data-cleanup-rule]:checked")].map((input) => input.dataset.cleanupRule);
+}
+
+function setCleanupBusy(busy) {
+  elements.cleanupScan.disabled = busy;
+  elements.cleanupPreview.disabled = busy || !state.cleanup;
+  elements.cleanupApply.disabled = busy || !state.cleanup;
+  elements.cleanupExport.disabled = busy || !state.cleanup;
+}
+
+async function postJSON(url, payload) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text() || `${url} failed`);
+  }
+  return response.json();
+}
+
+function cleanedFilename(filename = "cleaned.idf") {
+  const dot = filename.lastIndexOf(".");
+  if (dot <= 0) {
+    return `${filename}-cleaned.idf`;
+  }
+  return `${filename.slice(0, dot)}-cleaned${filename.slice(dot)}`;
+}

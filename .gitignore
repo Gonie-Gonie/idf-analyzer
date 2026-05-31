@@ -3,6 +3,7 @@
 /build/
 *.exe
 *.test
+*.syso
 coverage.out
 
 # Wails generated frontend bindings

@@ -10,6 +10,7 @@ export function renderReport() {
   }
 
   renderSummary(report.summary);
+  renderDiagnostics(report.diagnostics);
   if (state.activeResultTab === "geometry") {
     renderGeometry(report.geometry);
   } else {
@@ -25,6 +26,8 @@ export function renderEmpty() {
   elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;
   elements.geometryPlan.innerHTML = "";
   elements.geometryDetails.innerHTML = `<div class="empty">Select a zone, wall, or window</div>`;
+  elements.diagnosticCount.textContent = "0 issues";
+  elements.diagnosticList.innerHTML = `<div class="empty">No diagnostics yet</div>`;
   elements.textObjectView.innerHTML = `<div class="empty">No formatted input yet</div>`;
   elements.jsonStructuredView.innerHTML = `<div class="empty">No structured input yet</div>`;
   elements.fieldTable.innerHTML = `<div class="empty">No field table yet</div>`;
@@ -72,6 +75,50 @@ export function renderSummary(summary = state.report?.summary) {
     ? `${visibleMetricCount} of ${totalMetricCount} metrics`
     : `${totalMetricCount} metrics`;
   elements.summaryCategories.innerHTML = categoryHTML || `<div class="empty">No matching summary metrics</div>`;
+}
+
+export function renderDiagnostics(diagnostics = state.report?.diagnostics) {
+  const items = diagnostics || [];
+  const query = (elements.diagnosticFilter?.value || "").trim().toLowerCase();
+  const visible = items.filter((item) => diagnosticMatchesQuery(item, query));
+  const errorCount = items.filter((item) => item.severity === "error").length;
+  const warningCount = items.filter((item) => item.severity === "warning").length;
+  elements.diagnosticCount.textContent = query
+    ? `${visible.length} of ${items.length} issues`
+    : `${errorCount} errors, ${warningCount} warnings`;
+  elements.diagnosticList.innerHTML = visible.length
+    ? visible.map(renderDiagnosticItem).join("")
+    : `<div class="empty">${items.length ? "No matching diagnostics" : "No diagnostics found"}</div>`;
+}
+
+function renderDiagnosticItem(item) {
+  const target = item.objectIndex || item.objectIndex === 0
+    ? `<button class="diagnostic-link navigable-row" data-jump-object-index="${escapeHTML(item.objectIndex)}" data-jump-object-type="${escapeHTML(item.objectType || "")}" type="button">Object #${escapeHTML(Number(item.objectIndex) + 1)}</button>`
+    : "";
+  const context = [item.objectType, item.objectName, item.field, item.value]
+    .filter((value) => String(value ?? "").trim() !== "")
+    .map((value) => `<span>${escapeHTML(value)}</span>`)
+    .join("");
+  return `
+    <article class="diagnostic-item ${escapeHTML(item.severity || "warning")}">
+      <div class="diagnostic-main">
+        <div>
+          <span class="diagnostic-severity">${escapeHTML(item.severity || "warning")}</span>
+          <span class="diagnostic-category">${escapeHTML(item.category || "Diagnostic")}</span>
+        </div>
+        <strong>${escapeHTML(item.message || "")}</strong>
+        <div class="diagnostic-context">${context}</div>
+      </div>
+      ${target}
+    </article>`;
+}
+
+function diagnosticMatchesQuery(item, query) {
+  if (!query) {
+    return true;
+  }
+  return [item.severity, item.category, item.code, item.message, item.objectType, item.objectName, item.field, item.value]
+    .some((value) => String(value ?? "").toLowerCase().includes(query));
 }
 
 function renderMetricRow(metric) {

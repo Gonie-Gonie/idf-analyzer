@@ -26,7 +26,6 @@
             <div class="toolbar-menu-popover">
               <button id="toEPJSONButton" type="button">To epJSON</button>
               <button id="toIDFButton" type="button">To IDF</button>
-              <button id="removeUnusedButton" type="button">Remove unused</button>
             </div>
           </details>
         </div>
@@ -83,6 +82,7 @@
         <section class="analysis-panel" aria-label="Analysis results">
           <nav class="tabs" aria-label="Result tabs">
             <button class="tab active" data-result-tab="summary" type="button">Summary</button>
+            <button class="tab" data-result-tab="diagnose" type="button">Diagnose</button>
             <button class="tab" data-result-tab="geometry" type="button">Geometry</button>
           </nav>
 
@@ -100,6 +100,21 @@
             </div>
             <div class="summary-pane">
               <div id="summaryCategories" class="summary-categories"></div>
+            </div>
+          </div>
+
+          <div class="result-pane" id="diagnosePane">
+            <div class="summary-head">
+              <div>
+                <h2>Diagnose</h2>
+                <span id="diagnosticCount">0 issues</span>
+              </div>
+              <div class="summary-tools">
+                <input id="diagnosticFilter" type="search" placeholder="Filter issues" />
+              </div>
+            </div>
+            <div class="diagnostic-pane">
+              <div id="diagnosticList" class="diagnostic-list"></div>
             </div>
           </div>
 

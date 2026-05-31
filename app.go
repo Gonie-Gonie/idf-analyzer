@@ -63,6 +63,30 @@ type SaveFileResult struct {
 	Filename string `json:"filename,omitempty"`
 }
 
+type CleanupFileResult struct {
+	Canceled bool            `json:"canceled,omitempty"`
+	Path     string          `json:"path,omitempty"`
+	Filename string          `json:"filename,omitempty"`
+	Text     string          `json:"text,omitempty"`
+	Format   string          `json:"format,omitempty"`
+	Version  string          `json:"version,omitempty"`
+	Scan     idf.CleanupScan `json:"scan"`
+}
+
+type CleanupPreviewResult struct {
+	Text              string                 `json:"text"`
+	RemovedCandidates []idf.CleanupCandidate `json:"removedCandidates"`
+	RemovedCount      int                    `json:"removedCount"`
+	ObjectCount       int                    `json:"objectCount"`
+}
+
+type CleanupApplyResult struct {
+	Canceled     bool   `json:"canceled,omitempty"`
+	Path         string `json:"path,omitempty"`
+	Filename     string `json:"filename,omitempty"`
+	RemovedCount int    `json:"removedCount"`
+}
+
 type AppSettings struct {
 	Version int `json:"version"`
 }
@@ -241,6 +265,31 @@ func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) 
 	}), nil
 }
 
+func (a *App) ScanCleanupInputFile() (*CleanupFileResult, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("desktop runtime is not ready")
+	}
+	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+		Title:   "Open EnergyPlus input for cleanup",
+		Filters: inputFileFilters(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if path == "" {
+		return &CleanupFileResult{Canceled: true}, nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	result, err := cleanupFileResultFromText(string(content), path)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
 func (a *App) SaveIDF(path string, text string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
@@ -368,6 +417,53 @@ func (a *App) ExportSummaryText(text string, format string) (*SummaryExportResul
 	default:
 		return nil, fmt.Errorf("unsupported summary export format %q; use json or csv", format)
 	}
+}
+
+func (a *App) PreviewCleanupText(text string, ruleIDs []string) (*CleanupPreviewResult, error) {
+	return previewCleanupText(text, ruleIDs)
+}
+
+func (a *App) ExportCleanupCopy(text string, suggestedFilename string, ruleIDs []string) (*CleanupApplyResult, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("desktop runtime is not ready")
+	}
+	preview, err := previewCleanupText(text, ruleIDs)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(suggestedFilename) == "" {
+		suggestedFilename = "cleaned.idf"
+	}
+	path, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Export cleaned EnergyPlus input",
+		DefaultFilename: suggestedFilename,
+		Filters:         inputFileFilters(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	if path == "" {
+		return &CleanupApplyResult{Canceled: true, RemovedCount: preview.RemovedCount}, nil
+	}
+	if err := os.WriteFile(path, []byte(preview.Text), 0o644); err != nil {
+		return nil, err
+	}
+	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), RemovedCount: preview.RemovedCount}, nil
+}
+
+func (a *App) ApplyCleanupToFile(path string, text string, ruleIDs []string) (*CleanupApplyResult, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, fmt.Errorf("cleanup apply requires an original file path")
+	}
+	preview, err := previewCleanupText(text, ruleIDs)
+	if err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(path, []byte(preview.Text), 0o644); err != nil {
+		return nil, err
+	}
+	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), RemovedCount: preview.RemovedCount}, nil
 }
 
 func (a *App) GetSummaryMetricGuides() []idf.SummaryGuide {
@@ -531,6 +627,48 @@ func ensureUniqueMultiSummaryLabels(files []MultiSummaryFile) {
 		}
 		files[index].Label = label
 	}
+}
+
+func cleanupFileResultFromText(text string, path string) (*CleanupFileResult, error) {
+	model, err := epinput.Parse(path, []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	return &CleanupFileResult{
+		Path:     path,
+		Filename: filepath.Base(path),
+		Text:     text,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Scan:     idf.ScanCleanup(doc),
+	}, nil
+}
+
+func previewCleanupText(text string, ruleIDs []string) (*CleanupPreviewResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	updated, preview := idf.ApplyCleanup(doc, ruleIDs)
+	output := text
+	if preview.RemovedCount > 0 || idf.CleanupCompacts(ruleIDs) {
+		output = cleanupOutputText(updated, model)
+	}
+	return &CleanupPreviewResult{
+		Text:              output,
+		RemovedCandidates: preview.RemovedCandidates,
+		RemovedCount:      preview.RemovedCount,
+		ObjectCount:       len(updated.Objects),
+	}, nil
+}
+
+func cleanupOutputText(doc idf.Document, original *epinput.Model) string {
+	if original != nil && original.Format == epinput.FormatEPJSON {
+		return writeDocumentInOriginalFormat(doc, original)
+	}
+	return doc.String()
 }
 
 func (a *App) GetSettings() (*SettingsResult, error) {

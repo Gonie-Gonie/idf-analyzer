@@ -25,10 +25,12 @@
         <a href="#files">Files</a>
         <a href="#input-views">Input Views</a>
         <a href="#summary">Summary</a>
+        <a href="#diagnose">Diagnose</a>
         <a href="#geometry">Geometry</a>
         <a href="#summary-metrics">Metric Catalog</a>
         <a href="#actions">Actions</a>
         <a href="#multi-idf-summary">Multi-IDF Summary</a>
+        <a href="#cleanup-wizard">Cleanup Wizard</a>
         <a href="#settings">Settings</a>
         <a href="#updates">Recent Changes</a>
       </nav>
@@ -97,6 +99,15 @@
           </p>
         </section>
 
+        <section id="diagnose" class="guide-section">
+          <h2>Diagnose</h2>
+          <p>
+            Diagnose lists likely run-blocking errors and warning-level modeling risks, including missing references,
+            duplicate names, orphan resources, missing required objects, geometry issues, unsupported schedule-hour
+            calculations, and disconnected HVAC node graph hints.
+          </p>
+        </section>
+
         <section id="geometry" class="guide-section">
           <h2>Geometry</h2>
           <p>
@@ -129,12 +140,12 @@
               <p>Converts the current input to epJSON text and refreshes the views.</p>
             </article>
             <article>
-              <h3>Remove unused</h3>
-              <p>Removes supported unused resource objects such as schedules, materials, constructions, curves, and tables.</p>
+              <h3>Cleanup Wizard</h3>
+              <p>Moves cleanup into Tools so candidates and rules can be reviewed before changes are written.</p>
             </article>
             <article>
               <h3>Tools</h3>
-              <p>Opens larger workflows that need more screen space than a menu action, starting with Multi-IDF Summary.</p>
+              <p>Opens larger workflows that need more screen space than a menu action, including Multi-IDF Summary and Cleanup Wizard.</p>
             </article>
           </div>
         </section>
@@ -145,6 +156,16 @@
             Multi-IDF Summary is available from Tools. Select several input files, wait for the progress bar to finish,
             then review the combined Summary table. Metrics can be shown as rows with buildings as columns, or transposed
             with buildings as rows. Export CSV uses the currently selected table direction.
+          </p>
+        </section>
+
+        <section id="cleanup-wizard" class="guide-section">
+          <h2>Cleanup Wizard</h2>
+          <p>
+            Cleanup Wizard scans a selected file, shows removable object candidates, lets you choose cleanup rules,
+            previews removed objects, then either applies the cleanup to the original file or exports a cleaned copy.
+            Current rules cover unused schedules, unused envelope resources, unused curves/tables, duplicate
+            Output:Variable objects, and compact formatting. Comment-only cleanup is reserved for later.
           </p>
         </section>
 
@@ -159,6 +180,7 @@
         <section id="updates" class="guide-section">
           <h2>Recent Changes</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-31</strong> Added Diagnose results and moved remove-unused cleanup into the Tools Cleanup Wizard review flow.</li>
             <li><strong>2026-05-31</strong> Summary CSV now writes every metric as `variable [unit],value`, using `[-]` when no unit applies.</li>
             <li><strong>2026-05-31</strong> Improved startup and splitter responsiveness by deferring startup sample analysis and Geometry rendering work.</li>
             <li><strong>2026-05-31</strong> Added Multi-IDF Summary under Tools with multi-file selection, progress, table transpose, and CSV export.</li>

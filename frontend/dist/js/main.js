@@ -12,13 +12,12 @@ import {
   openSettings,
   openTools,
   registerLoadedDocument,
-  removeUnused,
   revertToLoadedDocument,
   saveInputFile,
   scheduleAutoAnalyze,
   updateDocumentActions,
 } from "./actions.js";
-import { renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
+import { renderDiagnostics, renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
 import { renderGeometry, resizeGeometry, setGeometryMode, setGeometryStory } from "./geometry-view.js";
 import {
   configureInputViews,
@@ -44,10 +43,6 @@ elements.fileInput.addEventListener("change", async (event) => {
 
 elements.saveButton.addEventListener("click", saveInputFile);
 elements.revertButton.addEventListener("click", revertToLoadedDocument);
-elements.removeUnusedButton.addEventListener("click", async () => {
-  closeToolbarMenus();
-  await removeUnused();
-});
 elements.toIDFButton.addEventListener("click", async () => {
   closeToolbarMenus();
   await convertInput("idf");
@@ -79,6 +74,7 @@ elements.syncRawTextToggle.addEventListener("change", () => {
 });
 elements.inputFilter.addEventListener("input", () => setInputFilter(elements.inputFilter.value));
 elements.summaryFilter.addEventListener("input", () => renderSummary());
+elements.diagnosticFilter.addEventListener("input", () => renderDiagnostics());
 elements.resultTabButtons.forEach((button) => {
   button.addEventListener("click", () => switchResultTab(button.dataset.resultTab));
 });

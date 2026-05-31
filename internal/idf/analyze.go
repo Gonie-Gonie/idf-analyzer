@@ -15,6 +15,7 @@ type Report struct {
 	UnusedObjects   []NamedObject    `json:"unusedObjects"`
 	Summary         SummaryReport    `json:"summary"`
 	Geometry        GeometryReport   `json:"geometry"`
+	Diagnostics     []Diagnostic     `json:"diagnostics"`
 }
 
 type TypeCount struct {
@@ -129,6 +130,7 @@ func Analyze(doc Document) Report {
 	report.UnusedObjects = FindUnusedObjects(doc)
 	report.Summary = AnalyzeSummary(doc)
 	report.Geometry = AnalyzeGeometry(doc)
+	report.Diagnostics = AnalyzeDiagnostics(doc)
 	return report
 }
 
