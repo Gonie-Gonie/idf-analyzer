@@ -72,46 +72,31 @@
           <div class="tool-title-row">
             <div>
               <h2>Cleanup Wizard</h2>
-              <p>Scan an input file, review cleanup candidates, choose rules, preview removals, then apply or export a cleaned copy.</p>
+              <p id="cleanupDocumentLabel">Review cleanup rules and candidates for the current input.</p>
             </div>
             <div class="tool-actions">
-              <button id="cleanupScan" type="button">Scan File</button>
-              <button id="cleanupPreview" type="button" disabled>Preview</button>
-              <button id="cleanupApply" type="button" disabled>Apply</button>
-              <button id="cleanupExport" type="button" disabled>Export Copy</button>
+              <button id="cleanupSave" type="button" disabled>Save</button>
+              <button id="cleanupSaveAs" type="button" disabled>Save As</button>
             </div>
-          </div>
-
-          <div class="wizard-steps" aria-label="Cleanup wizard steps">
-            <span class="active">1. Scan</span>
-            <span>2. Review candidates</span>
-            <span>3. Select cleanup rules</span>
-            <span>4. Preview object removal</span>
-            <span>5. Apply / Export cleaned copy</span>
-          </div>
-
-          <div class="tool-control-row">
-            <span id="cleanupStatus" class="tool-muted">No file scanned</span>
           </div>
 
           <div class="cleanup-grid">
-            <div>
+            <section>
               <h3>Rules</h3>
               <div id="cleanupRules" class="cleanup-rules">
-                <div class="empty">Scan a file to load cleanup rules.</div>
+                <div class="empty">Open an input in the main app, then return to Tools.</div>
               </div>
-            </div>
-            <div>
-              <h3>Preview</h3>
-              <div id="cleanupPreviewPane" class="cleanup-preview">
-                <div class="empty">No preview yet</div>
+            </section>
+            <section>
+              <div class="cleanup-candidate-head">
+                <h3>Candidates</h3>
+                <input id="cleanupCandidateFilter" type="search" placeholder="Filter candidates" aria-label="Filter cleanup candidates" />
+                <span id="cleanupCandidateStats" class="tool-muted">0 selected</span>
               </div>
-            </div>
-          </div>
-
-          <h3>Review Candidates</h3>
-          <div id="cleanupCandidates" class="tool-table-wrap cleanup-candidates">
-            <div class="empty">Scan a file to review cleanup candidates.</div>
+              <div id="cleanupCandidates" class="tool-table-wrap cleanup-candidates">
+                <div class="empty">Open an input in the main app, then return to Tools.</div>
+              </div>
+            </section>
           </div>
         </section>
       </section>

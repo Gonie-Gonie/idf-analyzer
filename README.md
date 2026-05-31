@@ -83,7 +83,7 @@ The app toolbar includes top-level Tools, Guide, and Settings navigation buttons
 - Open uses the desktop file dialog, Save writes the current text back to the opened file or asks for a path, and Revert restores the text from the last opened input snapshot.
 - Analysis runs automatically after file open and after debounced editor changes; larger workflows belong under Tools.
 - Tools includes Multi-IDF Summary, which opens several EnergyPlus inputs, analyzes them concurrently, displays progress, compares Summary metrics in a transposable table, and exports CSV in the selected table direction.
-- Tools includes Cleanup Wizard, which scans a file, shows cleanup candidates, lets users choose rules, previews removals, and applies or exports the cleaned copy.
+- Tools includes Cleanup Wizard, which works on the current app input, lets users choose cleanup rules, filter and include/exclude individual candidates, then Save or Save As the cleaned result.
 - Settings are stored under the local app data/config directory and currently expose only the page frame for future options.
 
 ## Project Layout

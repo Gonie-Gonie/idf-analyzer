@@ -25,6 +25,7 @@ type CleanupRule struct {
 }
 
 type CleanupCandidate struct {
+	Key         string `json:"key"`
 	RuleID      string `json:"ruleId"`
 	ObjectIndex int    `json:"objectIndex"`
 	ObjectType  string `json:"objectType"`
@@ -50,11 +51,12 @@ func ScanCleanup(doc Document) CleanupScan {
 	}
 }
 
-func PreviewCleanup(doc Document, ruleIDs []string) CleanupPreview {
+func PreviewCleanup(doc Document, ruleIDs []string, excludedCandidateKeys ...[]string) CleanupPreview {
 	selected := selectedCleanupRules(ruleIDs)
+	excluded := selectedCleanupCandidateKeys(excludedCandidateKeys)
 	var removed []CleanupCandidate
 	for _, candidate := range cleanupCandidates(doc) {
-		if selected[candidate.RuleID] {
+		if selected[candidate.RuleID] && !excluded[candidate.Key] {
 			removed = append(removed, candidate)
 		}
 	}
@@ -64,8 +66,8 @@ func PreviewCleanup(doc Document, ruleIDs []string) CleanupPreview {
 	}
 }
 
-func ApplyCleanup(doc Document, ruleIDs []string) (Document, CleanupPreview) {
-	preview := PreviewCleanup(doc, ruleIDs)
+func ApplyCleanup(doc Document, ruleIDs []string, excludedCandidateKeys ...[]string) (Document, CleanupPreview) {
+	preview := PreviewCleanup(doc, ruleIDs, excludedCandidateKeys...)
 	if len(preview.RemovedCandidates) == 0 {
 		return doc.clone(), preview
 	}
@@ -150,6 +152,7 @@ func cleanupCandidates(doc Document) []CleanupCandidate {
 			continue
 		}
 		candidates = append(candidates, CleanupCandidate{
+			Key:         cleanupCandidateKey(ruleID, obj.Index),
 			RuleID:      ruleID,
 			ObjectIndex: obj.Index,
 			ObjectType:  obj.Type,
@@ -194,6 +197,7 @@ func duplicateOutputVariableCandidates(doc Document) []CleanupCandidate {
 		signature := outputVariableSignature(obj)
 		if first, ok := seen[signature]; ok {
 			candidates = append(candidates, CleanupCandidate{
+				Key:         cleanupCandidateKey(CleanupRuleDuplicateOutputVars, obj.Index),
 				RuleID:      CleanupRuleDuplicateOutputVars,
 				ObjectIndex: obj.Index,
 				ObjectType:  obj.Type,
@@ -224,4 +228,21 @@ func selectedCleanupRules(ruleIDs []string) map[string]bool {
 		}
 	}
 	return out
+}
+
+func selectedCleanupCandidateKeys(groups [][]string) map[string]bool {
+	out := map[string]bool{}
+	for _, group := range groups {
+		for _, key := range group {
+			key = strings.TrimSpace(key)
+			if key != "" {
+				out[key] = true
+			}
+		}
+	}
+	return out
+}
+
+func cleanupCandidateKey(ruleID string, objectIndex int) string {
+	return fmt.Sprintf("%s:%d", ruleID, objectIndex)
 }

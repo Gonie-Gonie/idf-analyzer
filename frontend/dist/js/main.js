@@ -9,6 +9,7 @@ import {
   openInputFile,
   openSettings,
   openTools,
+  currentDocumentStorageKey,
   registerLoadedDocument,
   revertToLoadedDocument,
   saveInputFile,
@@ -112,20 +113,49 @@ initializeWorkspaceSplitter();
 initializeVerticalSplitters();
 renderEmpty();
 updateDocumentActions();
-loadDefaultSampleIDF().then(async (sampleText) => {
-  elements.idfInput.value = sampleText;
+const restoredDocument = restoreCurrentDocument();
+if (restoredDocument) {
+  elements.idfInput.value = restoredDocument.text || "";
   updateTextStats();
-  const loadedText = elements.idfInput.value;
-  const sourceLabel = sampleText.includes("RefBldgLargeOfficeNew2004_Chicago") ? defaultSample.name : "Fallback sample";
-  const sourceFilename = sourceLabel === "Fallback sample" ? "fallback-sample.idf" : "RefBldgLargeOfficeNew2004_Chicago.idf";
-  registerLoadedDocument(loadedText, { filename: sourceFilename });
-  if (sourceLabel !== "Fallback sample") {
-    elements.runtimeStatus.title = defaultSample.source;
-  }
-  scheduleAnalyzeAfterPaint({
-    loadingMessage: `Analyzing ${sourceLabel}`,
-    queuedMessage: `Loaded ${sourceLabel}; analysis queued`,
-    statusMessage: `Loaded ${sourceLabel}`,
-    textSnapshot: loadedText,
+  registerLoadedDocument(elements.idfInput.value, {
+    path: restoredDocument.path || "",
+    filename: restoredDocument.filename || "",
   });
-});
+  scheduleAnalyzeAfterPaint({
+    loadingMessage: `Analyzing ${restoredDocument.filename || "current input"}`,
+    queuedMessage: `Loaded ${restoredDocument.filename || "current input"}; analysis queued`,
+    statusMessage: `Loaded ${restoredDocument.filename || "current input"}`,
+    textSnapshot: elements.idfInput.value,
+  });
+} else {
+  loadDefaultSampleIDF().then(async (sampleText) => {
+    elements.idfInput.value = sampleText;
+    updateTextStats();
+    const loadedText = elements.idfInput.value;
+    const sourceLabel = sampleText.includes("RefBldgLargeOfficeNew2004_Chicago") ? defaultSample.name : "Fallback sample";
+    const sourceFilename = sourceLabel === "Fallback sample" ? "fallback-sample.idf" : "RefBldgLargeOfficeNew2004_Chicago.idf";
+    registerLoadedDocument(loadedText, { filename: sourceFilename });
+    if (sourceLabel !== "Fallback sample") {
+      elements.runtimeStatus.title = defaultSample.source;
+    }
+    scheduleAnalyzeAfterPaint({
+      loadingMessage: `Analyzing ${sourceLabel}`,
+      queuedMessage: `Loaded ${sourceLabel}; analysis queued`,
+      statusMessage: `Loaded ${sourceLabel}`,
+      textSnapshot: loadedText,
+    });
+  });
+}
+
+function restoreCurrentDocument() {
+  try {
+    const raw = window.sessionStorage.getItem(currentDocumentStorageKey);
+    if (!raw) {
+      return null;
+    }
+    const documentState = JSON.parse(raw);
+    return typeof documentState?.text === "string" && documentState.text.trim() ? documentState : null;
+  } catch {
+    return null;
+  }
+}

@@ -77,6 +77,7 @@ type CleanupApplyResult struct {
 	Canceled     bool   `json:"canceled,omitempty"`
 	Path         string `json:"path,omitempty"`
 	Filename     string `json:"filename,omitempty"`
+	Text         string `json:"text,omitempty"`
 	RemovedCount int    `json:"removedCount"`
 }
 
@@ -287,31 +288,6 @@ func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) 
 	}), nil
 }
 
-func (a *App) ScanCleanupInputFile() (*CleanupFileResult, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("desktop runtime is not ready")
-	}
-	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:   "Open EnergyPlus input for cleanup",
-		Filters: inputFileFilters(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if path == "" {
-		return &CleanupFileResult{Canceled: true}, nil
-	}
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	result, err := cleanupFileResultFromText(string(content), path)
-	if err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 func (a *App) SaveIDF(path string, text string) error {
 	return os.WriteFile(path, []byte(text), 0o644)
 }
@@ -421,15 +397,19 @@ func (a *App) ExportSummaryText(text string, format string) (*SummaryExportResul
 	}
 }
 
-func (a *App) PreviewCleanupText(text string, ruleIDs []string) (*CleanupPreviewResult, error) {
-	return previewCleanupText(text, ruleIDs)
+func (a *App) ScanCleanupText(text string, path string, filename string) (*CleanupFileResult, error) {
+	return cleanupFileResultFromText(text, path, filename)
 }
 
-func (a *App) ExportCleanupCopy(text string, suggestedFilename string, ruleIDs []string) (*CleanupApplyResult, error) {
+func (a *App) PreviewCleanupText(text string, ruleIDs []string, excludedCandidateKeys []string) (*CleanupPreviewResult, error) {
+	return previewCleanupText(text, ruleIDs, excludedCandidateKeys)
+}
+
+func (a *App) SaveCleanupAs(text string, suggestedFilename string, ruleIDs []string, excludedCandidateKeys []string) (*CleanupApplyResult, error) {
 	if a.ctx == nil {
 		return nil, fmt.Errorf("desktop runtime is not ready")
 	}
-	preview, err := previewCleanupText(text, ruleIDs)
+	preview, err := previewCleanupText(text, ruleIDs, excludedCandidateKeys)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +417,7 @@ func (a *App) ExportCleanupCopy(text string, suggestedFilename string, ruleIDs [
 		suggestedFilename = "cleaned.idf"
 	}
 	path, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
-		Title:           "Export cleaned EnergyPlus input",
+		Title:           "Save cleaned EnergyPlus input as",
 		DefaultFilename: suggestedFilename,
 		Filters:         inputFileFilters(),
 	})
@@ -450,22 +430,22 @@ func (a *App) ExportCleanupCopy(text string, suggestedFilename string, ruleIDs [
 	if err := os.WriteFile(path, []byte(preview.Text), 0o644); err != nil {
 		return nil, err
 	}
-	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), RemovedCount: preview.RemovedCount}, nil
+	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), Text: preview.Text, RemovedCount: preview.RemovedCount}, nil
 }
 
-func (a *App) ApplyCleanupToFile(path string, text string, ruleIDs []string) (*CleanupApplyResult, error) {
+func (a *App) SaveCleanupToFile(path string, text string, ruleIDs []string, excludedCandidateKeys []string) (*CleanupApplyResult, error) {
 	path = strings.TrimSpace(path)
 	if path == "" {
-		return nil, fmt.Errorf("cleanup apply requires an original file path")
+		return nil, fmt.Errorf("cleanup save requires an original file path")
 	}
-	preview, err := previewCleanupText(text, ruleIDs)
+	preview, err := previewCleanupText(text, ruleIDs, excludedCandidateKeys)
 	if err != nil {
 		return nil, err
 	}
 	if err := os.WriteFile(path, []byte(preview.Text), 0o644); err != nil {
 		return nil, err
 	}
-	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), RemovedCount: preview.RemovedCount}, nil
+	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), Text: preview.Text, RemovedCount: preview.RemovedCount}, nil
 }
 
 func (a *App) GetSummaryMetricGuides() []idf.SummaryGuide {
@@ -631,15 +611,27 @@ func ensureUniqueMultiSummaryLabels(files []MultiSummaryFile) {
 	}
 }
 
-func cleanupFileResultFromText(text string, path string) (*CleanupFileResult, error) {
-	model, err := epinput.Parse(path, []byte(text))
+func cleanupFileResultFromText(text string, path string, filename string) (*CleanupFileResult, error) {
+	path = strings.TrimSpace(path)
+	filename = strings.TrimSpace(filename)
+	parseName := path
+	if parseName == "" {
+		parseName = filename
+	}
+	model, err := epinput.Parse(parseName, []byte(text))
 	if err != nil {
 		return nil, err
+	}
+	if filename == "" && path != "" {
+		filename = filepath.Base(path)
+	}
+	if filename == "" {
+		filename = "Current input"
 	}
 	doc := epinput.ToIDFDocument(model)
 	return &CleanupFileResult{
 		Path:     path,
-		Filename: filepath.Base(path),
+		Filename: filename,
 		Text:     text,
 		Format:   string(model.Format),
 		Version:  model.Version.Raw,
@@ -647,13 +639,13 @@ func cleanupFileResultFromText(text string, path string) (*CleanupFileResult, er
 	}, nil
 }
 
-func previewCleanupText(text string, ruleIDs []string) (*CleanupPreviewResult, error) {
+func previewCleanupText(text string, ruleIDs []string, excludedCandidateKeys []string) (*CleanupPreviewResult, error) {
 	model, err := epinput.Parse("", []byte(text))
 	if err != nil {
 		return nil, err
 	}
 	doc := epinput.ToIDFDocument(model)
-	updated, preview := idf.ApplyCleanup(doc, ruleIDs)
+	updated, preview := idf.ApplyCleanup(doc, ruleIDs, excludedCandidateKeys)
 	output := text
 	if preview.RemovedCount > 0 || idf.CleanupCompacts(ruleIDs) {
 		output = cleanupOutputText(updated, model)

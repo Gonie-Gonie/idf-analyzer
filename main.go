@@ -86,7 +86,16 @@ func appAssetHandler(app *App) http.Handler {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
-			result, err := app.ScanCleanupInputFile()
+			var request struct {
+				Text     string `json:"text"`
+				Path     string `json:"path"`
+				Filename string `json:"filename"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			result, err := app.ScanCleanupText(request.Text, request.Path, request.Filename)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -100,14 +109,15 @@ func appAssetHandler(app *App) http.Handler {
 				return
 			}
 			var request struct {
-				Text    string   `json:"text"`
-				RuleIDs []string `json:"ruleIds"`
+				Text                  string   `json:"text"`
+				RuleIDs               []string `json:"ruleIds"`
+				ExcludedCandidateKeys []string `json:"excludedCandidateKeys"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			result, err := app.PreviewCleanupText(request.Text, request.RuleIDs)
+			result, err := app.PreviewCleanupText(request.Text, request.RuleIDs, request.ExcludedCandidateKeys)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -115,21 +125,22 @@ func appAssetHandler(app *App) http.Handler {
 			if err := json.NewEncoder(w).Encode(result); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
-		case "/api/cleanup-export":
+		case "/api/cleanup-save-as":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
 			var request struct {
-				Text              string   `json:"text"`
-				SuggestedFilename string   `json:"suggestedFilename"`
-				RuleIDs           []string `json:"ruleIds"`
+				Text                  string   `json:"text"`
+				SuggestedFilename     string   `json:"suggestedFilename"`
+				RuleIDs               []string `json:"ruleIds"`
+				ExcludedCandidateKeys []string `json:"excludedCandidateKeys"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			result, err := app.ExportCleanupCopy(request.Text, request.SuggestedFilename, request.RuleIDs)
+			result, err := app.SaveCleanupAs(request.Text, request.SuggestedFilename, request.RuleIDs, request.ExcludedCandidateKeys)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
@@ -137,21 +148,22 @@ func appAssetHandler(app *App) http.Handler {
 			if err := json.NewEncoder(w).Encode(result); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
-		case "/api/cleanup-apply":
+		case "/api/cleanup-save":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 				return
 			}
 			var request struct {
-				Path    string   `json:"path"`
-				Text    string   `json:"text"`
-				RuleIDs []string `json:"ruleIds"`
+				Path                  string   `json:"path"`
+				Text                  string   `json:"text"`
+				RuleIDs               []string `json:"ruleIds"`
+				ExcludedCandidateKeys []string `json:"excludedCandidateKeys"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			result, err := app.ApplyCleanupToFile(request.Path, request.Text, request.RuleIDs)
+			result, err := app.SaveCleanupToFile(request.Path, request.Text, request.RuleIDs, request.ExcludedCandidateKeys)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return

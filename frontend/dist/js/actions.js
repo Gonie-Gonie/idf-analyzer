@@ -2,6 +2,8 @@ import { backend, elements, setStatus, state, updateTextStats } from "./state.js
 import { renderDeferredGeometry, renderDiagnostics, renderEmpty, renderReport } from "./analysis-views.js";
 import { preloadGeometryRenderer, renderGeometry } from "./geometry-loader.js";
 
+export const currentDocumentStorageKey = "idfAnalyzer.currentDocument";
+
 let autoAnalyzeTimer = 0;
 let afterPaintAnalyzeTimer = 0;
 let analysisRunID = 0;
@@ -321,6 +323,7 @@ export function openGuide() {
 }
 
 export function openTools() {
+  storeCurrentDocumentForTools();
   window.location.assign("./tools.html");
 }
 
@@ -358,6 +361,21 @@ function nextPaint() {
 
 function normalizeLineEndings(text) {
   return String(text ?? "").replace(/\r\n?/g, "\n");
+}
+
+function storeCurrentDocumentForTools() {
+  try {
+    window.sessionStorage.setItem(
+      currentDocumentStorageKey,
+      JSON.stringify({
+        text: elements.idfInput.value || "",
+        path: state.currentFilePath || "",
+        filename: state.currentFilename || suggestedSaveFilename(),
+      }),
+    );
+  } catch {
+    // Session storage can be unavailable in hardened webview settings.
+  }
 }
 
 function suggestedSaveFilename() {

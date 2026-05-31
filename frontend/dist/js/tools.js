@@ -7,8 +7,13 @@ const state = {
   progressFiles: new Map(),
   progressListenerRegistered: false,
   cleanup: null,
-  cleanupPreview: null,
+  cleanupSelectedRuleIDs: new Set(),
+  cleanupExcludedCandidateKeys: new Set(),
+  cleanupCandidateFilter: "",
 };
+
+const currentDocumentStorageKey = "idfAnalyzer.currentDocument";
+const cleanupRuleCompactFormatting = "compact_formatting";
 
 const elements = {
   toolNavButtons: document.querySelectorAll("[data-tool-tab]"),
@@ -22,13 +27,12 @@ const elements = {
   fileList: document.querySelector("#multiSummaryFiles"),
   table: document.querySelector("#multiSummaryTable"),
   orientationButtons: document.querySelectorAll("[data-summary-orientation]"),
-  cleanupScan: document.querySelector("#cleanupScan"),
-  cleanupPreview: document.querySelector("#cleanupPreview"),
-  cleanupApply: document.querySelector("#cleanupApply"),
-  cleanupExport: document.querySelector("#cleanupExport"),
-  cleanupStatus: document.querySelector("#cleanupStatus"),
+  cleanupSave: document.querySelector("#cleanupSave"),
+  cleanupSaveAs: document.querySelector("#cleanupSaveAs"),
+  cleanupDocumentLabel: document.querySelector("#cleanupDocumentLabel"),
   cleanupRules: document.querySelector("#cleanupRules"),
-  cleanupPreviewPane: document.querySelector("#cleanupPreviewPane"),
+  cleanupCandidateFilter: document.querySelector("#cleanupCandidateFilter"),
+  cleanupCandidateStats: document.querySelector("#cleanupCandidateStats"),
   cleanupCandidates: document.querySelector("#cleanupCandidates"),
 };
 
@@ -319,97 +323,72 @@ elements.orientationButtons.forEach((button) => {
 
 registerProgressListener();
 switchToolTab(window.location.hash.replace(/^#/, "") || state.activeTool, { updateHash: false });
+loadCleanupFromCurrentDocument();
 
-elements.cleanupScan.addEventListener("click", scanCleanup);
-elements.cleanupPreview.addEventListener("click", previewCleanup);
-elements.cleanupApply.addEventListener("click", applyCleanup);
-elements.cleanupExport.addEventListener("click", exportCleanupCopy);
+elements.cleanupSave.addEventListener("click", () => saveCleanup(false));
+elements.cleanupSaveAs.addEventListener("click", () => saveCleanup(true));
+elements.cleanupCandidateFilter.addEventListener("input", () => {
+  state.cleanupCandidateFilter = elements.cleanupCandidateFilter.value;
+  renderCleanupCandidates();
+});
 
-async function scanCleanup() {
+async function loadCleanupFromCurrentDocument() {
+  const currentDocument = readCurrentDocument();
+  if (!currentDocument) {
+    renderMissingCleanupDocument();
+    return;
+  }
   setCleanupBusy(true);
-  elements.cleanupStatus.textContent = "Opening file dialog";
+  elements.cleanupDocumentLabel.textContent = `Current input: ${currentDocument.filename || "Untitled input"}`;
   try {
-    const result = await postJSON("/api/cleanup-scan", {});
-    if (result?.canceled) {
-      elements.cleanupStatus.textContent = "File selection canceled";
-      return;
-    }
+    const result = await postJSON("/api/cleanup-scan", {
+      text: currentDocument.text || "",
+      path: currentDocument.path || "",
+      filename: currentDocument.filename || "",
+    });
     state.cleanup = result;
-    state.cleanupPreview = null;
+    initializeCleanupSelection(result);
     renderCleanupScan();
   } catch (error) {
-    elements.cleanupStatus.textContent = error?.message || String(error);
+    elements.cleanupDocumentLabel.textContent = error?.message || String(error);
   } finally {
     setCleanupBusy(false);
   }
 }
 
-async function previewCleanup() {
+async function buildCleanupPreview() {
   if (!state.cleanup) {
-    return;
+    return null;
   }
-  setCleanupBusy(true);
-  elements.cleanupStatus.textContent = "Building cleanup preview";
-  try {
-    state.cleanupPreview = await postJSON("/api/cleanup-preview", {
-      text: state.cleanup.text,
-      ruleIds: selectedCleanupRuleIDs(),
-    });
-    renderCleanupPreview();
-  } catch (error) {
-    elements.cleanupStatus.textContent = error?.message || String(error);
-  } finally {
-    setCleanupBusy(false);
-  }
+  return postJSON("/api/cleanup-preview", cleanupPayload());
 }
 
-async function applyCleanup() {
-  if (!state.cleanup) {
-    return;
-  }
-  if (!window.confirm(`Apply selected cleanup rules to ${state.cleanup.filename || "the original file"}?`)) {
-    return;
-  }
-  if (!state.cleanupPreview) {
-    await previewCleanup();
-  }
-  setCleanupBusy(true);
-  elements.cleanupStatus.textContent = "Applying cleanup to original file";
-  try {
-    const result = await postJSON("/api/cleanup-apply", {
-      path: state.cleanup.path,
-      text: state.cleanup.text,
-      ruleIds: selectedCleanupRuleIDs(),
-    });
-    if (!result?.canceled) {
-      elements.cleanupStatus.textContent = `Applied cleanup to ${result.filename || "original file"} (${result.removedCount || 0} removed)`;
-    }
-  } catch (error) {
-    elements.cleanupStatus.textContent = error?.message || String(error);
-  } finally {
-    setCleanupBusy(false);
-  }
-}
-
-async function exportCleanupCopy() {
+async function saveCleanup(saveAs) {
   if (!state.cleanup) {
     return;
   }
   setCleanupBusy(true);
-  elements.cleanupStatus.textContent = "Exporting cleaned copy";
   try {
-    const result = await postJSON("/api/cleanup-export", {
+    const preview = await buildCleanupPreview();
+    const endpoint = saveAs || !state.cleanup?.path ? "/api/cleanup-save-as" : "/api/cleanup-save";
+    const result = await postJSON(endpoint, {
+      ...cleanupPayload(),
       text: state.cleanup.text,
-      suggestedFilename: cleanedFilename(state.cleanup.filename),
-      ruleIds: selectedCleanupRuleIDs(),
+      path: state.cleanup.path || "",
+      suggestedFilename: saveAs ? saveAsFilename(state.cleanup.filename) : state.cleanup.filename || "cleaned.idf",
     });
     if (result?.canceled) {
-      elements.cleanupStatus.textContent = "Export canceled";
-    } else {
-      elements.cleanupStatus.textContent = `Exported ${result.filename || "cleaned copy"} (${result.removedCount || 0} removed)`;
+      return;
     }
+    updateCurrentDocument({
+      text: result.text || preview?.text || state.cleanup.text,
+      path: result.path || state.cleanup.path || "",
+      filename: result.filename || state.cleanup.filename || "",
+    });
+    await loadCleanupFromCurrentDocument();
+    elements.cleanupDocumentLabel.textContent = `Saved ${result.filename || state.cleanup?.filename || "input"} (${result.removedCount || 0} removed)`;
   } catch (error) {
-    elements.cleanupStatus.textContent = error?.message || String(error);
+    elements.cleanupDocumentLabel.textContent = error?.message || String(error);
   } finally {
     setCleanupBusy(false);
   }
@@ -419,21 +398,24 @@ function renderCleanupScan() {
   const cleanup = state.cleanup;
   const candidates = cleanup?.scan?.candidates || [];
   const rules = cleanup?.scan?.rules || [];
-  elements.cleanupStatus.textContent = `${cleanup.filename || "Input file"} scanned: ${candidates.length} cleanup candidates`;
   elements.cleanupRules.innerHTML = rules.map(renderCleanupRule).join("");
   elements.cleanupRules.querySelectorAll("input[data-cleanup-rule]").forEach((input) => {
     input.addEventListener("change", () => {
-      state.cleanupPreview = null;
-      renderCleanupPreview();
+      if (input.checked) {
+        state.cleanupSelectedRuleIDs.add(input.dataset.cleanupRule);
+      } else {
+        state.cleanupSelectedRuleIDs.delete(input.dataset.cleanupRule);
+      }
+      renderCleanupCandidates();
     });
   });
-  renderCleanupCandidates(candidates);
-  renderCleanupPreview();
+  renderCleanupCandidates();
+  updateCleanupButtons();
 }
 
 function renderCleanupRule(rule) {
   const disabled = !rule.available ? "disabled" : "";
-  const checked = rule.default && rule.available ? "checked" : "";
+  const checked = state.cleanupSelectedRuleIDs.has(rule.id) && rule.available ? "checked" : "";
   const status = rule.future ? "Future" : rule.available ? "Available" : "No candidates";
   return `
     <label class="cleanup-rule ${rule.available ? "" : "disabled"}">
@@ -446,69 +428,149 @@ function renderCleanupRule(rule) {
     </label>`;
 }
 
-function renderCleanupCandidates(candidates) {
+function renderCleanupCandidates() {
+  const candidates = state.cleanup?.scan?.candidates || [];
+  const query = state.cleanupCandidateFilter.trim().toLowerCase();
+  const visible = candidates.filter((candidate) => cleanupCandidateMatches(candidate, query));
+  const selectedCount = selectedCleanupCandidates(candidates).length;
+  elements.cleanupCandidateStats.textContent = query
+    ? `${selectedCount} selected, ${visible.length} shown`
+    : `${selectedCount} selected of ${candidates.length}`;
+
   if (!candidates.length) {
     elements.cleanupCandidates.innerHTML = `<div class="empty">No cleanup candidates found.</div>`;
+    updateCleanupButtons();
+    return;
+  }
+  if (!visible.length) {
+    elements.cleanupCandidates.innerHTML = `<div class="empty">No candidates match the filter.</div>`;
+    updateCleanupButtons();
     return;
   }
   elements.cleanupCandidates.innerHTML = `
-    <table class="tool-table">
-      <thead>
-        <tr>
-          <th>rule</th>
-          <th>object</th>
-          <th>reason</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${candidates
-          .map((candidate) => `
-            <tr>
-              <td>${escapeHTML(candidate.ruleId)}</td>
-              <td><strong>${escapeHTML(candidate.objectType)}</strong><span>${escapeHTML(candidate.objectName || `#${Number(candidate.objectIndex) + 1}`)}</span></td>
-              <td>${escapeHTML(candidate.reason)}</td>
-            </tr>`)
-          .join("")}
-      </tbody>
-    </table>`;
+    <div class="cleanup-candidate-list">
+      ${visible.map(renderCleanupCandidate).join("")}
+    </div>`;
+  elements.cleanupCandidates.querySelectorAll("input[data-cleanup-candidate]").forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) {
+        state.cleanupExcludedCandidateKeys.delete(input.dataset.cleanupCandidate);
+      } else {
+        state.cleanupExcludedCandidateKeys.add(input.dataset.cleanupCandidate);
+      }
+      updateCleanupButtons();
+      renderCleanupCandidates();
+    });
+  });
+  updateCleanupButtons();
 }
 
-function renderCleanupPreview() {
-  const canPreview = Boolean(state.cleanup);
-  elements.cleanupPreview.disabled = !canPreview;
-  elements.cleanupApply.disabled = !canPreview;
-  elements.cleanupExport.disabled = !canPreview;
-  if (!state.cleanupPreview) {
-    elements.cleanupPreviewPane.innerHTML = `<div class="empty">Choose rules and click Preview.</div>`;
-    return;
-  }
-  const removed = state.cleanupPreview.removedCandidates || [];
-  elements.cleanupPreviewPane.innerHTML = `
-    <div class="cleanup-preview-summary">
-      <strong>${escapeHTML(state.cleanupPreview.removedCount || 0)} objects removed</strong>
-      <span>${escapeHTML(state.cleanupPreview.objectCount || 0)} objects remain after cleanup</span>
-    </div>
-    ${
-      removed.length
-        ? `<div class="cleanup-preview-list">
-            ${removed
-              .slice(0, 80)
-              .map((candidate) => `<div><span>${escapeHTML(candidate.objectType)}</span><strong>${escapeHTML(candidate.objectName || `#${Number(candidate.objectIndex) + 1}`)}</strong></div>`)
-              .join("")}
-          </div>`
-        : `<div class="empty">Selected rules do not remove objects.</div>`
-    }`;
-}
-
-function selectedCleanupRuleIDs() {
-  return [...elements.cleanupRules.querySelectorAll("input[data-cleanup-rule]:checked")].map((input) => input.dataset.cleanupRule);
+function renderCleanupCandidate(candidate) {
+  const ruleSelected = state.cleanupSelectedRuleIDs.has(candidate.ruleId);
+  const excluded = state.cleanupExcludedCandidateKeys.has(candidate.key);
+  const selected = ruleSelected && !excluded;
+  const objectLabel = candidate.objectName || `#${Number(candidate.objectIndex) + 1}`;
+  return `
+    <label class="cleanup-candidate ${selected ? "selected" : ""} ${ruleSelected ? "" : "inactive"}">
+      <input data-cleanup-candidate="${escapeHTML(candidate.key)}" type="checkbox" ${selected ? "checked" : ""} ${ruleSelected ? "" : "disabled"} />
+      <span>
+        <strong>${escapeHTML(objectLabel)}</strong>
+        <small>${escapeHTML(candidate.objectType)} / ${escapeHTML(candidate.ruleId)}</small>
+        <em>${escapeHTML(candidate.reason)}</em>
+      </span>
+    </label>`;
 }
 
 function setCleanupBusy(busy) {
-  elements.cleanupScan.disabled = busy;
-  elements.cleanupPreview.disabled = busy || !state.cleanup;
-  elements.cleanupApply.disabled = busy || !state.cleanup;
-  elements.cleanupExport.disabled = busy || !state.cleanup;
+  elements.cleanupSave.disabled = busy || !canSaveCleanup();
+  elements.cleanupSaveAs.disabled = busy || !canSaveCleanup();
+  elements.cleanupCandidateFilter.disabled = busy || !state.cleanup;
+}
+
+function renderMissingCleanupDocument() {
+  state.cleanup = null;
+  state.cleanupSelectedRuleIDs.clear();
+  state.cleanupExcludedCandidateKeys.clear();
+  elements.cleanupDocumentLabel.textContent = "Open an input in the main app, then return to Tools.";
+  elements.cleanupRules.innerHTML = `<div class="empty">No current input.</div>`;
+  elements.cleanupCandidates.innerHTML = `<div class="empty">No current input.</div>`;
+  elements.cleanupCandidateStats.textContent = "0 selected";
+  updateCleanupButtons();
+}
+
+function initializeCleanupSelection(result) {
+  state.cleanupSelectedRuleIDs = new Set(
+    (result?.scan?.rules || []).filter((rule) => rule.default && rule.available).map((rule) => rule.id),
+  );
+  state.cleanupExcludedCandidateKeys = new Set();
+  state.cleanupCandidateFilter = "";
+  elements.cleanupCandidateFilter.value = "";
+}
+
+function cleanupPayload() {
+  return {
+    text: state.cleanup?.text || "",
+    ruleIds: selectedCleanupRuleIDs(),
+    excludedCandidateKeys: [...state.cleanupExcludedCandidateKeys],
+  };
+}
+
+function selectedCleanupRuleIDs() {
+  return [...state.cleanupSelectedRuleIDs];
+}
+
+function selectedCleanupCandidates(candidates = state.cleanup?.scan?.candidates || []) {
+  return candidates.filter((candidate) => state.cleanupSelectedRuleIDs.has(candidate.ruleId) && !state.cleanupExcludedCandidateKeys.has(candidate.key));
+}
+
+function canSaveCleanup() {
+  return (
+    Boolean(state.cleanup) &&
+    (selectedCleanupCandidates().length > 0 || state.cleanupSelectedRuleIDs.has(cleanupRuleCompactFormatting))
+  );
+}
+
+function updateCleanupButtons() {
+  elements.cleanupSave.disabled = !canSaveCleanup();
+  elements.cleanupSaveAs.disabled = !canSaveCleanup();
+}
+
+function cleanupCandidateMatches(candidate, query) {
+  if (!query) {
+    return true;
+  }
+  return [candidate.ruleId, candidate.objectType, candidate.objectName, candidate.reason]
+    .some((value) => String(value ?? "").toLowerCase().includes(query));
+}
+
+function readCurrentDocument() {
+  try {
+    const raw = window.sessionStorage.getItem(currentDocumentStorageKey);
+    if (!raw) {
+      return null;
+    }
+    const currentDocument = JSON.parse(raw);
+    return typeof currentDocument?.text === "string" && currentDocument.text.trim() ? currentDocument : null;
+  } catch {
+    return null;
+  }
+}
+
+function updateCurrentDocument(nextDocument) {
+  const currentDocument = {
+    text: nextDocument.text || "",
+    path: nextDocument.path || "",
+    filename: nextDocument.filename || "cleaned.idf",
+  };
+  try {
+    window.sessionStorage.setItem(currentDocumentStorageKey, JSON.stringify(currentDocument));
+  } catch {
+    // Session storage may be unavailable in hardened webview settings.
+  }
+  state.cleanup = {
+    ...state.cleanup,
+    ...currentDocument,
+  };
 }
 
 async function postJSON(url, payload) {
@@ -523,7 +585,7 @@ async function postJSON(url, payload) {
   return response.json();
 }
 
-function cleanedFilename(filename = "cleaned.idf") {
+function saveAsFilename(filename = "cleaned.idf") {
   const dot = filename.lastIndexOf(".");
   if (dot <= 0) {
     return `${filename}-cleaned.idf`;

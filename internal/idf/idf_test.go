@@ -259,6 +259,13 @@ Output:Variable,
 	if len(scan.Candidates) != 2 {
 		t.Fatalf("cleanup candidates = %d, want 2: %#v", len(scan.Candidates), scan.Candidates)
 	}
+	if scan.Candidates[0].Key == "" {
+		t.Fatalf("cleanup candidate key was empty: %#v", scan.Candidates[0])
+	}
+	excludedPreview := PreviewCleanup(doc, []string{CleanupRuleUnusedSchedules, CleanupRuleDuplicateOutputVars}, []string{scan.Candidates[0].Key})
+	if excludedPreview.RemovedCount != 1 {
+		t.Fatalf("removed count with excluded candidate = %d, want 1", excludedPreview.RemovedCount)
+	}
 	updated, preview := ApplyCleanup(doc, []string{CleanupRuleUnusedSchedules, CleanupRuleDuplicateOutputVars})
 	if preview.RemovedCount != 2 {
 		t.Fatalf("removed count = %d, want 2", preview.RemovedCount)

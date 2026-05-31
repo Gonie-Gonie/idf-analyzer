@@ -140,11 +140,11 @@
         <section id="cleanup-wizard" class="guide-section">
           <h2>Cleanup Wizard</h2>
           <p>
-            Cleanup Wizard is available from Tools. Choose it from the left tool selector to scan a selected file, review
-            removable object candidates, choose cleanup rules, preview removed objects, then either apply the cleanup to
-            the original file or export a cleaned copy. Current rules cover unused schedules, unused envelope resources,
-            unused curves/tables, duplicate Output:Variable objects, and compact formatting. Comment-only cleanup is
-            reserved for later.
+            Cleanup Wizard is available from Tools and works on the input currently open in the main app. Choose rules on
+            the left, then review filterable candidate checkboxes on the right to include or exclude individual removals.
+            Save writes the cleaned result to the current file when a file path is available, while Save As asks for a new
+            path. Current rules cover unused schedules, unused envelope resources, unused curves/tables, duplicate
+            Output:Variable objects, and compact formatting. Comment-only cleanup is reserved for later.
           </p>
         </section>
 
@@ -159,6 +159,7 @@
         <section id="updates" class="guide-section">
           <h2>Recent Changes</h2>
           <ul class="guide-log">
+            <li><strong>2026-05-31</strong> Cleanup Wizard now operates on the current input with rule and candidate checkboxes plus Save / Save As.</li>
             <li><strong>2026-05-31</strong> Removed conversion commands and changed Tools to a left-selector tab layout.</li>
             <li><strong>2026-05-31</strong> Added Diagnose results and moved remove-unused cleanup into the Tools Cleanup Wizard review flow.</li>
             <li><strong>2026-05-31</strong> Startup analysis now runs in visible-first stages, then prepares Diagnose and Geometry in the background.</li>
