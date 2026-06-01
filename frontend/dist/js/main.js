@@ -31,6 +31,7 @@ import {
 import { initializeVerticalSplitters, initializeWorkspaceSplitter } from "./layout.js";
 import { focusInputObject, handleAnalysisActivation, switchResultTab } from "./navigation.js";
 import { initializeProfileControls, renderProfile } from "./profile-views.js";
+import { t, translatePage } from "./i18n.js";
 
 loadAndApplyAppSettings().then((result) => applyRuntimeSettings(result.settings));
 
@@ -133,7 +134,7 @@ window.addEventListener("idfAnalyzer:profileApplied", (event) => {
   renderReport();
   updateDocumentActions();
   const changeCount = result.preview?.changes?.length || 0;
-  setStatus(`Profile applied (${changeCount} changes)`, "ok");
+  setStatus(t("status.profileApplied", { count: changeCount }), "ok");
 });
 window.addEventListener("idfAnalyzer:hvacApplied", (event) => {
   const result = event.detail || {};
@@ -152,7 +153,7 @@ window.addEventListener("idfAnalyzer:hvacApplied", (event) => {
   renderReport();
   updateDocumentActions();
   const changeCount = result.preview?.changes?.filter((change) => change.requiresSave).length || 0;
-  setStatus(`HVAC change applied (${changeCount} changes)`, "ok");
+  setStatus(t("status.hvacApplied", { count: changeCount }), "ok");
 });
 
 initializeWorkspaceSplitter();
@@ -169,12 +170,12 @@ if (restoredDocument) {
     path: restoredDocument.path || "",
     filename: restoredDocument.filename || "",
   });
-  scheduleAnalyzeAfterPaint({
-    loadingMessage: `Analyzing ${restoredDocument.filename || "current input"}`,
-    queuedMessage: `Loaded ${restoredDocument.filename || "current input"}; analysis queued`,
-    statusMessage: `Loaded ${restoredDocument.filename || "current input"}`,
-    textSnapshot: elements.idfInput.value,
-  });
+    scheduleAnalyzeAfterPaint({
+      loadingMessage: t("status.analyzingNamed", { name: restoredDocument.filename || "current input" }),
+      queuedMessage: t("status.loadedQueued", { name: restoredDocument.filename || "current input" }),
+      statusMessage: t("status.loadedNamed", { name: restoredDocument.filename || "current input" }),
+      textSnapshot: elements.idfInput.value,
+    });
 } else {
   loadDefaultSampleIDF().then(async (sampleText) => {
     elements.idfInput.value = sampleText;
@@ -187,9 +188,9 @@ if (restoredDocument) {
       elements.runtimeStatus.title = defaultSample.source;
     }
     scheduleAnalyzeAfterPaint({
-      loadingMessage: `Analyzing ${sourceLabel}`,
-      queuedMessage: `Loaded ${sourceLabel}; analysis queued`,
-      statusMessage: `Loaded ${sourceLabel}`,
+      loadingMessage: t("status.analyzingNamed", { name: sourceLabel }),
+      queuedMessage: t("status.loadedQueued", { name: sourceLabel }),
+      statusMessage: t("status.loadedNamed", { name: sourceLabel }),
       textSnapshot: loadedText,
     });
   });
@@ -229,6 +230,15 @@ function applyRuntimeSettings(settings) {
     state.profileSettings = settings.profile;
     if (state.report?.profile) {
       renderProfile(state.report.profile);
+    }
+  }
+  if (settings.appearance) {
+    translatePage();
+    updateTextStats();
+    if (state.report) {
+      renderReport();
+    } else {
+      renderEmpty();
     }
   }
   if (state.report?.geometry && state.activeResultTab === "geometry") {

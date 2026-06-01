@@ -1,4 +1,5 @@
 import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
+import { t } from "./i18n.js";
 
 let analyzeCallback = async () => {};
 let renderReportCallback = () => renderInputViews();
@@ -41,8 +42,8 @@ function setInputFilterStats(matchingObjects, totalObjects) {
     return;
   }
   elements.inputFilterStats.textContent = state.inputFilterQuery.trim()
-    ? `${matchingObjects} of ${totalObjects} objects`
-    : `${totalObjects} objects`;
+    ? t("count.objectsOf", { shown: matchingObjects, total: totalObjects })
+    : t("count.objects", { count: totalObjects });
 }
 
 function filterInputObjects(objects) {
@@ -96,9 +97,9 @@ function hasCurrentAnalysis() {
 
 function pendingViewMessage(viewName) {
   if (!elements.idfInput.value.trim()) {
-    return `No input loaded yet`;
+    return t("input.noLoaded");
   }
-  return `Analysis pending; ${viewName} view will update automatically`;
+  return t("input.pendingView", { view: viewName });
 }
 
 function renderFormattedTextView() {
@@ -118,8 +119,8 @@ function renderFormattedTextView() {
     <div class="json-meta">
       <span class="badge">${escapeHTML(formatLabel)}</span>
       <span class="badge">Version ${escapeHTML(versionLabel)}</span>
-      <span class="badge">${escapeHTML(matchingObjects)} objects</span>
-      <span class="badge">Editable fields</span>
+      <span class="badge">${escapeHTML(t("count.objects", { count: matchingObjects }))}</span>
+      <span class="badge">${escapeHTML(t("input.editableFields"))}</span>
     </div>
     ${
       groups.length
@@ -137,7 +138,7 @@ function renderFormattedTextView() {
               )
               .join("")}
           </div>`
-        : `<div class="empty">No matching objects</div>`
+        : `<div class="empty">${t("input.noMatchingObjects")}</div>`
     }
   `;
   bindFormattedTextControls();
@@ -159,15 +160,15 @@ function renderJSONView() {
     <div class="json-meta">
       <span class="badge">${escapeHTML(model.format || "unknown")}</span>
       <span class="badge">Version ${escapeHTML(versionLabel)}</span>
-      <span class="badge">${escapeHTML(visibleObjects.length)} objects</span>
+      <span class="badge">${escapeHTML(t("count.objects", { count: visibleObjects.length }))}</span>
     </div>
     <div class="json-editor-tools">
       <select id="jsonCollapseDepth" aria-label="JSON collapse depth">
         ${[
-          ["1", "Type only"],
-          ["2", "Objects"],
-          ["3", "Fields"],
-          ["99", "Expand all"],
+          ["1", t("input.typeOnly")],
+          ["2", t("common.object")],
+          ["3", t("common.field")],
+          ["99", t("input.expandAll")],
         ]
           .map(
             ([value, label]) =>
@@ -175,7 +176,7 @@ function renderJSONView() {
           )
           .join("")}
       </select>
-      <button id="jsonFocusObjectButton" type="button">Focus Object</button>
+      <button id="jsonFocusObjectButton" type="button">${t("input.focusObject")}</button>
     </div>
     <div class="json-tree primary-tree json-object-tree">${renderJSONObjectsTree(visibleObjects)}</div>
   `;
@@ -184,11 +185,11 @@ function renderJSONView() {
 
 function renderJSONObjectsTree(objects) {
   if (!objects.length) {
-    return state.inputFilterQuery.trim() ? `<div class="empty">No matching objects</div>` : `<div class="empty">No objects</div>`;
+    return state.inputFilterQuery.trim() ? `<div class="empty">${t("input.noMatchingObjects")}</div>` : `<div class="empty">${t("input.noObjects")}</div>`;
   }
   const groups = groupObjectsByType(objects);
   if (!groups.length) {
-    return `<div class="empty">No matching objects</div>`;
+    return `<div class="empty">${t("input.noMatchingObjects")}</div>`;
   }
 
   return `
@@ -204,7 +205,7 @@ function renderJSONTypeGroup(group, isLastGroup) {
     <details class="json-node json-type-group" data-object-type="${escapeHTML(group.type)}" ${openAttr}>
       <summary>
         <span class="json-line"><span class="json-key">${formatJSONKey(group.type)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
-        <span class="badge">${escapeHTML(group.objects.length)} objects</span>
+        <span class="badge">${escapeHTML(t("count.objects", { count: group.objects.length }))}</span>
       </summary>
       <div class="json-children">
         ${group.objects.map((object, index) => renderJSONInstance(object, index === group.objects.length - 1)).join("")}
@@ -229,7 +230,7 @@ function renderJSONInstance(object, isLastObject) {
         <span class="json-line" title="${escapeHTML(objectName)}"><span class="json-key">${formatJSONKey(objectName)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="json-summary-meta">
           ${sourceLabel}
-          <span class="badge">${escapeHTML(fields.length)} fields</span>
+          <span class="badge">${escapeHTML(t("count.fields", { count: fields.length }))}</span>
         </span>
       </summary>
       <div class="json-fields">
@@ -362,7 +363,7 @@ async function commitJSONValueEdit(editor, nextRaw, restore) {
 
   const api = backend();
   if (!api || typeof api.PatchModelValueText !== "function") {
-    setStatus("Backend patch API unavailable", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     restore();
     return;
   }
@@ -386,7 +387,7 @@ async function commitJSONValueEdit(editor, nextRaw, restore) {
     state.geometryReady = true;
     window.dispatchEvent(new Event("idfAnalyzer:documentChanged"));
     renderReportCallback();
-    setStatus("JSON value updated", "ok");
+    setStatus(t("input.jsonValueUpdated"), "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
     restore();
@@ -518,10 +519,10 @@ function attachFieldSuggestionList(input, suggestions) {
 }
 
 async function applyTextValue(input) {
-  await applyFieldValue(input, "Text field updated");
+  await applyFieldValue(input, t("input.textFieldUpdated"));
 }
 
-async function applyFieldValue(input, successMessage = "Field updated") {
+async function applyFieldValue(input, successMessage = t("input.fieldUpdated")) {
   const nextValue = input.value;
   if (nextValue === input.dataset.original || input.dataset.committing === "true") {
     return;
@@ -529,7 +530,7 @@ async function applyFieldValue(input, successMessage = "Field updated") {
 
   const api = backend();
   if (!api || typeof api.UpdateFieldText !== "function") {
-    setStatus("Backend unavailable", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     input.value = input.dataset.original || "";
     return;
   }
@@ -1053,18 +1054,18 @@ export function renderFieldTable() {
   const report = state.report;
   if (!report || !Array.isArray(report.objects) || !hasCurrentAnalysis()) {
     elements.fieldTable.innerHTML = `<div class="empty">${escapeHTML(pendingViewMessage("table"))}</div>`;
-    elements.fieldStats.textContent = "0 tables";
+    elements.fieldStats.textContent = t("input.tableStats", { tables: 0, objects: 0, orientation: "" });
     setInputFilterStats(0, 0);
     return;
   }
 
   const groups = groupObjectsByType(filterInputObjects(report.objects));
   const objectCount = groups.reduce((sum, group) => sum + group.objects.length, 0);
-  const orientationLabel = state.tableOrientation === "fields" ? "fields as rows" : "objects as rows";
-  elements.fieldStats.textContent = `${groups.length} tables, ${objectCount} objects, ${orientationLabel}`;
+  const orientationLabel = state.tableOrientation === "fields" ? t("input.fieldsRows").toLowerCase() : t("input.objectsRows").toLowerCase();
+  elements.fieldStats.textContent = t("input.tableStats", { tables: groups.length, objects: objectCount, orientation: orientationLabel });
   setInputFilterStats(objectCount, report.objects.length);
   if (!groups.length) {
-    elements.fieldTable.innerHTML = `<div class="empty">No matching object tables</div>`;
+    elements.fieldTable.innerHTML = `<div class="empty">${t("input.noMatchingTables")}</div>`;
     return;
   }
 
@@ -1113,9 +1114,9 @@ function renderObjectTypeTable(group, groupIndex) {
         <span>${escapeHTML(group.type)}</span>
         <span class="object-table-actions">
           <button class="object-orientation-button" data-object-type="${escapeHTML(group.type)}" data-next-orientation="${escapeHTML(nextOrientation)}" type="button">
-            ${orientation === "objects" ? "Fields as rows" : "Objects as rows"}
+            ${orientation === "objects" ? t("input.fieldsRows") : t("input.objectsRows")}
           </button>
-          <span class="badge">${escapeHTML(group.objects.length)} objects</span>
+          <span class="badge">${escapeHTML(t("count.objects", { count: group.objects.length }))}</span>
         </span>
       </summary>
       <div class="object-type-table-scroll">
@@ -1130,7 +1131,7 @@ function renderObjectsAsRowsTable(group, columns) {
     <table>
       <thead>
         <tr>
-          <th class="sticky-col">Object</th>
+          <th class="sticky-col">${t("common.object")}</th>
           ${columns.map((column) => `<th title="${escapeHTML(column.label)}">${escapeHTML(column.label)}</th>`).join("")}
         </tr>
       </thead>

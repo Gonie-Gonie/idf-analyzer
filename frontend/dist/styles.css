@@ -3288,6 +3288,12 @@ th.input-jump-highlight {
   gap: 10px;
 }
 
+.settings-tab-order {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+
 .settings-profile-field {
   min-width: 0;
   min-height: 54px;

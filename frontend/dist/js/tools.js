@@ -1,5 +1,6 @@
 import { loadAndApplyAppSettings } from "./settings-client.js";
 import { renderAppInfo } from "./app-info.js";
+import { t } from "./i18n.js";
 
 loadAndApplyAppSettings();
 renderAppInfo();
@@ -106,7 +107,7 @@ function updateProgress(completed, total, succeeded = 0, failed = 0) {
   elements.progressBar.style.width = `${percent}%`;
   elements.percent.textContent = `${percent}%`;
   if (total > 0) {
-    elements.status.textContent = `Analyzed ${completed} of ${total} files (${succeeded} ok, ${failed} failed)`;
+    elements.status.textContent = t("tools.analyzedProgress", { completed, total, ok: succeeded, failed });
   }
 }
 
@@ -121,9 +122,9 @@ async function runMultiSummary() {
   state.progressFiles.clear();
   state.activeRunID = `multi-summary-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   setRunning(true);
-  elements.stats.textContent = "Waiting for file selection";
-  elements.status.textContent = "Opening file dialog";
-  elements.table.innerHTML = `<div class="empty">Analysis will start after files are selected.</div>`;
+  elements.stats.textContent = t("tools.waitingSelection");
+  elements.status.textContent = t("status.openDialog");
+  elements.table.innerHTML = `<div class="empty">${t("status.analysisWillStart")}</div>`;
   elements.fileList.innerHTML = "";
   updateProgress(0, 0);
   waitForProgressRuntime();
@@ -131,9 +132,9 @@ async function runMultiSummary() {
   try {
     const result = await analyzeMultiSummary(state.activeRunID);
     if (result?.canceled) {
-      elements.stats.textContent = "No files selected";
-      elements.status.textContent = "File selection canceled";
-      elements.table.innerHTML = `<div class="empty">Select one or more IDF or epJSON files to build a comparison table.</div>`;
+      elements.stats.textContent = t("tools.noFilesSelected");
+      elements.status.textContent = t("status.fileSelectionCanceled");
+      elements.table.innerHTML = `<div class="empty">${t("tools.selectFilesHelp")}</div>`;
       return;
     }
     state.result = result;
@@ -141,7 +142,7 @@ async function runMultiSummary() {
     renderResult();
   } catch (error) {
     elements.status.textContent = error?.message || String(error);
-    elements.stats.textContent = "Analysis failed";
+    elements.stats.textContent = t("tools.analysisFailed");
     elements.table.innerHTML = `<div class="empty">${escapeHTML(error?.message || String(error))}</div>`;
   } finally {
     setRunning(false);
@@ -169,7 +170,7 @@ async function analyzeMultiSummary(runID) {
     return api.AnalyzeMultiIDFSummary(runID);
   }
 
-  throw new Error(responseError || "Multi-IDF Summary is available in the desktop app.");
+  throw new Error(responseError || t("tools.desktopOnly"));
 }
 
 function renderResult() {
@@ -181,7 +182,7 @@ function renderResult() {
   const succeeded = result.succeeded || 0;
   const failed = result.failed || 0;
   const workers = result.concurrency || 0;
-  elements.stats.textContent = `${total} files, ${succeeded} ok, ${failed} failed, ${workers} workers`;
+  elements.stats.textContent = t("count.filesSummary", { total, ok: succeeded, failed, workers });
   renderFileList(result.files || []);
   renderTable();
   elements.exportButton.disabled = state.running || !result.metrics?.length;
@@ -197,7 +198,7 @@ function renderFileList(files) {
     .sort((a, b) => (a.index || 0) - (b.index || 0))
     .map((file) => {
       const status = file.status === "ok" ? "ok" : "error";
-      const detail = status === "ok" ? (file.filename && file.filename !== file.label ? file.filename : "Analyzed") : file.error || "Failed";
+      const detail = status === "ok" ? (file.filename && file.filename !== file.label ? file.filename : t("tools.analyzed")) : file.error || t("tools.failed");
       return `
         <div class="tool-file-item ${status}">
           <strong>${escapeHTML(file.label || file.filename || "Input file")}</strong>
@@ -212,7 +213,7 @@ function renderTable() {
   const metrics = result?.metrics || [];
   const files = result?.files || [];
   if (!metrics.length || !files.length) {
-    elements.table.innerHTML = `<div class="empty">No summary data available.</div>`;
+    elements.table.innerHTML = `<div class="empty">${t("tools.noSummaryData")}</div>`;
     return;
   }
   elements.table.innerHTML = state.orientation === "files" ? renderFilesAsRows(metrics, files) : renderMetricsAsRows(metrics, files);
@@ -223,7 +224,7 @@ function renderMetricsAsRows(metrics, files) {
     <table class="tool-table">
       <thead>
         <tr>
-          <th class="tool-sticky-col">name</th>
+          <th class="tool-sticky-col">${t("common.name")}</th>
           ${files.map((file) => `<th>${renderFileLabel(file)}</th>`).join("")}
         </tr>
       </thead>
@@ -247,7 +248,7 @@ function renderFilesAsRows(metrics, files) {
     <table class="tool-table">
       <thead>
         <tr>
-          <th class="tool-sticky-col">building</th>
+          <th class="tool-sticky-col">${t("common.building")}</th>
           ${metrics.map((metric) => `<th>${escapeHTML(metric.csvName || metric.id)}</th>`).join("")}
         </tr>
       </thead>
@@ -345,7 +346,7 @@ async function loadCleanupFromCurrentDocument() {
     return;
   }
   setCleanupBusy(true);
-  elements.cleanupDocumentLabel.textContent = `Current input: ${currentDocument.filename || "Untitled input"}`;
+  elements.cleanupDocumentLabel.textContent = t("tools.currentInput", { name: currentDocument.filename || t("tools.untitledInput") });
   try {
     const result = await postJSON("/api/cleanup-scan", {
       text: currentDocument.text || "",
@@ -392,7 +393,10 @@ async function saveCleanup(saveAs) {
       filename: result.filename || state.cleanup.filename || "",
     });
     await loadCleanupFromCurrentDocument();
-    elements.cleanupDocumentLabel.textContent = `Saved ${result.filename || state.cleanup?.filename || "input"} (${result.removedCount || 0} removed)`;
+    elements.cleanupDocumentLabel.textContent = t("tools.savedCleanup", {
+      name: result.filename || state.cleanup?.filename || t("common.inputFile"),
+      count: result.removedCount || 0,
+    });
   } catch (error) {
     elements.cleanupDocumentLabel.textContent = error?.message || String(error);
   } finally {
@@ -422,7 +426,7 @@ function renderCleanupScan() {
 function renderCleanupRule(rule) {
   const disabled = !rule.available ? "disabled" : "";
   const checked = state.cleanupSelectedRuleIDs.has(rule.id) && rule.available ? "checked" : "";
-  const status = rule.future ? "Future" : rule.available ? "Available" : "No candidates";
+  const status = rule.future ? t("tools.future") : rule.available ? t("tools.available") : t("tools.noCandidates");
   return `
     <label class="cleanup-rule ${rule.available ? "" : "disabled"}">
       <input data-cleanup-rule="${escapeHTML(rule.id)}" type="checkbox" ${checked} ${disabled} />
@@ -440,16 +444,16 @@ function renderCleanupCandidates() {
   const visible = candidates.filter((candidate) => cleanupCandidateMatches(candidate, query));
   const selectedCount = selectedCleanupCandidates(candidates).length;
   elements.cleanupCandidateStats.textContent = query
-    ? `${selectedCount} selected, ${visible.length} shown`
-    : `${selectedCount} selected of ${candidates.length}`;
+    ? t("tools.selectedShown", { selected: selectedCount, shown: visible.length })
+    : t("tools.selectedOf", { selected: selectedCount, total: candidates.length });
 
   if (!candidates.length) {
-    elements.cleanupCandidates.innerHTML = `<div class="empty">No cleanup candidates found.</div>`;
+    elements.cleanupCandidates.innerHTML = `<div class="empty">${t("tools.noCleanupCandidates")}</div>`;
     updateCleanupButtons();
     return;
   }
   if (!visible.length) {
-    elements.cleanupCandidates.innerHTML = `<div class="empty">No candidates match the filter.</div>`;
+    elements.cleanupCandidates.innerHTML = `<div class="empty">${t("tools.noMatchingCandidates")}</div>`;
     updateCleanupButtons();
     return;
   }
@@ -497,10 +501,10 @@ function renderMissingCleanupDocument() {
   state.cleanup = null;
   state.cleanupSelectedRuleIDs.clear();
   state.cleanupExcludedCandidateKeys.clear();
-  elements.cleanupDocumentLabel.textContent = "Open an input in the main app, then return to Tools.";
-  elements.cleanupRules.innerHTML = `<div class="empty">No current input.</div>`;
-  elements.cleanupCandidates.innerHTML = `<div class="empty">No current input.</div>`;
-  elements.cleanupCandidateStats.textContent = "0 selected";
+  elements.cleanupDocumentLabel.textContent = t("tools.noCurrentInput");
+  elements.cleanupRules.innerHTML = `<div class="empty">${t("tools.noCurrentInputShort")}</div>`;
+  elements.cleanupCandidates.innerHTML = `<div class="empty">${t("tools.noCurrentInputShort")}</div>`;
+  elements.cleanupCandidateStats.textContent = t("tools.selectedOf", { selected: 0, total: 0 });
   updateCleanupButtons();
 }
 

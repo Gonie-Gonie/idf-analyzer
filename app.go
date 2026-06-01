@@ -110,8 +110,10 @@ type AppSettings struct {
 }
 
 type AppearanceSettings struct {
-	Theme    string                     `json:"theme"`
-	Geometry GeometryAppearanceSettings `json:"geometry"`
+	Theme            string                     `json:"theme"`
+	Language         string                     `json:"language"`
+	AnalysisTabOrder []string                   `json:"analysisTabOrder"`
+	Geometry         GeometryAppearanceSettings `json:"geometry"`
 }
 
 type GeometryAppearanceSettings struct {
@@ -870,7 +872,9 @@ func defaultAppSettings() AppSettings {
 	return AppSettings{
 		Version: 1,
 		Appearance: AppearanceSettings{
-			Theme: "system",
+			Theme:            "system",
+			Language:         "en",
+			AnalysisTabOrder: []string{"summary", "profile", "hvac", "diagnose", "geometry"},
 			Geometry: GeometryAppearanceSettings{
 				Background: "#f7fafc",
 				Zone:       "#b8d7b0",
@@ -902,6 +906,8 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 	default:
 		settings.Appearance.Theme = defaults.Appearance.Theme
 	}
+	settings.Appearance.Language = normalizeAppLanguage(settings.Appearance.Language, defaults.Appearance.Language)
+	settings.Appearance.AnalysisTabOrder = normalizeAnalysisTabOrder(settings.Appearance.AnalysisTabOrder, defaults.Appearance.AnalysisTabOrder)
 	settings.Appearance.Geometry.Background = normalizeHexColor(settings.Appearance.Geometry.Background, defaults.Appearance.Geometry.Background)
 	settings.Appearance.Geometry.Zone = normalizeHexColor(settings.Appearance.Geometry.Zone, defaults.Appearance.Geometry.Zone)
 	settings.Appearance.Geometry.Wall = normalizeHexColor(settings.Appearance.Geometry.Wall, defaults.Appearance.Geometry.Wall)
@@ -919,6 +925,55 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 	}
 	settings.Profile = normalizeProfileSettings(settings.Profile, defaults.Profile)
 	return settings
+}
+
+func normalizeAppLanguage(value string, fallback string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	if index := strings.IndexAny(normalized, "-_"); index >= 0 {
+		normalized = normalized[:index]
+	}
+	switch normalized {
+	case "en", "ko", "ja", "hi", "es", "fr":
+		return normalized
+	case "kr":
+		return "ko"
+	case "jp":
+		return "ja"
+	default:
+		return fallback
+	}
+}
+
+func normalizeAnalysisTabOrder(values []string, fallback []string) []string {
+	allowed := map[string]bool{
+		"summary":  true,
+		"profile":  true,
+		"hvac":     true,
+		"diagnose": true,
+		"geometry": true,
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(allowed))
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if !allowed[normalized] || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		out = append(out, normalized)
+	}
+	source := fallback
+	if len(source) == 0 {
+		source = []string{"summary", "profile", "hvac", "diagnose", "geometry"}
+	}
+	for _, value := range source {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if allowed[normalized] && !seen[normalized] {
+			seen[normalized] = true
+			out = append(out, normalized)
+		}
+	}
+	return out
 }
 
 func normalizeProfileSettings(settings idf.ProfileAnalysisSettings, defaults idf.ProfileAnalysisSettings) idf.ProfileAnalysisSettings {

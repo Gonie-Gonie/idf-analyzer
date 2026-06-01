@@ -14,16 +14,16 @@
             <span data-app-name>IDF Analyzer</span>
             <span class="app-version" data-app-version>v0.1.0</span>
           </h1>
-          <p id="runtimeStatus" class="status-loading">Loading interface</p>
+          <p id="runtimeStatus" class="status-loading" data-i18n="status.loadingInterface">Loading interface</p>
         </div>
         <div class="toolbar" role="toolbar" aria-label="IDF controls">
-          <button id="openButton" type="button">Open</button>
+          <button id="openButton" type="button" data-i18n="action.open">Open</button>
           <input id="fileInput" class="hidden-file-input" type="file" accept=".idf,.imf,.epjson,.json,.txt" />
-          <button id="saveButton" type="button">Save</button>
-          <button id="revertButton" type="button" disabled>Revert</button>
-          <button id="toolsButton" type="button">Tools</button>
-          <button id="guideButton" type="button">Guide</button>
-          <button id="settingsButton" type="button">Settings</button>
+          <button id="saveButton" type="button" data-i18n="action.save">Save</button>
+          <button id="revertButton" type="button" disabled data-i18n="action.revert">Revert</button>
+          <button id="toolsButton" type="button" data-i18n="action.tools">Tools</button>
+          <button id="guideButton" type="button" data-i18n="action.guide">Guide</button>
+          <button id="settingsButton" type="button" data-i18n="action.settings">Settings</button>
         </div>
       </header>
 
@@ -31,7 +31,7 @@
         <aside class="editor-panel" aria-label="IDF editor">
           <div class="panel-head editor-head">
             <div>
-              <h2>Input View</h2>
+              <h2 data-i18n="input.view">Input View</h2>
               <span id="textStats">0 lines</span>
             </div>
             <div class="view-tabs" role="tablist" aria-label="Input views">
@@ -41,7 +41,7 @@
             </div>
           </div>
           <div class="input-filter-bar" role="search">
-            <input id="inputFilter" type="search" placeholder="Filter objects, fields, values" aria-label="Filter input objects" />
+            <input id="inputFilter" type="search" placeholder="Filter objects, fields, values" aria-label="Filter input objects" data-i18n-placeholder="input.filter" />
             <span id="inputFilterStats">0 objects</span>
           </div>
           <div class="input-view active" id="textInputView">
@@ -53,8 +53,8 @@
           <div class="input-view" id="tableInputView">
             <div class="table-tools">
               <div class="orientation-controls" role="group" aria-label="Table orientation">
-                <button class="orientation-button active" data-table-orientation="objects" type="button">Objects as rows</button>
-                <button class="orientation-button" data-table-orientation="fields" type="button">Fields as rows</button>
+                <button class="orientation-button active" data-table-orientation="objects" type="button" data-i18n="input.objectsRows">Objects as rows</button>
+                <button class="orientation-button" data-table-orientation="fields" type="button" data-i18n="input.fieldsRows">Fields as rows</button>
               </div>
               <span id="fieldStats">0 fields</span>
             </div>
@@ -63,10 +63,10 @@
           <div id="inputRawSplitter" class="vertical-splitter" role="separator" aria-orientation="horizontal" aria-label="Resize input view and raw text"></div>
           <div class="raw-editor-block">
             <div class="subhead">
-              <h3>Raw Text</h3>
+              <h3 data-i18n="input.rawText">Raw Text</h3>
               <label class="sync-toggle">
                 <input id="syncRawTextToggle" type="checkbox" checked />
-                Sync position
+                <span data-i18n="input.syncPosition">Sync position</span>
               </label>
             </div>
             <textarea id="idfInput" spellcheck="false"></textarea>
@@ -77,23 +77,23 @@
 
         <section class="analysis-panel" aria-label="Analysis results">
           <nav class="tabs" aria-label="Result tabs">
-            <button class="tab active" data-result-tab="summary" type="button">Summary</button>
-            <button class="tab" data-result-tab="profile" type="button">Profile</button>
-            <button class="tab" data-result-tab="hvac" type="button">HVAC</button>
-            <button class="tab" data-result-tab="diagnose" type="button">Diagnose</button>
-            <button class="tab" data-result-tab="geometry" type="button">Geometry</button>
+            <button class="tab active" data-result-tab="summary" type="button" data-i18n="tab.summary">Summary</button>
+            <button class="tab" data-result-tab="profile" type="button" data-i18n="tab.profile">Profile</button>
+            <button class="tab" data-result-tab="hvac" type="button" data-i18n="tab.hvac">HVAC</button>
+            <button class="tab" data-result-tab="diagnose" type="button" data-i18n="tab.diagnose">Diagnose</button>
+            <button class="tab" data-result-tab="geometry" type="button" data-i18n="tab.geometry">Geometry</button>
           </nav>
 
           <div class="result-pane active" id="summaryPane">
             <div class="summary-head">
               <div>
-                <h2>Summary</h2>
+                <h2 data-i18n="tab.summary">Summary</h2>
                 <span id="summaryMetricCount">0 metrics</span>
               </div>
               <div class="summary-tools">
-                <input id="summaryFilter" type="search" placeholder="Filter metrics" />
-                <button id="exportSummaryJSONButton" type="button">Export JSON</button>
-                <button id="exportSummaryCSVButton" type="button">Export CSV</button>
+                <input id="summaryFilter" type="search" placeholder="Filter metrics" data-i18n-placeholder="summary.filter" />
+                <button id="exportSummaryJSONButton" type="button" data-i18n="action.exportJson">Export JSON</button>
+                <button id="exportSummaryCSVButton" type="button" data-i18n="action.exportCsv">Export CSV</button>
               </div>
             </div>
             <div class="summary-pane">
@@ -104,12 +104,12 @@
           <div class="result-pane" id="profilePane">
             <div class="summary-head profile-head">
               <div>
-                <h2>Profile</h2>
+                <h2 data-i18n="tab.profile">Profile</h2>
                 <span id="profileStats">0 profiles</span>
               </div>
               <div class="summary-tools">
-                <input id="profileFilter" type="search" placeholder="Filter profiles, zones, schedules" />
-                <button id="profileApplyButton" type="button" disabled>Apply Profile</button>
+                <input id="profileFilter" type="search" placeholder="Filter profiles, zones, schedules" data-i18n-placeholder="profile.filter" />
+                <button id="profileApplyButton" type="button" disabled data-i18n="action.applyProfile">Apply Profile</button>
               </div>
             </div>
             <div class="profile-pane">
@@ -124,14 +124,14 @@
               </div>
               <section class="profile-section">
                 <div class="profile-section-head">
-                  <h3>Profile Matrix</h3>
+                  <h3 data-i18n="profile.matrix">Profile Matrix</h3>
                   <span id="profileMatrixStats" class="tool-muted">0 zones</span>
                 </div>
                 <div id="profileMatrix" class="profile-matrix"></div>
               </section>
               <section class="profile-section">
                 <div class="profile-section-head">
-                  <h3>Profile Graph</h3>
+                  <h3 data-i18n="profile.graph">Profile Graph</h3>
                   <span id="profileGraphStats" class="tool-muted">Representative day</span>
                 </div>
                 <div id="profileGraph" class="profile-graph"></div>
@@ -140,14 +140,14 @@
             <div id="profileApplyDialog" class="profile-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="profileApplyTitle">
               <form id="profileApplyForm" class="profile-dialog-panel">
                 <div class="profile-dialog-head">
-                  <h3 id="profileApplyTitle">Apply Profile</h3>
-                  <button id="profileApplyClose" type="button">Close</button>
+                  <h3 id="profileApplyTitle" data-i18n="action.applyProfile">Apply Profile</h3>
+                  <button id="profileApplyClose" type="button" data-i18n="action.close">Close</button>
                 </div>
                 <div id="profileApplyBody" class="profile-apply-body"></div>
                 <div class="profile-dialog-actions">
-                  <span id="profileApplyStatus" class="settings-save-status">Review changes before applying.</span>
-                  <button id="profilePreviewApply" type="button">Preview</button>
-                  <button id="profileConfirmApply" type="submit" disabled>Apply</button>
+                  <span id="profileApplyStatus" class="settings-save-status" data-i18n="status.reviewBeforeApplying">Review changes before applying.</span>
+                  <button id="profilePreviewApply" type="button" data-i18n="action.preview">Preview</button>
+                  <button id="profileConfirmApply" type="submit" disabled data-i18n="action.apply">Apply</button>
                 </div>
               </form>
             </div>
@@ -156,17 +156,17 @@
           <div class="result-pane" id="hvacPane">
             <div class="summary-head hvac-head">
               <div>
-                <h2>HVAC</h2>
+                <h2 data-i18n="tab.hvac">HVAC</h2>
                 <span id="hvacStats">0 loops, 0 zones</span>
               </div>
               <div class="summary-tools hvac-tools">
                 <select id="hvacLoopSelect" aria-label="HVAC loop selector"></select>
                 <div class="hvac-view-tabs" role="group" aria-label="HVAC views">
-                  <button class="hvac-view-button active" data-hvac-view="loop" type="button">Loop</button>
-                  <button class="hvac-view-button" data-hvac-view="relation" type="button">Relation</button>
-                  <button class="hvac-view-button" data-hvac-view="diagnostics" type="button">Diagnostics</button>
+                  <button class="hvac-view-button active" data-hvac-view="loop" type="button" data-i18n="hvac.viewLoop">Loop</button>
+                  <button class="hvac-view-button" data-hvac-view="relation" type="button" data-i18n="hvac.viewRelation">Relation</button>
+                  <button class="hvac-view-button" data-hvac-view="diagnostics" type="button" data-i18n="hvac.viewDiagnostics">Diagnostics</button>
                 </div>
-                <input id="hvacFilter" type="search" placeholder="Filter loops, zones, nodes" />
+                <input id="hvacFilter" type="search" placeholder="Filter loops, zones, nodes" data-i18n-placeholder="hvac.filter" />
               </div>
             </div>
             <div class="hvac-pane">
@@ -178,14 +178,14 @@
                 <aside class="hvac-side" aria-label="HVAC inspector">
                   <section class="hvac-inspector-section">
                     <div class="hvac-section-head">
-                      <h3>Inspector</h3>
+                      <h3 data-i18n="hvac.inspector">Inspector</h3>
                       <span id="hvacInspectorStats">Select a node or component</span>
                     </div>
                     <div id="hvacInspector" class="hvac-inspector"></div>
                   </section>
                   <section class="hvac-inspector-section">
                     <div class="hvac-section-head">
-                      <h3>Warnings</h3>
+                      <h3 data-i18n="hvac.warnings">Warnings</h3>
                       <span id="hvacWarningStats">0 warnings</span>
                     </div>
                     <div id="hvacWarnings" class="hvac-warning-list"></div>
@@ -196,14 +196,14 @@
             <div id="hvacApplyDialog" class="profile-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="hvacApplyTitle">
               <form id="hvacApplyForm" class="profile-dialog-panel">
                 <div class="profile-dialog-head">
-                  <h3 id="hvacApplyTitle">Edit HVAC Field</h3>
-                  <button id="hvacApplyClose" type="button">Close</button>
+                  <h3 id="hvacApplyTitle" data-i18n="hvac.applyTitle">Edit HVAC Field</h3>
+                  <button id="hvacApplyClose" type="button" data-i18n="action.close">Close</button>
                 </div>
                 <div id="hvacApplyBody" class="profile-apply-body"></div>
                 <div class="profile-dialog-actions">
-                  <span id="hvacApplyStatus" class="settings-save-status">Review changes before applying.</span>
-                  <button id="hvacPreviewApply" type="button">Preview</button>
-                  <button id="hvacConfirmApply" type="submit" disabled>Apply</button>
+                  <span id="hvacApplyStatus" class="settings-save-status" data-i18n="status.reviewBeforeApplying">Review changes before applying.</span>
+                  <button id="hvacPreviewApply" type="button" data-i18n="action.preview">Preview</button>
+                  <button id="hvacConfirmApply" type="submit" disabled data-i18n="action.apply">Apply</button>
                 </div>
               </form>
             </div>
@@ -212,11 +212,11 @@
           <div class="result-pane" id="diagnosePane">
             <div class="summary-head">
               <div>
-                <h2>Diagnose</h2>
+                <h2 data-i18n="tab.diagnose">Diagnose</h2>
                 <span id="diagnosticCount">0 issues</span>
               </div>
               <div class="summary-tools">
-                <input id="diagnosticFilter" type="search" placeholder="Filter issues" />
+                <input id="diagnosticFilter" type="search" placeholder="Filter issues" data-i18n-placeholder="diagnose.filter" />
               </div>
             </div>
             <div class="diagnostic-pane">
@@ -227,7 +227,7 @@
           <div class="result-pane" id="geometryPane">
             <div class="geometry-head">
               <div>
-                <h2>Geometry</h2>
+                <h2 data-i18n="tab.geometry">Geometry</h2>
                 <span id="geometryStats">0 zones, 0 surfaces, 0 windows</span>
               </div>
               <div class="geometry-tools">
@@ -236,11 +236,11 @@
                   <button class="geometry-mode-button" data-geometry-mode="plan" type="button">Plan</button>
                   <select id="geometryStorySelect" aria-label="Geometry story"></select>
                 </div>
-                <label class="geometry-toggle geometry-sync-toggle"><input id="geometrySyncLocate" type="checkbox" checked /> Sync locate</label>
+                <label class="geometry-toggle geometry-sync-toggle"><input id="geometrySyncLocate" type="checkbox" checked /> <span data-i18n="geometry.syncLocate">Sync locate</span></label>
                 <div class="geometry-control-group geometry-visibility-controls" aria-label="Geometry visibility">
-                  <label class="geometry-toggle"><input id="geometryShowZones" type="checkbox" checked /> Zones</label>
-                  <label class="geometry-toggle"><input id="geometryShowWalls" type="checkbox" checked /> Walls</label>
-                  <label class="geometry-toggle"><input id="geometryShowWindows" type="checkbox" checked /> Windows</label>
+                  <label class="geometry-toggle"><input id="geometryShowZones" type="checkbox" checked /> <span data-i18n="geometry.showZones">Zones</span></label>
+                  <label class="geometry-toggle"><input id="geometryShowWalls" type="checkbox" checked /> <span data-i18n="geometry.showWalls">Walls</span></label>
+                  <label class="geometry-toggle"><input id="geometryShowWindows" type="checkbox" checked /> <span data-i18n="geometry.showWindows">Windows</span></label>
                 </div>
               </div>
             </div>
@@ -251,7 +251,7 @@
               </div>
               <div id="geometryDetailsSplitter" class="vertical-splitter" role="separator" aria-orientation="horizontal" aria-label="Resize geometry view and properties"></div>
               <section id="geometryDetails" class="geometry-details" aria-label="Selected geometry properties">
-                <div class="empty">Select a zone, wall, or window</div>
+                <div class="empty" data-i18n="geometry.selectObject">Select a zone, wall, or window</div>
               </section>
             </div>
           </div>

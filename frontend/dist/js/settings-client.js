@@ -1,9 +1,21 @@
+import {
+  applyAnalyzeTabOrder,
+  defaultAnalyzeTabOrder,
+  normalizeAnalyzeTabOrder,
+  normalizeLanguage,
+  setLanguage,
+  storeAnalyzeTabOrder,
+  translatePage,
+} from "./i18n.js";
+
 export const settingsStorageKey = "idfAnalyzer.appSettings";
 
 export const defaultAppSettings = {
   version: 1,
   appearance: {
     theme: "system",
+    language: "en",
+    analysisTabOrder: [...defaultAnalyzeTabOrder],
     geometry: {
       background: "#f7fafc",
       zone: "#b8d7b0",
@@ -132,6 +144,10 @@ export function applyAppSettings(settingsInput) {
   const resolvedTheme = resolvedThemeName(currentSettings.appearance.theme);
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.themePreference = currentSettings.appearance.theme;
+  setLanguage(currentSettings.appearance.language);
+  const analysisTabOrder = storeAnalyzeTabOrder(currentSettings.appearance.analysisTabOrder);
+  applyAnalyzeTabOrder(analysisTabOrder);
+  translatePage();
   const geometry = currentSettings.appearance.geometry;
   Object.entries(geometry).forEach(([name, value]) => {
     document.documentElement.style.setProperty(`--geometry-${name}`, value);
@@ -153,6 +169,8 @@ export function mergeSettings(settingsInput = {}) {
     version: Number(settings.version) || defaultAppSettings.version,
     appearance: {
       theme: normalizeTheme(appearance.theme),
+      language: normalizeLanguage(appearance.language),
+      analysisTabOrder: normalizeAnalyzeTabOrder(appearance.analysisTabOrder),
       geometry: {
         background: normalizeHexColor(geometry.background, defaultAppSettings.appearance.geometry.background),
         zone: normalizeHexColor(geometry.zone, defaultAppSettings.appearance.geometry.zone),

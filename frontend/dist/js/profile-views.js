@@ -1,5 +1,6 @@
 import { backend, elements, escapeHTML, setStatus, state } from "./state.js";
 import { getCurrentAppSettings, saveAppSettings } from "./settings-client.js";
+import { profileDimensionLabel as i18nProfileDimensionLabel, profileMetricLabel, t } from "./i18n.js";
 
 let lastProfileView = null;
 
@@ -28,8 +29,8 @@ export function renderProfile(profile = state.report?.profile) {
     : selectedProfileGroup();
 
   elements.profileStats.textContent = query
-    ? `${visibleGroups.length} of ${lastProfileView.groups.length} profiles, ${profile.itemCount || 0} items`
-    : `${lastProfileView.groups.length} profiles, ${profile.itemCount || 0} items`;
+    ? t("count.profilesOf", { shown: visibleGroups.length, total: lastProfileView.groups.length, items: profile.itemCount || 0 })
+    : t("count.profiles", { profiles: lastProfileView.groups.length, items: profile.itemCount || 0 });
   elements.profileApplyButton.disabled = !selectedGroup;
   renderProfileSettings(profile);
   renderProfileOverview(visibleGroups);
@@ -40,14 +41,14 @@ export function renderProfile(profile = state.report?.profile) {
 }
 
 function renderEmptyProfile() {
-  elements.profileStats.textContent = "0 profiles";
+  elements.profileStats.textContent = t("count.profiles", { profiles: 0, items: 0 });
   elements.profileSettings.innerHTML = "";
-  elements.profileOverview.innerHTML = `<div class="empty">No profile analysis yet</div>`;
-  elements.profileDetail.innerHTML = `<div class="empty">Select a profile</div>`;
-  elements.profileMatrix.innerHTML = `<div class="empty">No profile matrix yet</div>`;
-  elements.profileMatrixStats.textContent = "0 zones";
-  elements.profileGraph.innerHTML = `<div class="empty">No profile graph yet</div>`;
-  elements.profileGraphStats.textContent = "Representative day";
+  elements.profileOverview.innerHTML = `<div class="empty">${t("profile.noAnalysis")}</div>`;
+  elements.profileDetail.innerHTML = `<div class="empty">${t("profile.noProfile")}</div>`;
+  elements.profileMatrix.innerHTML = `<div class="empty">${t("profile.noMatrix")}</div>`;
+  elements.profileMatrixStats.textContent = t("count.zones", { count: 0 });
+  elements.profileGraph.innerHTML = `<div class="empty">${t("profile.noGraph")}</div>`;
+  elements.profileGraphStats.textContent = t("graph.representativeDay");
   elements.profileApplyButton.disabled = true;
 }
 
@@ -57,24 +58,24 @@ function renderProfileSettings(profile) {
   elements.profileSettings.innerHTML = `
     <div class="profile-live-controls">
       <div class="profile-live-group">
-        <span class="profile-live-label">Dimensions</span>
+        <span class="profile-live-label">${t("common.dimensions")}</span>
         <div class="profile-toggle-row">
           ${dimensions
             .map(
               (dimension) => `
                 <label class="profile-check compact">
                   <input data-profile-dimension="${escapeHTML(dimension.id)}" type="checkbox" ${settings.enabledDimensions.includes(dimension.id) ? "checked" : ""} />
-                  <span>${escapeHTML(dimension.label)}</span>
+                  <span>${escapeHTML(profileDimensionLabel(dimension.id))}</span>
                 </label>`,
             )
             .join("")}
         </div>
       </div>
       <label class="profile-field profile-live-select">
-        <span>Graph</span>
+        <span>${t("profile.graph")}</span>
         <select id="profileGraphMode">
-          ${optionHTML("actual_value", "Actual value", settings.graphMode)}
-          ${optionHTML("multiplier", "Multiplier", settings.graphMode)}
+          ${optionHTML("actual_value", t("graph.actualValue"), settings.graphMode)}
+          ${optionHTML("multiplier", t("graph.multiplier"), settings.graphMode)}
         </select>
       </label>
     </div>`;
@@ -83,8 +84,8 @@ function renderProfileSettings(profile) {
 function applyModeSelect(id, value) {
   return `
       <select id="${escapeHTML(id)}">
-        ${optionHTML("clone", "Clone objects", value)}
-        ${optionHTML("shared", "Edit ZoneList", value)}
+        ${optionHTML("clone", t("profile.applyClone"), value)}
+        ${optionHTML("shared", t("profile.applyShared"), value)}
       </select>
     `;
 }
@@ -92,9 +93,9 @@ function applyModeSelect(id, value) {
 function replacePolicySelect(id, value) {
   return `
       <select id="${escapeHTML(id)}">
-        ${optionHTML("replace", "Replace", value)}
-        ${optionHTML("keep", "Keep", value)}
-        ${optionHTML("duplicate", "Duplicate", value)}
+        ${optionHTML("replace", t("profile.existingReplace"), value)}
+        ${optionHTML("keep", t("profile.existingKeep"), value)}
+        ${optionHTML("duplicate", t("profile.existingDuplicate"), value)}
       </select>
     `;
 }
@@ -106,7 +107,7 @@ function optionHTML(value, label, selected) {
 function renderProfileOverview(groups) {
   elements.profileOverview.innerHTML = groups.length
     ? groups.map(renderProfileGroupCard).join("")
-    : `<div class="empty">No matching profile groups</div>`;
+    : `<div class="empty">${t("profile.noMatchingGroups")}</div>`;
 }
 
 function renderProfileGroupCard(group) {
@@ -115,7 +116,7 @@ function renderProfileGroupCard(group) {
     <button class="profile-group-card ${active}" data-profile-group-id="${escapeHTML(group.id)}" type="button">
       <span>
         <strong>${escapeHTML(group.name)}</strong>
-        <small>${escapeHTML(group.zoneCount)} zones</small>
+        <small>${escapeHTML(t("count.zones", { count: group.zoneCount }))}</small>
       </span>
       <span class="profile-card-zones">${escapeHTML(group.zoneNames.slice(0, 4).join(", "))}${group.zoneNames.length > 4 ? "..." : ""}</span>
       <span class="profile-card-metrics">${group.dimensions.map((dimension) => `${escapeHTML(dimension.label)} ${escapeHTML(dimension.displayValue)}`).join(" / ")}</span>
@@ -124,7 +125,7 @@ function renderProfileGroupCard(group) {
 
 function renderProfileDetail(group, profile) {
   if (!group) {
-    elements.profileDetail.innerHTML = `<div class="empty">Select a profile group</div>`;
+    elements.profileDetail.innerHTML = `<div class="empty">${t("profile.noProfileGroup")}</div>`;
     return;
   }
   const itemMap = profileItemMap(profile);
@@ -136,15 +137,15 @@ function renderProfileDetail(group, profile) {
         <h3>${escapeHTML(group.name)}</h3>
         <p>${escapeHTML(group.zoneNames.join(", "))}</p>
       </div>
-      <span class="badge">${escapeHTML(group.zoneCount)} zones</span>
+      <span class="badge">${escapeHTML(t("count.zones", { count: group.zoneCount }))}</span>
     </div>
     <div class="profile-dimension-grid">
       ${group.dimensions.map(renderProfileDimensionSummary).join("")}
     </div>
     ${warnings.length ? `<div class="profile-warning-list">${warnings.map(renderProfileWarning).join("")}</div>` : ""}
-    <div class="profile-item-table" role="table" aria-label="Profile source objects">
+    <div class="profile-item-table" role="table" aria-label="${escapeHTML(t("profile.sourceObjects"))}">
       <div class="profile-item-row head" role="row">
-        <span>Dimension</span><span>Source</span><span>Schedule</span><span>Method</span><span>Normalized</span>
+        <span>${t("common.dimension")}</span><span>${t("common.source")}</span><span>${t("common.schedule")}</span><span>${t("common.method")}</span><span>${t("common.normalized")}</span>
       </div>
       ${items.map(renderProfileItemRow).join("")}
     </div>`;
@@ -155,14 +156,14 @@ function renderProfileDimensionSummary(dimension) {
     <article class="profile-dimension-card">
       <strong>${escapeHTML(dimension.label)}</strong>
       <span>${escapeHTML(dimension.displayValue)}</span>
-      <small>${escapeHTML(dimension.scheduleName || dimension.schedulePattern || "No schedule")}</small>
+      <small>${escapeHTML(dimension.scheduleName || dimension.schedulePattern || t("profile.noSchedule"))}</small>
     </article>`;
 }
 
 function renderProfileItemRow(item) {
   const metrics = (item.normalized || [])
     .filter((metric) => metric.status !== "missing")
-    .map((metric) => `${metric.label}: ${metric.displayValue}`)
+    .map((metric) => `${profileMetricLabel(item.dimension, metric.id, metric.label)}: ${metric.displayValue}`)
     .join("; ");
   return `
     <div class="profile-item-row" role="row">
@@ -183,12 +184,12 @@ function renderProfileMatrix(rows, query, profile) {
   const visibleRows = rows.filter((row) => profileMatrixRowMatchesQuery(row, query));
   const dimensions = (lastProfileView?.dimensions || []).filter((dimension) => state.profileSettings.enabledDimensions.includes(dimension.id));
   const itemMap = profileItemMap(profile);
-  elements.profileMatrixStats.textContent = `${visibleRows.length} zones`;
+  elements.profileMatrixStats.textContent = t("count.zones", { count: visibleRows.length });
   elements.profileMatrix.innerHTML = visibleRows.length
     ? `
       <table>
         <thead>
-          <tr><th>Zone</th>${dimensions.map((dimension) => `<th>${escapeHTML(dimension.label)}</th>`).join("")}</tr>
+          <tr><th>Zone</th>${dimensions.map((dimension) => `<th>${escapeHTML(profileDimensionLabel(dimension.id))}</th>`).join("")}</tr>
         </thead>
         <tbody>
           ${visibleRows
@@ -212,7 +213,7 @@ function renderProfileMatrix(rows, query, profile) {
             .join("")}
         </tbody>
       </table>`
-    : `<div class="empty">No matching zones</div>`;
+    : `<div class="empty">${t("profile.noMatchingZones")}</div>`;
 }
 
 function renderProfileMatrixCell(summary, itemMap) {
@@ -239,7 +240,7 @@ function renderProfileMatrixCell(summary, itemMap) {
 
 function renderProfileGraph(group, profile) {
   if (!group) {
-    elements.profileGraph.innerHTML = `<div class="empty">Select a profile group to view graph summaries.</div>`;
+    elements.profileGraph.innerHTML = `<div class="empty">${t("profile.graphSelect")}</div>`;
     return;
   }
   const viewMode = currentGraphViewMode();
@@ -257,26 +258,26 @@ function renderProfileGraph(group, profile) {
   elements.profileGraph.innerHTML = `
     <div class="profile-graph-toolbar">
       <label class="profile-field">
-        <span>View</span>
+        <span>${t("common.view")}</span>
         <select id="profileGraphViewMode">
-          ${optionHTML("annual_heatmap", "Annual heatmap", viewMode)}
-          ${optionHTML("representative_week", "Representative week", viewMode)}
-          ${optionHTML("period_rules", "Through / For rules", viewMode)}
-          ${optionHTML("representative_day", "Representative days", viewMode)}
+          ${optionHTML("annual_heatmap", t("graph.annualHeatmap"), viewMode)}
+          ${optionHTML("representative_week", t("graph.representativeWeek"), viewMode)}
+          ${optionHTML("period_rules", t("graph.periodRules"), viewMode)}
+          ${optionHTML("representative_day", t("graph.representativeDay"), viewMode)}
         </select>
       </label>
       <label class="profile-field">
-        <span>Scale</span>
+        <span>${t("common.scale")}</span>
         <select id="profileGraphScaleMode">
-          ${optionHTML("auto", "Auto", scaleMode)}
-          ${optionHTML("design_peak", "Design peak", scaleMode)}
-          ${optionHTML("multiplier_0_1", "Multiplier 0-1", scaleMode)}
+          ${optionHTML("auto", t("common.auto"), scaleMode)}
+          ${optionHTML("design_peak", t("graph.designPeak"), scaleMode)}
+          ${optionHTML("multiplier_0_1", t("graph.multiplier01"), scaleMode)}
         </select>
       </label>
     </div>
     ${renderProfileGraphSummary(group)}
     <div class="profile-graph-grid">
-      ${cards || `<div class="empty">No scheduled profile values for this group.</div>`}
+      ${cards || `<div class="empty">${t("profile.graphNoValues")}</div>`}
     </div>`;
 }
 
@@ -309,7 +310,7 @@ function renderProfileGraphCard(dimension, schedule, viewMode, scaleMode) {
       </div>
       ${warnings}
       ${renderGraphVisual(graphData, values, max, dimension)}
-      <small>Peak ${escapeHTML(formatGraphNumber(Math.max(...values, 0), unit))} / scale ${escapeHTML(formatGraphNumber(max, unit))}</small>
+      <small>${escapeHTML(t("graph.peakScale", { peak: formatGraphNumber(Math.max(...values, 0), unit), scale: formatGraphNumber(max, unit) }))}</small>
     </article>`;
 }
 
@@ -328,20 +329,20 @@ function renderGraphVisual(graphData, values, max, dimension) {
 
 function graphDataForDimension(dimension, schedule, viewMode) {
   const unresolvedWarning = schedule && schedule.resolved === false
-    ? "Schedule could not be fully parsed; showing design-level fallback instead of treating it as zero."
+    ? t("profile.scheduleUnresolvedWarning")
     : "";
   switch (viewMode) {
     case "representative_week":
       return {
         kind: "line",
-        label: `${schedule?.detectedPattern || "No schedule"} / representative week`,
+        label: `${schedule?.detectedPattern || t("profile.noSchedule")} / ${t("graph.representativeWeek")}`,
         values: scheduleWeeklyProfile(schedule),
         warning: unresolvedWarning,
       };
     case "period_rules":
       return {
         kind: "rules",
-        label: `${schedule?.detectedPattern || "No schedule"} / Through-For rules`,
+        label: `${schedule?.detectedPattern || t("profile.noSchedule")} / ${t("graph.periodRules")}`,
         values: scheduleRuleValues(schedule),
         rules: scheduleRules(schedule),
         warning: unresolvedWarning,
@@ -349,23 +350,23 @@ function graphDataForDimension(dimension, schedule, viewMode) {
     case "representative_day":
       return {
         kind: "day_profiles",
-        label: `${schedule?.detectedPattern || "No schedule"} / representative days`,
+        label: `${schedule?.detectedPattern || t("profile.noSchedule")} / ${t("graph.representativeDay")}`,
         values: [
           ...scheduleDayProfile(schedule, "weekdayProfile"),
           ...scheduleDayProfile(schedule, "saturdayProfile"),
           ...scheduleDayProfile(schedule, "sundayProfile"),
         ],
         profiles: [
-          { label: "Weekday", values: scheduleDayProfile(schedule, "weekdayProfile") },
-          { label: "Saturday", values: scheduleDayProfile(schedule, "saturdayProfile") },
-          { label: "Sunday", values: scheduleDayProfile(schedule, "sundayProfile") },
+          { label: t("day.weekday"), values: scheduleDayProfile(schedule, "weekdayProfile") },
+          { label: t("day.saturday"), values: scheduleDayProfile(schedule, "saturdayProfile") },
+          { label: t("day.sunday"), values: scheduleDayProfile(schedule, "sundayProfile") },
         ],
         warning: unresolvedWarning,
       };
     default:
       return {
         kind: "heatmap",
-        label: `${schedule?.detectedPattern || "No schedule"} / annual heatmap`,
+        label: `${schedule?.detectedPattern || t("profile.noSchedule")} / ${t("graph.annualHeatmap")}`,
         values: annualScheduleValues(schedule),
         warning: unresolvedWarning,
       };
@@ -420,7 +421,7 @@ function renderRuleGraph(graphData, values, max) {
               ${renderLineGraph(ruleValues.length ? ruleValues : [0], max, rule.label || "Schedule rule")}
             </div>`;
         })
-        .join("") || `<div class="empty">No Through / For rules available.</div>`}
+        .join("") || `<div class="empty">${t("profile.noRules")}</div>`}
     </div>`;
 }
 
@@ -433,7 +434,7 @@ function renderHeatmap(values, max, label) {
     })
     .join("");
   return `
-    <svg class="profile-heatmap" viewBox="0 0 365 24" preserveAspectRatio="none" role="img" aria-label="${escapeHTML(label)} annual heatmap">
+    <svg class="profile-heatmap" viewBox="0 0 365 24" preserveAspectRatio="none" role="img" aria-label="${escapeHTML(`${label} ${t("graph.annualHeatmap")}`)}">
       ${rects}
     </svg>`;
 }
@@ -447,16 +448,15 @@ function currentGraphViewMode() {
 }
 
 function graphStatsLabel(viewMode, graphMode) {
-  const valueLabel = graphMode === "multiplier" ? "Schedule multiplier" : "Actual value";
   switch (viewMode) {
     case "representative_week":
-      return `${valueLabel}, representative week`;
+      return graphMode === "multiplier" ? t("graph.multiplierWeek") : t("graph.actualWeek");
     case "period_rules":
-      return `${valueLabel}, Through / For rules`;
+      return graphMode === "multiplier" ? t("graph.multiplierRules") : t("graph.actualRules");
     case "representative_day":
-      return `${valueLabel}, representative days`;
+      return graphMode === "multiplier" ? t("graph.multiplierDay") : t("graph.actualDay");
     default:
-      return `${valueLabel}, annual heatmap`;
+      return graphMode === "multiplier" ? t("graph.multiplierAnnual") : t("graph.actualAnnual");
   }
 }
 
@@ -496,7 +496,7 @@ function scheduleWeeklyProfile(schedule) {
 function scheduleRules(schedule) {
   return Array.isArray(schedule?.rules) && schedule.rules.length
     ? schedule.rules
-    : [{ startDay: 1, endDay: 365, selector: "AllDays", label: "Fallback all days", intervals: [{ startHour: 0, endHour: 24, value: 1 }] }];
+    : [{ startDay: 1, endDay: 365, selector: "AllDays", label: t("profile.fallbackAllDays"), intervals: [{ startHour: 0, endHour: 24, value: 1 }] }];
 }
 
 function scheduleRuleValues(schedule) {
@@ -575,7 +575,7 @@ function clampGraphValue(value, max) {
 }
 
 function renderProfileWarning(warning) {
-  return `<div class="profile-warning ${escapeHTML(warning.severity || "warning")}">${escapeHTML(warning.message || warning.code || "Profile warning")}</div>`;
+  return `<div class="profile-warning ${escapeHTML(warning.severity || "warning")}">${escapeHTML(warning.message || warning.code || t("profile.warning"))}</div>`;
 }
 
 function bindProfileControls(profile) {
@@ -645,7 +645,7 @@ export function initializeProfileControls() {
     }
     state.profileApplyPreview = null;
     elements.profileConfirmApply.disabled = true;
-    elements.profileApplyStatus.textContent = "Run preview before applying.";
+    elements.profileApplyStatus.textContent = t("status.runPreview");
   });
 }
 
@@ -657,7 +657,7 @@ function openProfileApplyDialog() {
   }
   state.profileApplyPreview = null;
   elements.profileConfirmApply.disabled = true;
-  elements.profileApplyStatus.textContent = "Review changes before applying.";
+  elements.profileApplyStatus.textContent = t("status.reviewBeforeApplying");
   const sourceZones = new Set(group.zoneNames);
   const targets = (profile.zoneProfiles || []).filter((zone) => !sourceZones.has(zone.zoneName));
   const dimensions = (profile.dimensions || []).filter((dimension) => state.profileSettings.enabledDimensions.includes(dimension.id));
@@ -667,7 +667,7 @@ function openProfileApplyDialog() {
       <p>${escapeHTML(group.zoneNames.join(", "))}</p>
     </section>
     <section>
-      <h4>Target Zones</h4>
+      <h4>${t("common.targetZones")}</h4>
       <div class="profile-target-list">
         ${targets
           .map(
@@ -677,40 +677,40 @@ function openProfileApplyDialog() {
                 <span>${escapeHTML(zone.zoneName)}</span>
               </label>`,
           )
-          .join("") || `<div class="empty">No other zones available.</div>`}
+          .join("") || `<div class="empty">${t("profile.noOtherZones")}</div>`}
       </div>
     </section>
     <section>
-      <h4>Dimensions</h4>
+      <h4>${t("common.dimensions")}</h4>
       <div class="profile-chip-grid">
         ${dimensions
           .map(
             (dimension) => `
               <label class="profile-check">
                 <input data-profile-apply-dimension="${escapeHTML(dimension.id)}" type="checkbox" checked />
-                <span>${escapeHTML(dimension.label)}</span>
+                <span>${escapeHTML(profileDimensionLabel(dimension.id))}</span>
               </label>`,
           )
           .join("")}
       </div>
     </section>
     <section>
-      <h4>Options</h4>
+      <h4>${t("common.options")}</h4>
       <div class="profile-dialog-options">
         <label class="profile-field">
-          <span>Apply mode</span>
+          <span>${t("common.applyMode")}</span>
           ${applyModeSelect("profileApplyModeDialog", state.profileSettings.applyBehavior.defaultMode)}
         </label>
         <label class="profile-field">
-          <span>Existing target</span>
+          <span>${t("common.existingTarget")}</span>
           ${replacePolicySelect("profileReplacePolicyDialog", state.profileSettings.applyBehavior.replaceExistingPolicy)}
         </label>
-        <label class="profile-check"><input id="profileAllowZoneListEdit" type="checkbox" ${state.profileSettings.applyBehavior.allowZoneListEdit ? "checked" : ""} /> <span>Allow shared ZoneList edits</span></label>
+        <label class="profile-check"><input id="profileAllowZoneListEdit" type="checkbox" ${state.profileSettings.applyBehavior.allowZoneListEdit ? "checked" : ""} /> <span>${t("profile.allowSharedZoneList")}</span></label>
       </div>
     </section>
     <section>
-      <h4>Preview</h4>
-      <div id="profileApplyPreviewList" class="profile-apply-preview"><div class="empty">Run preview before applying.</div></div>
+      <h4>${t("common.preview")}</h4>
+      <div id="profileApplyPreviewList" class="profile-apply-preview"><div class="empty">${t("status.runPreview")}</div></div>
     </section>`;
   elements.profileApplyDialog.classList.remove("hidden");
 }
@@ -722,17 +722,17 @@ function closeProfileApplyDialog() {
 async function previewProfileApply() {
   const request = profileApplyRequest();
   if (!request.targetZoneNames.length) {
-    elements.profileApplyStatus.textContent = "Select at least one target zone.";
+    elements.profileApplyStatus.textContent = t("status.selectTargetZone");
     return;
   }
   try {
-    elements.profileApplyStatus.textContent = "Building preview";
+    elements.profileApplyStatus.textContent = t("status.buildingPreview");
     const preview = await callProfileApplyAPI("PreviewProfileApplyText", "/api/profile-apply-preview", request);
     state.profileApplyPreview = preview;
     const canApply = preview.canApply ?? preview.CanApply;
     elements.profileConfirmApply.disabled = !canApply;
     renderApplyPreview(preview);
-    elements.profileApplyStatus.textContent = canApply ? "Preview ready." : "Preview has blocking warnings.";
+    elements.profileApplyStatus.textContent = canApply ? t("status.previewReady") : t("status.previewBlocking");
   } catch (error) {
     elements.profileApplyStatus.textContent = error?.message || String(error);
   }
@@ -742,7 +742,7 @@ async function applyProfile(event) {
   event.preventDefault();
   const request = profileApplyRequest();
   try {
-    elements.profileApplyStatus.textContent = "Applying profile";
+    elements.profileApplyStatus.textContent = t("status.applyProfile");
     const result = await callProfileApplyAPI("ApplyProfileText", "/api/profile-apply", request);
     window.dispatchEvent(new CustomEvent("idfAnalyzer:profileApplied", { detail: result }));
     closeProfileApplyDialog();
@@ -801,7 +801,7 @@ function renderApplyPreview(preview) {
   const changes = preview.changes || [];
   list.innerHTML = `
     ${warnings.map(renderProfileWarning).join("")}
-    ${changes.length ? changes.map((change) => `<div class="profile-apply-change"><strong>${escapeHTML(change.action)}</strong><span>${escapeHTML(change.message)}</span></div>`).join("") : `<div class="empty">No changes.</div>`}`;
+    ${changes.length ? changes.map((change) => `<div class="profile-apply-change"><strong>${escapeHTML(change.action)}</strong><span>${escapeHTML(change.message)}</span></div>`).join("") : `<div class="empty">${t("status.noChanges")}</div>`}`;
 }
 
 function buildProfileView(profile, settings) {
@@ -866,7 +866,7 @@ function summarizeDimension(zone, dimension, metricId) {
     if (metric && metric.status !== "missing") {
       value += Number(metric.value) || 0;
       okCount += 1;
-      label = metric.label || label;
+      label = profileMetricLabel(dimension.id, metric.id, metric.label || label);
       unit = metric.unit || unit;
     }
     itemIds.push(item.id);
@@ -878,7 +878,7 @@ function summarizeDimension(zone, dimension, metricId) {
   const status = okCount === 0 ? "missing" : okCount < items.length ? "partial" : "ok";
   return {
     dimension: dimension.id,
-    label: dimension.label,
+    label: profileDimensionLabel(dimension.id),
     metricId,
     metricLabel: label,
     unit,
@@ -967,7 +967,8 @@ function profileMatrixRowMatchesQuery(row, query) {
 }
 
 function profileDimensionLabel(dimension) {
-  return state.report?.profile?.dimensions?.find((item) => item.id === dimension)?.label || dimension;
+  const fallback = state.report?.profile?.dimensions?.find((item) => item.id === dimension)?.label || dimension;
+  return i18nProfileDimensionLabel(dimension, fallback);
 }
 
 function shortObjectType(value) {

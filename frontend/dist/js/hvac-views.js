@@ -1,4 +1,5 @@
 import { backend, elements, escapeHTML, state } from "./state.js";
+import { t } from "./i18n.js";
 
 export function initializeHVACControls() {
   elements.hvacLoopSelect?.addEventListener("change", () => {
@@ -46,11 +47,11 @@ export function initializeHVACControls() {
       elements.hvacConfirmApply.disabled = true;
     }
     if (elements.hvacApplyStatus) {
-      elements.hvacApplyStatus.textContent = "Run preview before applying.";
+      elements.hvacApplyStatus.textContent = t("status.runPreview");
     }
     const previewList = elements.hvacApplyBody.querySelector("#hvacApplyPreviewList");
     if (previewList) {
-      previewList.innerHTML = `<div class="empty">Run preview before applying.</div>`;
+      previewList.innerHTML = `<div class="empty">${t("status.runPreview")}</div>`;
     }
   });
 }
@@ -71,7 +72,11 @@ export function renderHVAC(hvac = state.report?.hvac) {
   const selectedLoop = loops.find((loop) => loop.id === state.activeHVACLoopId) || null;
   const query = hvacQuery();
 
-  elements.hvacStats.textContent = `${hvac.airLoopCount || 0} air loops, ${hvac.plantLoopCount || 0} plant loops, ${hvac.zoneRelationCount || 0} zones`;
+  elements.hvacStats.textContent = t("count.airPlantZone", {
+    air: hvac.airLoopCount || 0,
+    plant: hvac.plantLoopCount || 0,
+    zones: hvac.zoneRelationCount || 0,
+  });
   renderHVACLoopSelect(loops);
   renderHVACSummary(hvac);
   renderHVACWarnings(hvac, query);
@@ -88,20 +93,20 @@ export function renderHVAC(hvac = state.report?.hvac) {
 }
 
 function renderEmptyHVAC() {
-  elements.hvacStats.textContent = "0 loops, 0 zones";
+  elements.hvacStats.textContent = t("count.airPlantZone", { air: 0, plant: 0, zones: 0 });
   elements.hvacLoopSelect.innerHTML = "";
-  elements.hvacSummary.innerHTML = `<div class="empty">No HVAC analysis yet</div>`;
-  elements.hvacGraph.innerHTML = `<div class="empty">No loop graph yet</div>`;
-  elements.hvacInspectorStats.textContent = "Select a node or component";
-  elements.hvacInspector.innerHTML = `<div class="empty">No inspector data</div>`;
-  elements.hvacWarningStats.textContent = "0 warnings";
-  elements.hvacWarnings.innerHTML = `<div class="empty">No HVAC warnings</div>`;
+  elements.hvacSummary.innerHTML = `<div class="empty">${t("hvac.noHVACAnalysis")}</div>`;
+  elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.noLoopGraph")}</div>`;
+  elements.hvacInspectorStats.textContent = t("hvac.selectNode");
+  elements.hvacInspector.innerHTML = `<div class="empty">${t("hvac.noData")}</div>`;
+  elements.hvacWarningStats.textContent = t("count.warnings", { count: 0 });
+  elements.hvacWarnings.innerHTML = `<div class="empty">${t("hvac.noWarnings")}</div>`;
 }
 
 function renderHVACLoopSelect(loops) {
   elements.hvacLoopSelect.disabled = state.activeHVACView !== "loop";
   if (state.activeHVACView !== "loop") {
-    elements.hvacLoopSelect.innerHTML = `<option value="">All systems</option>`;
+    elements.hvacLoopSelect.innerHTML = `<option value="">${t("hvac.allSystems")}</option>`;
     return;
   }
   elements.hvacLoopSelect.innerHTML = loops.length
@@ -111,7 +116,7 @@ function renderHVACLoopSelect(loops) {
             `<option value="${escapeHTML(loop.id)}" ${loop.id === state.activeHVACLoopId ? "selected" : ""}>${escapeHTML(loop.type)}: ${escapeHTML(loop.name || `#${Number(loop.objectIndex) + 1}`)}</option>`,
         )
         .join("")
-    : `<option value="">No loops</option>`;
+    : `<option value="">${t("hvac.noLoops")}</option>`;
 }
 
 function renderHVACViewButtons() {
@@ -128,7 +133,7 @@ function renderHVACSummary(hvac) {
       ${renderHVACStat("PlantLoop", hvac.plantLoopCount || 0)}
       ${renderHVACStat("Zone relations", hvac.zoneRelationCount || 0)}
       ${renderHVACStat("Nodes", hvac.nodeCount || 0)}
-      ${renderHVACStat("Warnings", hvac.warningCount || 0)}
+      ${renderHVACStat(t("hvac.warnings"), hvac.warningCount || 0)}
     </div>`;
 }
 
@@ -142,11 +147,11 @@ function renderHVACStat(label, value) {
 
 function renderHVACLoopView(loop, query) {
   if (!loop) {
-    elements.hvacGraph.innerHTML = `<div class="empty">No HVAC loops found</div>`;
+    elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.noLoopsFound")}</div>`;
     return;
   }
   if (query && !loopMatchesQuery(loop, query)) {
-    elements.hvacGraph.innerHTML = `<div class="empty">Selected loop does not match filter</div>`;
+    elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.selectedLoopMismatch")}</div>`;
     return;
   }
   elements.hvacGraph.innerHTML = `
@@ -156,8 +161,8 @@ function renderHVACLoopView(loop, query) {
         <span>${escapeHTML(loop.type)} ${renderObjectLink(loop.objectIndex, loop.type)}</span>
       </div>
       <div class="hvac-loop-meta">
-        <span>${escapeHTML((loop.relatedZones || []).length)} zones</span>
-        <span>${escapeHTML((loop.relatedLoops || []).length)} cross-loop links</span>
+        <span>${escapeHTML(t("count.zones", { count: (loop.relatedZones || []).length }))}</span>
+        <span>${escapeHTML(t("hvac.crossLoopLinks", { count: (loop.relatedLoops || []).length }))}</span>
       </div>
     </div>
     ${renderHVACLoopDiagram(loop)}
@@ -178,7 +183,7 @@ function renderHVACLoopDiagram(loop) {
     : (loop.relatedZones || []).map((zone) => ({ kind: "zone", zone }));
   const supplyItems = supplyComponents.length
     ? supplyComponents.map((component) => ({ kind: "component", component }))
-    : [{ kind: "placeholder", label: "Supply side" }];
+    : [{ kind: "placeholder", label: t("hvac.supplySide") }];
   const height = Math.max(450, 260 + Math.max(supplyItems.length, demandItems.length, 1) * 28);
   const supplyPositions = distributeGraphPositions(supplyItems.length, leftX + 160, rightX - 160, supplyY);
   const demandPositions = distributeGraphPositions(Math.max(demandItems.length, 1), rightX - 160, leftX + 160, demandY);
@@ -195,22 +200,22 @@ function renderHVACLoopDiagram(loop) {
         <path class="hvac-loop-path ${selectedKey === `loop:${loop.id}` ? "selected" : ""}" data-hvac-graph-key="loop:${escapeHTML(loop.id)}"
           d="M${leftX},${supplyY} H${rightX} V${demandY} H${leftX} V${supplyY}" marker-end="url(#hvacArrow)"></path>
         <text class="hvac-loop-label" x="${leftX}" y="54">${escapeHTML(loop.type)}</text>
-        <text class="hvac-loop-name" x="${leftX}" y="76">${escapeHTML(loop.name || "Unnamed loop")}</text>
-        ${renderLoopEndpoint(leftX, supplyY, loop.supplySide?.inletNode, "Supply inlet")}
-        ${renderLoopEndpoint(rightX, supplyY, loop.supplySide?.outletNode, "Supply outlet")}
-        ${renderLoopEndpoint(rightX, demandY, loop.demandSide?.inletNode, "Demand inlet")}
-        ${renderLoopEndpoint(leftX, demandY, loop.demandSide?.outletNode, "Demand outlet")}
+        <text class="hvac-loop-name" x="${leftX}" y="76">${escapeHTML(loop.name || t("hvac.unnamedLoop"))}</text>
+        ${renderLoopEndpoint(leftX, supplyY, loop.supplySide?.inletNode, t("hvac.supplyInlet"))}
+        ${renderLoopEndpoint(rightX, supplyY, loop.supplySide?.outletNode, t("hvac.supplyOutlet"))}
+        ${renderLoopEndpoint(rightX, demandY, loop.demandSide?.inletNode, t("hvac.demandInlet"))}
+        ${renderLoopEndpoint(leftX, demandY, loop.demandSide?.outletNode, t("hvac.demandOutlet"))}
         ${supplyItems.map((item, index) => renderLoopDiagramItem(item, supplyPositions[index], "supply")).join("")}
-        ${(demandItems.length ? demandItems : [{ kind: "placeholder", label: "Demand side" }])
+        ${(demandItems.length ? demandItems : [{ kind: "placeholder", label: t("hvac.demandSide") }])
           .map((item, index) => renderLoopDiagramItem(item, demandPositions[index], "demand"))
           .join("")}
-        ${renderLoopBranchBadges(loop.supplySide, leftX + 20, supplyY + 68, "Supply")}
-        ${renderLoopBranchBadges(loop.demandSide, rightX - 260, demandY + 68, "Demand")}
+        ${renderLoopBranchBadges(loop.supplySide, leftX + 20, supplyY + 68, t("hvac.supplyBranch"))}
+        ${renderLoopBranchBadges(loop.demandSide, rightX - 260, demandY + 68, t("hvac.demandBranch"))}
       </svg>
       <div class="hvac-legend">
-        <span><i class="hvac-legend-supply"></i>Supply side</span>
-        <span><i class="hvac-legend-demand"></i>Demand side</span>
-        <span><i class="hvac-legend-zone"></i>Served zone</span>
+        <span><i class="hvac-legend-supply"></i>${t("hvac.legendSupply")}</span>
+        <span><i class="hvac-legend-demand"></i>${t("hvac.demandSide")}</span>
+        <span><i class="hvac-legend-zone"></i>${t("hvac.legendZone")}</span>
       </div>
     </div>`;
 }
@@ -284,7 +289,7 @@ function renderLoopBranchBadges(side = {}, x, y, label) {
       return `
         <g class="hvac-branch-badge ${graphSelectionClass(key)}" data-hvac-graph-key="${escapeHTML(key)}">
           <rect x="${x}" y="${itemY}" width="240" height="18" rx="5"></rect>
-          <text x="${x + 8}" y="${itemY + 13}">${escapeHTML(label)} branch: ${escapeHTML(truncateText(branch.name || "Branch", 26))}</text>
+          <text x="${x + 8}" y="${itemY + 13}">${escapeHTML(label)}: ${escapeHTML(truncateText(branch.name || "Branch", 26))}</text>
         </g>`;
     })
     .join("");
@@ -307,14 +312,14 @@ function renderHVACLoopGraphDetail(loop) {
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
-          <h3>Loop Detail</h3>
-          <span>Click a component, branch, zone, node, or loop path</span>
+          <h3>${t("hvac.loopDetail")}</h3>
+          <span>${t("hvac.loopDetailHint")}</span>
         </div>
         <div class="hvac-detail-grid">
-          <div><span>Supply branches</span><strong>${escapeHTML((loop.supplySide?.branches || []).length)}</strong></div>
-          <div><span>Demand branches</span><strong>${escapeHTML((loop.demandSide?.branches || []).length)}</strong></div>
-          <div><span>Related zones</span><strong>${escapeHTML((loop.relatedZones || []).length)}</strong></div>
-          <div><span>Cross-loop links</span><strong>${escapeHTML((loop.relatedLoops || []).length)}</strong></div>
+          <div><span>${t("hvac.supplyBranches")}</span><strong>${escapeHTML((loop.supplySide?.branches || []).length)}</strong></div>
+          <div><span>${t("hvac.demandBranches")}</span><strong>${escapeHTML((loop.demandSide?.branches || []).length)}</strong></div>
+          <div><span>${t("hvac.relatedZones")}</span><strong>${escapeHTML((loop.relatedZones || []).length)}</strong></div>
+          <div><span>${t("hvac.crossLoopLinksLabel")}</span><strong>${escapeHTML((loop.relatedLoops || []).length)}</strong></div>
         </div>
       </section>`;
   }
@@ -326,19 +331,19 @@ function renderHVACLoopSide(side = {}) {
     <section class="hvac-loop-side">
       <div class="hvac-section-head">
         <h3>${escapeHTML(side.name || "Side")}</h3>
-        <span>${escapeHTML((side.branches || []).length)} branches</span>
+        <span>${escapeHTML(t("hvac.branchCount", { count: (side.branches || []).length }))}</span>
       </div>
       <div class="hvac-node-line">
-        ${renderNodePill(side.inletNode, "Inlet")}
+        ${renderNodePill(side.inletNode, t("common.inlet"))}
         <span class="hvac-arrow">-&gt;</span>
-        ${renderNodePill(side.outletNode, "Outlet")}
+        ${renderNodePill(side.outletNode, t("common.outlet"))}
       </div>
       <div class="hvac-side-meta">
         ${side.branchListName ? `<span>BranchList ${escapeHTML(side.branchListName)}</span>` : ""}
         ${side.connectorListName ? `<span>ConnectorList ${escapeHTML(side.connectorListName)}</span>` : ""}
       </div>
       <div class="hvac-branch-list">
-        ${(side.branches || []).map(renderHVACBranch).join("") || `<div class="empty">No branches on this side</div>`}
+        ${(side.branches || []).map(renderHVACBranch).join("") || `<div class="empty">${t("hvac.noBranches")}</div>`}
       </div>
       ${(side.connectors || []).length ? `<div class="hvac-connector-list">${side.connectors.map(renderHVACConnector).join("")}</div>` : ""}
     </section>`;
@@ -357,7 +362,7 @@ function renderHVACBranch(branch) {
         ${renderNodePill(branch.outletNode, "Out")}
       </div>
       <div class="hvac-component-list">
-        ${(branch.components || []).map(renderHVACComponent).join("") || `<div class="empty">No components parsed</div>`}
+        ${(branch.components || []).map(renderHVACComponent).join("") || `<div class="empty">${t("hvac.noComponents")}</div>`}
       </div>
       ${(branch.warnings || []).length ? `<div class="hvac-inline-warning">${branch.warnings.map((warning) => escapeHTML(warning.message)).join("<br />")}</div>` : ""}
     </article>`;
@@ -368,8 +373,8 @@ function renderHVACComponent(component) {
   return `
     <div class="hvac-component${existsClass}">
       <div class="hvac-component-main">
-        <strong>${escapeHTML(component.objectName || component.objectType || "Component")}</strong>
-        <span>${escapeHTML(component.objectType || "Unknown type")} ${renderObjectLink(component.objectIndex, component.objectType)}</span>
+        <strong>${escapeHTML(component.objectName || component.objectType || t("common.component"))}</strong>
+        <span>${escapeHTML(component.objectType || t("hvac.unknownType"))} ${renderObjectLink(component.objectIndex, component.objectType)}</span>
       </div>
       <div class="hvac-node-line compact">
         ${renderNodePill(component.inletNode, "In")}
@@ -381,7 +386,7 @@ function renderHVACComponent(component) {
           ? `<div class="hvac-node-line compact water">${renderNodePill(component.waterInletNode, "Water In")}<span class="hvac-arrow">-&gt;</span>${renderNodePill(component.waterOutletNode, "Water Out")}</div>`
           : ""
       }
-      ${(component.relatedLoopNames || []).length ? `<small>Cross-loop: ${escapeHTML(component.relatedLoopNames.join(", "))}</small>` : ""}
+      ${(component.relatedLoopNames || []).length ? `<small>${t("hvac.crossLoop")}: ${escapeHTML(component.relatedLoopNames.join(", "))}</small>` : ""}
       ${renderHVACEditableFields(component.editableFields)}
     </div>`;
 }
@@ -398,7 +403,7 @@ function renderHVACEditableFields(fields = []) {
           (field) => `
             <button class="hvac-edit-button" data-hvac-edit-key="${escapeHTML(hvacEditKey(field))}" type="button">
               <span>${escapeHTML(hvacEditLabel(field))}</span>
-              <small>${escapeHTML(field.currentValue || "blank")}</small>
+              <small>${escapeHTML(field.currentValue || t("common.blank"))}</small>
             </button>`,
         )
         .join("")}
@@ -422,8 +427,8 @@ function renderCrossLoopRelations(loop) {
   return `
     <section class="hvac-cross-loop">
       <div class="hvac-section-head">
-        <h3>Cross-Loop Relations</h3>
-        <span>${escapeHTML(relations.length)} links</span>
+        <h3>${t("hvac.crossLoopRelations")}</h3>
+        <span>${escapeHTML(t("hvac.linkCount", { count: relations.length }))}</span>
       </div>
       <div class="hvac-relation-list">
         ${relations
@@ -445,7 +450,7 @@ function renderHVACRelations(hvac, query) {
     ? `
       ${renderHVACRelationGraph(relations)}
       ${renderHVACRelationGraphDetail(relations)}`
-    : `<div class="empty">No matching system-zone relations</div>`;
+    : `<div class="empty">${t("hvac.noMatchingRelations")}</div>`;
 }
 
 function renderHVACRelationGraph(relations) {
@@ -470,9 +475,9 @@ function renderHVACRelationGraph(relations) {
         ${graph.nodes.map(renderRelationNode).join("")}
       </svg>
       <div class="hvac-legend">
-        <span><i class="hvac-legend-source"></i>Source loop</span>
-        <span><i class="hvac-legend-air"></i>Air loop</span>
-        <span><i class="hvac-legend-terminal"></i>Terminal/equipment</span>
+        <span><i class="hvac-legend-source"></i>${t("hvac.legendSource")}</span>
+        <span><i class="hvac-legend-air"></i>${t("hvac.legendAir")}</span>
+        <span><i class="hvac-legend-terminal"></i>${t("hvac.legendTerminal")}</span>
         <span><i class="hvac-legend-zone"></i>Zone</span>
       </div>
     </div>`;
@@ -510,14 +515,14 @@ function renderHVACRelationGraphDetail(relations) {
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
-          <h3>Service Chain Detail</h3>
-          <span>Click a node or connection to highlight related objects</span>
+          <h3>${t("hvac.relationDetail")}</h3>
+          <span>${t("hvac.relationHint")}</span>
         </div>
         <div class="hvac-detail-grid">
           <div><span>Zones</span><strong>${escapeHTML(zoneCount)}</strong></div>
-          <div><span>Terminals</span><strong>${escapeHTML(terminalCount)}</strong></div>
+          <div><span>${t("hvac.terminals")}</span><strong>${escapeHTML(terminalCount)}</strong></div>
           <div><span>Plant loops</span><strong>${escapeHTML(plantCount)}</strong></div>
-          <div><span>Chains</span><strong>${escapeHTML(relations.reduce((sum, relation) => sum + Math.max(1, (relation.serviceChains || []).length), 0))}</strong></div>
+          <div><span>${t("common.chains")}</span><strong>${escapeHTML(relations.reduce((sum, relation) => sum + Math.max(1, (relation.serviceChains || []).length), 0))}</strong></div>
         </div>
       </section>`;
   }
@@ -542,17 +547,17 @@ function renderHVACDiagnostics(hvac, query) {
   const warnings = (hvac.warnings || []).filter((warning) => warningMatchesQuery(warning, query));
   elements.hvacGraph.innerHTML = warnings.length
     ? `<div class="hvac-diagnostic-list">${warnings.map(renderHVACWarning).join("")}</div>`
-    : `<div class="empty">${(hvac.warnings || []).length ? "No matching HVAC warnings" : "No HVAC connection warnings"}</div>`;
+    : `<div class="empty">${(hvac.warnings || []).length ? t("hvac.noMatchingWarnings") : t("hvac.noWarnings")}</div>`;
 }
 
 function renderHVACWarnings(hvac, query) {
   const warnings = (hvac.warnings || []).filter((warning) => warningMatchesQuery(warning, query)).slice(0, 8);
   elements.hvacWarningStats.textContent = query
-    ? `${warnings.length} matching`
-    : `${(hvac.warnings || []).length} warnings`;
+    ? t("count.matching", { count: warnings.length })
+    : t("count.warnings", { count: (hvac.warnings || []).length });
   elements.hvacWarnings.innerHTML = warnings.length
     ? warnings.map(renderHVACWarning).join("")
-    : `<div class="empty">${(hvac.warnings || []).length ? "No matching warnings" : "No HVAC warnings"}</div>`;
+    : `<div class="empty">${(hvac.warnings || []).length ? t("hvac.noMatchingWarnings") : t("hvac.noWarnings")}</div>`;
 }
 
 function renderHVACWarning(warning) {
@@ -569,13 +574,13 @@ function renderHVACWarning(warning) {
 function renderHVACInspector(hvac, selectedLoop) {
   if (state.activeHVACNodeName) {
     const usages = (hvac.nodeUsages || []).filter((usage) => usage.nodeName === state.activeHVACNodeName);
-    elements.hvacInspectorStats.textContent = `${usages.length} uses`;
+    elements.hvacInspectorStats.textContent = t("count.uses", { count: usages.length });
     elements.hvacInspector.innerHTML = `
       <div class="hvac-inspector-title">
         <strong>${escapeHTML(state.activeHVACNodeName)}</strong>
         <span>Node</span>
       </div>
-      ${usages.length ? usages.map(renderNodeUsage).join("") : `<div class="empty">No node usages found</div>`}`;
+      ${usages.length ? usages.map(renderNodeUsage).join("") : `<div class="empty">${t("hvac.noNodeUsages")}</div>`}`;
     return;
   }
   if (state.activeHVACGraphKey) {
@@ -591,19 +596,19 @@ function renderHVACInspector(hvac, selectedLoop) {
     }
   }
   if (!selectedLoop) {
-    elements.hvacInspectorStats.textContent = "No loop selected";
-    elements.hvacInspector.innerHTML = `<div class="empty">Select a loop</div>`;
+    elements.hvacInspectorStats.textContent = t("hvac.noLoopSelected");
+    elements.hvacInspector.innerHTML = `<div class="empty">${t("hvac.selectLoop")}</div>`;
     return;
   }
-  elements.hvacInspectorStats.textContent = `${(selectedLoop.relatedZones || []).length} zones`;
+  elements.hvacInspectorStats.textContent = t("count.zones", { count: (selectedLoop.relatedZones || []).length });
   elements.hvacInspector.innerHTML = `
     <div class="hvac-inspector-title">
       <strong>${escapeHTML(selectedLoop.name || selectedLoop.type)}</strong>
       <span>${escapeHTML(selectedLoop.type)}</span>
     </div>
-    <div class="hvac-inspector-kv"><span>Supply branches</span><strong>${escapeHTML((selectedLoop.supplySide?.branches || []).length)}</strong></div>
-    <div class="hvac-inspector-kv"><span>Demand branches</span><strong>${escapeHTML((selectedLoop.demandSide?.branches || []).length)}</strong></div>
-    <div class="hvac-inspector-kv"><span>Related zones</span><strong>${escapeHTML((selectedLoop.relatedZones || []).length)}</strong></div>
+    <div class="hvac-inspector-kv"><span>${t("hvac.supplyBranches")}</span><strong>${escapeHTML((selectedLoop.supplySide?.branches || []).length)}</strong></div>
+    <div class="hvac-inspector-kv"><span>${t("hvac.demandBranches")}</span><strong>${escapeHTML((selectedLoop.demandSide?.branches || []).length)}</strong></div>
+    <div class="hvac-inspector-kv"><span>${t("hvac.relatedZones")}</span><strong>${escapeHTML((selectedLoop.relatedZones || []).length)}</strong></div>
     <div class="hvac-tag-list">${(selectedLoop.relatedZones || []).map((zone) => `<span>${escapeHTML(zone)}</span>`).join("") || `<span>N/A</span>`}</div>`;
 }
 
@@ -615,19 +620,19 @@ function renderHVACInspectorSelection(selected) {
     selected.loopName ||
     selected.nodeName ||
     selected.loop?.name ||
-    "Selection";
-  elements.hvacInspectorStats.textContent = selected.kind || "selection";
+    t("common.selection");
+  elements.hvacInspectorStats.textContent = selected.kind || t("common.selection");
   elements.hvacInspector.innerHTML = `
     <div class="hvac-inspector-title">
       <strong>${escapeHTML(title)}</strong>
-      <span>${escapeHTML(selected.kind || "selection")}</span>
+      <span>${escapeHTML(selected.kind || t("common.selection"))}</span>
     </div>
     ${
       selected.component
         ? `
-          <div class="hvac-inspector-kv"><span>Type</span><strong>${escapeHTML(selected.component.objectType || "N/A")}</strong></div>
-          <div class="hvac-inspector-kv"><span>Inlet</span><strong>${escapeHTML(selected.component.inletNode || "N/A")}</strong></div>
-          <div class="hvac-inspector-kv"><span>Outlet</span><strong>${escapeHTML(selected.component.outletNode || "N/A")}</strong></div>`
+          <div class="hvac-inspector-kv"><span>${t("common.type")}</span><strong>${escapeHTML(selected.component.objectType || "N/A")}</strong></div>
+          <div class="hvac-inspector-kv"><span>${t("common.inlet")}</span><strong>${escapeHTML(selected.component.inletNode || "N/A")}</strong></div>
+          <div class="hvac-inspector-kv"><span>${t("common.outlet")}</span><strong>${escapeHTML(selected.component.outletNode || "N/A")}</strong></div>`
         : ""
     }
     ${
@@ -839,14 +844,14 @@ function renderSelectedHVACDetail(selected) {
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
-          <h3>${escapeHTML(component.objectName || selected.label || "Component")}</h3>
-          <span>${escapeHTML(component.objectType || "Component")}</span>
+          <h3>${escapeHTML(component.objectName || selected.label || t("common.component"))}</h3>
+          <span>${escapeHTML(component.objectType || t("common.component"))}</span>
         </div>
         <div class="hvac-detail-grid">
-          <div><span>Object</span><strong>${renderObjectLink(component.objectIndex, component.objectType) || "N/A"}</strong></div>
-          <div><span>Inlet</span><strong>${escapeHTML(component.inletNode || "N/A")}</strong></div>
-          <div><span>Outlet</span><strong>${escapeHTML(component.outletNode || "N/A")}</strong></div>
-          <div><span>Water</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
+          <div><span>${t("common.object")}</span><strong>${renderObjectLink(component.objectIndex, component.objectType) || "N/A"}</strong></div>
+          <div><span>${t("common.inlet")}</span><strong>${escapeHTML(component.inletNode || "N/A")}</strong></div>
+          <div><span>${t("common.outlet")}</span><strong>${escapeHTML(component.outletNode || "N/A")}</strong></div>
+          <div><span>${t("common.water")}</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
         </div>
         ${renderHVACEditableFields(component.editableFields)}
       </section>`;
@@ -859,7 +864,7 @@ function renderSelectedHVACDetail(selected) {
           <span>${renderObjectLink(selected.branch.objectIndex, "Branch")}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.branch.components || []).map((component) => `<div><strong>${escapeHTML(component.objectName || component.objectType)}</strong><span>${escapeHTML(component.objectType || "")}</span></div>`).join("") || `<div class="empty">No branch components</div>`}
+          ${(selected.branch.components || []).map((component) => `<div><strong>${escapeHTML(component.objectName || component.objectType)}</strong><span>${escapeHTML(component.objectType || "")}</span></div>`).join("") || `<div class="empty">${t("hvac.noBranchComponents")}</div>`}
         </div>
       </section>`;
   }
@@ -870,7 +875,7 @@ function renderSelectedHVACDetail(selected) {
           <h3>${escapeHTML(selected.nodeName)}</h3>
           <span>Node</span>
         </div>
-        <p class="hvac-detail-note">Node usage details are shown in the inspector.</p>
+        <p class="hvac-detail-note">${t("hvac.nodeUsageInspector")}</p>
       </section>`;
   }
   if (selected.kind === "zone") {
@@ -885,8 +890,8 @@ function renderSelectedHVACDetail(selected) {
         <div class="hvac-detail-grid">
           <div><span>Air loops</span><strong>${escapeHTML(loopNames.join(", ") || "N/A")}</strong></div>
           <div><span>Plant loops</span><strong>${escapeHTML((relation?.plantLoopNames || []).join(", ") || "N/A")}</strong></div>
-          <div><span>Terminals</span><strong>${escapeHTML((relation?.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
-          <div><span>Equipment</span><strong>${escapeHTML((relation?.zoneEquipment || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
+          <div><span>${t("hvac.terminals")}</span><strong>${escapeHTML((relation?.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
+          <div><span>${t("common.equipment")}</span><strong>${escapeHTML((relation?.zoneEquipment || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
         </div>
       </section>`;
   }
@@ -898,7 +903,7 @@ function renderSelectedHVACDetail(selected) {
           <span>${selected.kind === "plant" ? "PlantLoop" : "AirLoopHVAC"}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML((relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "No terminal")}</span></div>`).join("") || `<div class="empty">No matching zones</div>`}
+          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML((relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
         </div>
       </section>`;
   }
@@ -906,11 +911,11 @@ function renderSelectedHVACDetail(selected) {
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
-          <h3>Connection</h3>
-          <span>${escapeHTML((selected.relations || []).length)} related zones</span>
+          <h3>${t("common.connection")}</h3>
+          <span>${escapeHTML(t("hvac.relatedZoneCount", { count: (selected.relations || []).length }))}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML([...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || "Service relation")}</span></div>`).join("")}
+          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML([...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"))}</span></div>`).join("")}
         </div>
       </section>`;
   }
@@ -921,8 +926,8 @@ function renderSelectedHVACDetail(selected) {
         <span>${escapeHTML(selected.loop?.type || "Loop")}</span>
       </div>
       <div class="hvac-detail-grid">
-        <div><span>Related zones</span><strong>${escapeHTML((selected.loop?.relatedZones || []).length)}</strong></div>
-        <div><span>Cross-loop links</span><strong>${escapeHTML((selected.loop?.relatedLoops || []).length)}</strong></div>
+        <div><span>${t("hvac.relatedZones")}</span><strong>${escapeHTML((selected.loop?.relatedZones || []).length)}</strong></div>
+        <div><span>${t("hvac.crossLoopLinksLabel")}</span><strong>${escapeHTML((selected.loop?.relatedLoops || []).length)}</strong></div>
       </div>
     </section>`;
 }
@@ -963,9 +968,9 @@ function truncateText(value, maxLength) {
 
 function buildRelationGraph(relations) {
   const columns = [
-    { id: "plant", label: "Source / Plant", x: 120 },
-    { id: "air", label: "Air Loop", x: 360 },
-    { id: "terminal", label: "Terminal / Equipment", x: 625 },
+    { id: "plant", label: t("hvac.sourcePlant"), x: 120 },
+    { id: "air", label: t("hvac.legendAir"), x: 360 },
+    { id: "terminal", label: t("hvac.terminalEquipment"), x: 625 },
     { id: "zone", label: "Zone", x: 900 },
   ];
   const nodesByKey = new Map();
@@ -996,8 +1001,8 @@ function buildRelationGraph(relations) {
             key: `terminal:direct:${relation.zoneName}`,
             kind: "terminal",
             column: "terminal",
-            label: "Direct zone equipment",
-            meta: "Inferred",
+            label: t("hvac.directZoneEquipment"),
+            meta: t("hvac.inferred"),
           }),
         ];
     const airNodes = (relation.airLoopNames || []).map((name) =>
@@ -1107,18 +1112,18 @@ function hvacEditKey(field) {
 
 function hvacEditLabel(field) {
   if (field.editKind === "availability_schedule") {
-    return "Availability";
+    return t("hvac.availability");
   }
   if (field.editKind === "flow") {
-    return "Flow";
+    return t("common.flow");
   }
   if (field.editKind === "capacity") {
-    return "Capacity";
+    return t("common.capacity");
   }
   if (field.editKind === "sequence") {
-    return "Sequence";
+    return t("common.sequence");
   }
-  return field.fieldName || "Field";
+  return field.fieldName || t("common.field");
 }
 
 function allHVACEditableFields(hvac = state.report?.hvac) {
@@ -1147,18 +1152,18 @@ function openHVACApplyDialog(key) {
   elements.hvacApplyBody.innerHTML = `
     <section>
       <h4>${escapeHTML(field.objectType)} ${escapeHTML(field.objectName || "")}</h4>
-      <p>${escapeHTML(field.impact || "Changes this HVAC field.")}</p>
+      <p>${escapeHTML(field.impact || t("hvac.editImpactFallback"))}</p>
       <div class="settings-profile-grid">
         <label class="settings-profile-field">
-          <span>Field</span>
-          <input type="text" value="${escapeHTML(field.fieldName || `Field ${Number(field.fieldIndex) + 1}`)}" readonly />
+          <span>${t("common.field")}</span>
+          <input type="text" value="${escapeHTML(field.fieldName || `${t("common.field")} ${Number(field.fieldIndex) + 1}`)}" readonly />
         </label>
         <label class="settings-profile-field">
-          <span>Current</span>
+          <span>${t("common.current")}</span>
           <input type="text" value="${escapeHTML(field.currentValue || "")}" readonly />
         </label>
         <label class="settings-profile-field">
-          <span>New value</span>
+          <span>${t("common.newValue")}</span>
           <input id="hvacApplyValue" type="text" value="${escapeHTML(field.currentValue || "")}" list="${listID}" />
           <datalist id="${listID}">
             ${(field.suggestedValues || []).map((item) => `<option value="${escapeHTML(item.value || "")}" label="${escapeHTML(item.label || item.source || "")}"></option>`).join("")}
@@ -1167,10 +1172,10 @@ function openHVACApplyDialog(key) {
       </div>
     </section>
     <section>
-      <h4>Preview</h4>
-      <div id="hvacApplyPreviewList" class="profile-apply-preview"><div class="empty">Run preview before applying.</div></div>
+      <h4>${t("common.preview")}</h4>
+      <div id="hvacApplyPreviewList" class="profile-apply-preview"><div class="empty">${t("status.runPreview")}</div></div>
     </section>`;
-  elements.hvacApplyStatus.textContent = "Review changes before applying.";
+  elements.hvacApplyStatus.textContent = t("status.reviewBeforeApplying");
   elements.hvacConfirmApply.disabled = true;
   elements.hvacApplyDialog.classList.remove("hidden");
   elements.hvacApplyBody.querySelector("#hvacApplyValue")?.focus();
@@ -1186,12 +1191,12 @@ async function previewHVACApply() {
     return;
   }
   try {
-    elements.hvacApplyStatus.textContent = "Building preview";
+    elements.hvacApplyStatus.textContent = t("status.buildingPreview");
     const preview = await callHVACApplyAPI("PreviewHVACApplyText", "/api/hvac-apply-preview", request);
     state.hvacApplyPreview = preview;
     renderHVACApplyPreview(preview);
     elements.hvacConfirmApply.disabled = !preview.canApply;
-    elements.hvacApplyStatus.textContent = preview.canApply ? "Preview ready." : "Preview has blocking warnings.";
+    elements.hvacApplyStatus.textContent = preview.canApply ? t("status.previewReady") : t("status.previewBlocking");
   } catch (error) {
     elements.hvacApplyStatus.textContent = error?.message || String(error);
     elements.hvacConfirmApply.disabled = true;
@@ -1205,7 +1210,7 @@ async function applyHVACEdit(event) {
     return;
   }
   try {
-    elements.hvacApplyStatus.textContent = "Applying HVAC change";
+    elements.hvacApplyStatus.textContent = t("status.applyHVAC");
     const result = await callHVACApplyAPI("ApplyHVACText", "/api/hvac-apply", request);
     window.dispatchEvent(new CustomEvent("idfAnalyzer:hvacApplied", { detail: result }));
     closeHVACApplyDialog();
@@ -1259,7 +1264,7 @@ function renderHVACApplyPreview(preview) {
     ${
       changes.length
         ? changes.map(renderHVACApplyChange).join("")
-        : `<div class="empty">${warnings.length ? "No changes can be applied yet" : "No field changes"}</div>`
+        : `<div class="empty">${warnings.length ? t("status.noChangesCanApply") : t("hvac.noFieldChanges")}</div>`
     }`;
 }
 

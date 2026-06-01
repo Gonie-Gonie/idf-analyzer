@@ -1,5 +1,6 @@
 import * as THREE from "../vendor/three.module.js";
 import { elements, escapeHTML, state } from "./state.js";
+import { t } from "./i18n.js";
 
 let rendererState = null;
 
@@ -16,7 +17,11 @@ export function renderGeometry(geometry = state.report?.geometry) {
   if (elements.geometrySyncLocate) {
     elements.geometrySyncLocate.checked = state.geometrySyncLocate;
   }
-  elements.geometryStats.textContent = `${geometry.zoneCount || 0} zones, ${geometry.surfaceCount || 0} surfaces, ${geometry.windowCount || 0} windows`;
+  elements.geometryStats.textContent = t("geometry.stats", {
+    zones: geometry.zoneCount || 0,
+    surfaces: geometry.surfaceCount || 0,
+    windows: geometry.windowCount || 0,
+  });
   renderStoryOptions(geometry);
   updateModeVisibility();
   if (state.geometryMode === "plan") {
@@ -61,11 +66,11 @@ export function resizeGeometry() {
 }
 
 function renderEmptyGeometry() {
-  elements.geometryStats.textContent = "0 zones, 0 surfaces, 0 windows";
+  elements.geometryStats.textContent = t("geometry.stats", { zones: 0, surfaces: 0, windows: 0 });
   elements.geometryStorySelect.innerHTML = "";
-  elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;
+  elements.geometryCanvasHost.innerHTML = `<div class="empty">${t("geometry.noGeometry")}</div>`;
   elements.geometryPlan.innerHTML = "";
-  elements.geometryDetails.innerHTML = `<div class="empty">Select a zone, wall, or window</div>`;
+  elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.selectObject")}</div>`;
 }
 
 function ensureSelectedStory(geometry) {
@@ -87,7 +92,7 @@ function renderStoryOptions(geometry) {
   const stories = geometry.stories || [];
   const allOption =
     state.geometryMode === "3d"
-      ? `<option value="all" ${state.selectedGeometryStory === "all" ? "selected" : ""}>All levels</option>`
+      ? `<option value="all" ${state.selectedGeometryStory === "all" ? "selected" : ""}>${t("geometry.allLevels")}</option>`
       : "";
   const storyOptions = stories
     .map(
@@ -332,7 +337,7 @@ function renderPlan(geometry) {
   const windows = (geometry.windows || []).filter((windowItem) => windowItem.storyIndex === storyIndex);
   const bounds = geometry.bounds || {};
   if (!bounds.ok || (!surfaces.length && !windows.length)) {
-    elements.geometryPlan.innerHTML = `<text x="24" y="42" fill="#60707c" font-size="14">No floor plan geometry</text>`;
+    elements.geometryPlan.innerHTML = `<text x="24" y="42" fill="#60707c" font-size="14">${t("geometry.noFloorPlan")}</text>`;
     elements.geometryPlan.setAttribute("viewBox", "0 0 640 420");
     return;
   }
@@ -377,7 +382,7 @@ function renderPlan(geometry) {
 function renderGeometryDetails(geometry = state.report?.geometry) {
   const entity = selectedGeometryEntity(geometry);
   if (!entity) {
-    elements.geometryDetails.innerHTML = `<div class="empty">Select a zone, wall, or window</div>`;
+    elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.selectObject")}</div>`;
     return;
   }
   const relatedGroups = geometryRelatedGroups(geometry, entity);
@@ -387,7 +392,7 @@ function renderGeometryDetails(geometry = state.report?.geometry) {
         <h3>${escapeHTML(entity.title)}</h3>
         <span>${escapeHTML(entity.subtitle)}</span>
       </div>
-      <span class="geometry-sync-note">${state.geometrySyncLocate ? "Sync locate on" : "Sync locate off"}</span>
+      <span class="geometry-sync-note">${state.geometrySyncLocate ? t("geometry.syncOn") : t("geometry.syncOff")}</span>
     </div>
     <div class="geometry-detail-grid">
       <section>
@@ -395,7 +400,7 @@ function renderGeometryDetails(geometry = state.report?.geometry) {
         ${renderMetricList(entity.metrics)}
       </section>
       <section>
-        <h4>Related Objects</h4>
+        <h4>${t("geometry.relatedObjects")}</h4>
         ${renderRelatedGroups(relatedGroups)}
       </section>
     </div>`;

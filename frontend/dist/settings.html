@@ -10,27 +10,27 @@
     <header class="guide-header">
       <div>
         <p class="guide-kicker" data-app-brand-version>IDF ANALYZER V0.1.0</p>
-        <h1>Settings</h1>
+        <h1 data-i18n="action.settings">Settings</h1>
       </div>
       <div class="guide-header-actions">
-        <a class="toolbar-link" href="./index.html">Back to App</a>
-        <a class="toolbar-link" href="./tools.html">Tools</a>
-        <a class="toolbar-link" href="./guide.html">Guide</a>
+        <a class="toolbar-link" href="./index.html" data-i18n="action.backToApp">Back to App</a>
+        <a class="toolbar-link" href="./tools.html" data-i18n="action.tools">Tools</a>
+        <a class="toolbar-link" href="./guide.html" data-i18n="action.guide">Guide</a>
       </div>
     </header>
 
     <main class="guide-layout settings-layout">
       <nav class="guide-nav" aria-label="Settings sections">
-        <a href="#appearance">Appearance</a>
-        <a href="#geometry-colors">Geometry Colors</a>
-        <a href="#behavior">Behavior</a>
-        <a href="#profile-analysis">Profile Analysis</a>
-        <a href="#storage">Storage</a>
+        <a href="#appearance" data-i18n="settings.appearance">Appearance</a>
+        <a href="#geometry-colors" data-i18n="settings.geometryColors">Geometry Colors</a>
+        <a href="#behavior" data-i18n="settings.behavior">Behavior</a>
+        <a href="#profile-analysis" data-i18n="settings.profileAnalysis">Profile Analysis</a>
+        <a href="#storage" data-i18n="settings.storage">Storage</a>
       </nav>
 
       <section class="guide-content">
         <div id="settingsStatus" class="settings-status">
-          <div class="empty status-loading">Loading settings</div>
+          <div class="empty status-loading" data-i18n="common.loadingSettings">Loading settings</div>
         </div>
       </section>
     </main>
@@ -44,6 +44,16 @@
         saveAppSettings,
       } from "./js/settings-client.js";
       import { formatAppVersion, loadAppInfo, renderAppInfo } from "./js/app-info.js";
+      import {
+        analysisTabLabel,
+        defaultAnalyzeTabOrder,
+        normalizeAnalyzeTabOrder,
+        profileDimensionLabel,
+        profileMetricLabel,
+        supportedLanguages,
+        t,
+        translatePage,
+      } from "./js/i18n.js";
 
       const container = document.querySelector("#settingsStatus");
       const colorControls = [
@@ -54,14 +64,7 @@
         ["window", "Window"],
         ["selected", "Selected object"],
       ];
-      const profileDimensions = [
-        ["occupancy", "Occupancy"],
-        ["lighting", "Lighting"],
-        ["equipment", "Equipment"],
-        ["infiltration", "Infiltration"],
-        ["ventilation", "Ventilation"],
-        ["outdoor_air", "Outdoor Air"],
-      ];
+      const profileDimensions = ["occupancy", "lighting", "equipment", "infiltration", "ventilation", "outdoor_air"];
       const profileMetricOptions = {
         occupancy: [
           ["count", "People", "people"],
@@ -121,9 +124,27 @@
           <label class="settings-profile-field" for="${escapeHTML(prefix)}-${escapeHTML(dimension)}">
             <span>${escapeHTML(label)}</span>
             <select id="${escapeHTML(prefix)}-${escapeHTML(dimension)}" data-profile-metric="${escapeHTML(prefix)}" data-profile-dimension="${escapeHTML(dimension)}">
-              ${choices.map(([value, metricLabel, unit]) => optionHTML(value, `${metricLabel}${unit ? ` (${unit})` : ""}`, selected)).join("")}
+              ${choices.map(([value, metricLabel, unit]) => optionHTML(value, `${profileMetricLabel(dimension, value, metricLabel)}${unit ? ` (${unit})` : ""}`, selected)).join("")}
             </select>
           </label>`;
+      }
+
+      function analysisTabOrderFields(selectedOrder) {
+        const order = normalizeAnalyzeTabOrder(selectedOrder);
+        return `
+          <div class="settings-tab-order">
+            ${order
+              .map(
+                (tab, index) => `
+                  <label class="settings-profile-field" for="analysisTabOrder-${index}">
+                    <span>${escapeHTML(t("appearance.tabPosition", { count: index + 1 }))}</span>
+                    <select id="analysisTabOrder-${index}" data-analysis-tab-position="${index}">
+                      ${defaultAnalyzeTabOrder.map((value) => optionHTML(value, analysisTabLabel(value), tab)).join("")}
+                    </select>
+                  </label>`,
+              )
+              .join("")}
+          </div>`;
       }
 
       function renderSettings(result) {
@@ -137,25 +158,36 @@
             <section id="appearance" class="guide-section">
               <div class="settings-section-head">
                 <div>
-                  <h2>Appearance</h2>
-                  <p>Choose the app theme used across the main app, Tools, Guide, and Settings pages.</p>
+                  <h2>${escapeHTML(t("settings.appearance"))}</h2>
+                  <p>${escapeHTML(t("appearance.description"))}</p>
                 </div>
               </div>
               <label class="settings-field" for="themeSelect">
-                <span>App theme</span>
+                <span>${escapeHTML(t("appearance.theme"))}</span>
                 <select id="themeSelect" name="theme">
-                  <option value="system" ${activeSettings.appearance.theme === "system" ? "selected" : ""}>System</option>
-                  <option value="light" ${activeSettings.appearance.theme === "light" ? "selected" : ""}>Light</option>
-                  <option value="dark" ${activeSettings.appearance.theme === "dark" ? "selected" : ""}>Dark</option>
+                  ${optionHTML("system", t("theme.system"), activeSettings.appearance.theme)}
+                  ${optionHTML("light", t("theme.light"), activeSettings.appearance.theme)}
+                  ${optionHTML("dark", t("theme.dark"), activeSettings.appearance.theme)}
                 </select>
               </label>
+              <label class="settings-field" for="languageSelect">
+                <span>${escapeHTML(t("appearance.language"))}</span>
+                <select id="languageSelect" name="language">
+                  ${supportedLanguages.map(([code, label]) => optionHTML(code, label, activeSettings.appearance.language)).join("")}
+                </select>
+              </label>
+              <div class="settings-subsection">
+                <h3>${escapeHTML(t("appearance.analysisTabOrder"))}</h3>
+                <p>${escapeHTML(t("appearance.analysisTabOrderHelp"))}</p>
+                ${analysisTabOrderFields(activeSettings.appearance.analysisTabOrder)}
+              </div>
             </section>
 
             <section id="geometry-colors" class="guide-section">
               <div class="settings-section-head">
                 <div>
-                  <h2>Geometry Colors</h2>
-                  <p>Set the colors used by the Geometry 3D and Plan views.</p>
+                  <h2>${escapeHTML(t("settings.geometryColors"))}</h2>
+                  <p>${escapeHTML(t("settings.geometryDescription"))}</p>
                 </div>
               </div>
               <div class="settings-color-grid">
@@ -172,12 +204,12 @@
             <section id="behavior" class="guide-section">
               <div class="settings-section-head">
                 <div>
-                  <h2>Behavior</h2>
-                  <p>Keep interaction defaults in one place instead of scattering them through the workspace.</p>
+                  <h2>${escapeHTML(t("settings.behavior"))}</h2>
+                  <p>${escapeHTML(t("behavior.description"))}</p>
                 </div>
               </div>
               <label class="settings-field" for="autoAnalyzeDelay">
-                <span>Auto analysis delay</span>
+                <span>${escapeHTML(t("behavior.autoDelay"))}</span>
                 <span class="settings-inline-control">
                   <input id="autoAnalyzeDelayRange" type="range" min="150" max="5000" step="50" value="${escapeHTML(activeSettings.behavior.autoAnalyzeDelayMs)}" />
                   <input id="autoAnalyzeDelay" type="number" min="150" max="5000" step="50" value="${escapeHTML(activeSettings.behavior.autoAnalyzeDelayMs)}" />
@@ -186,113 +218,114 @@
               </label>
               <label class="settings-check">
                 <input id="syncRawTextPosition" type="checkbox" ${activeSettings.interaction.syncRawTextPosition ? "checked" : ""} />
-                <span>Sync raw text position by default</span>
+                <span>${escapeHTML(t("behavior.rawSync"))}</span>
               </label>
               <label class="settings-check">
                 <input id="geometrySyncLocateDefault" type="checkbox" ${activeSettings.interaction.geometrySyncLocate ? "checked" : ""} />
-                <span>Geometry sync locate by default</span>
+                <span>${escapeHTML(t("behavior.geometrySync"))}</span>
               </label>
             </section>
 
             <section id="profile-analysis" class="guide-section">
               <div class="settings-section-head">
                 <div>
-                  <h2>Profile Analysis</h2>
-                  <p>Set the normalization and grouping defaults used by the Profile tab.</p>
+                  <h2>${escapeHTML(t("settings.profileAnalysis"))}</h2>
+                  <p>${escapeHTML(t("profile.defaultDescription"))}</p>
                 </div>
               </div>
               <div class="settings-subsection">
-                <h3>Display Metrics</h3>
+                <h3>${escapeHTML(t("profile.displayMetrics"))}</h3>
                 <div class="settings-profile-grid">
-                  ${profileDimensions.map(([dimension, label]) => profileMetricField("profileDisplayMetric", dimension, label, profile.displayMetrics[dimension])).join("")}
+                  ${profileDimensions.map((dimension) => profileMetricField("profileDisplayMetric", dimension, profileDimensionLabel(dimension), profile.displayMetrics[dimension])).join("")}
                 </div>
               </div>
               <div class="settings-subsection">
-                <h3>Grouping Metrics</h3>
+                <h3>${escapeHTML(t("profile.groupingMetrics"))}</h3>
                 <div class="settings-profile-grid">
-                  ${profileDimensions.map(([dimension, label]) => profileMetricField("profileGroupingMetric", dimension, label, profile.groupingMetrics[dimension])).join("")}
+                  ${profileDimensions.map((dimension) => profileMetricField("profileGroupingMetric", dimension, profileDimensionLabel(dimension), profile.groupingMetrics[dimension])).join("")}
                 </div>
               </div>
               <label class="settings-field" for="profileNumericTolerance">
-                <span>Numeric tolerance</span>
+                <span>${escapeHTML(t("profile.numericTolerance"))}</span>
                 <input id="profileNumericTolerance" type="number" min="0.000001" step="0.001" value="${escapeHTML(profile.numericTolerance)}" />
               </label>
               <label class="settings-field" for="profileScheduleCompare">
-                <span>Schedule compare</span>
+                <span>${escapeHTML(t("profile.scheduleCompare"))}</span>
                 <select id="profileScheduleCompare">
-                  ${optionHTML("none", "Ignore schedule", profile.scheduleCompareMode)}
-                  ${optionHTML("name", "Schedule name", profile.scheduleCompareMode)}
-                  ${optionHTML("resolved", "Resolved schedule", profile.scheduleCompareMode)}
+                  ${optionHTML("none", t("profile.scheduleIgnore"), profile.scheduleCompareMode)}
+                  ${optionHTML("name", t("profile.scheduleName"), profile.scheduleCompareMode)}
+                  ${optionHTML("resolved", t("profile.scheduleResolved"), profile.scheduleCompareMode)}
                 </select>
               </label>
               <label class="settings-field" for="profileScheduleSummaryMode">
-                <span>Schedule summary</span>
+                <span>${escapeHTML(t("profile.scheduleSummary"))}</span>
                 <select id="profileScheduleSummaryMode">
-                  ${optionHTML("representative_day", "Representative day", profile.scheduleSummaryMode)}
-                  ${optionHTML("representative_week", "Representative week", profile.scheduleSummaryMode)}
+                  ${optionHTML("representative_day", t("graph.representativeDay"), profile.scheduleSummaryMode)}
+                  ${optionHTML("representative_week", t("graph.representativeWeek"), profile.scheduleSummaryMode)}
                   ${optionHTML("monthly_average", "Monthly average", profile.scheduleSummaryMode)}
                   ${optionHTML("hourly_average_by_daytype", "Hourly by daytype", profile.scheduleSummaryMode)}
                   ${optionHTML("load_duration", "Load duration", profile.scheduleSummaryMode)}
-                  ${optionHTML("annual_heatmap", "Annual heatmap", profile.scheduleSummaryMode)}
+                  ${optionHTML("annual_heatmap", t("graph.annualHeatmap"), profile.scheduleSummaryMode)}
                 </select>
               </label>
               <div class="settings-subsection">
-                <h3>Apply Defaults</h3>
+                <h3>${escapeHTML(t("profile.applyDefaults"))}</h3>
                 <label class="settings-field" for="profileDefaultApplyMode">
-                  <span>Apply mode</span>
+                  <span>${escapeHTML(t("common.applyMode"))}</span>
                   <select id="profileDefaultApplyMode">
-                    ${optionHTML("clone", "Clone objects", profile.applyBehavior.defaultMode)}
-                    ${optionHTML("shared", "Edit ZoneList", profile.applyBehavior.defaultMode)}
+                    ${optionHTML("clone", t("profile.applyClone"), profile.applyBehavior.defaultMode)}
+                    ${optionHTML("shared", t("profile.applyShared"), profile.applyBehavior.defaultMode)}
                   </select>
                 </label>
                 <label class="settings-field" for="profileReplaceExistingPolicy">
-                  <span>Existing target</span>
+                  <span>${escapeHTML(t("common.existingTarget"))}</span>
                   <select id="profileReplaceExistingPolicy">
-                    ${optionHTML("replace", "Replace", profile.applyBehavior.replaceExistingPolicy)}
-                    ${optionHTML("keep", "Keep", profile.applyBehavior.replaceExistingPolicy)}
-                    ${optionHTML("duplicate", "Duplicate", profile.applyBehavior.replaceExistingPolicy)}
+                    ${optionHTML("replace", t("profile.existingReplace"), profile.applyBehavior.replaceExistingPolicy)}
+                    ${optionHTML("keep", t("profile.existingKeep"), profile.applyBehavior.replaceExistingPolicy)}
+                    ${optionHTML("duplicate", t("profile.existingDuplicate"), profile.applyBehavior.replaceExistingPolicy)}
                   </select>
                 </label>
                 <label class="settings-field" for="profileNameSuffix">
-                  <span>Name suffix</span>
+                  <span>${escapeHTML(t("profile.nameSuffix"))}</span>
                   <input id="profileNameSuffix" type="text" value="${escapeHTML(profile.applyBehavior.nameSuffix)}" />
                 </label>
                 <label class="settings-check">
                   <input id="profileAllowZoneListEdit" type="checkbox" ${profile.applyBehavior.allowZoneListEdit ? "checked" : ""} />
-                  <span>Allow ZoneList editing by default</span>
+                  <span>${escapeHTML(t("profile.allowZoneListEdit"))}</span>
                 </label>
                 <label class="settings-check">
                   <input id="profileCreateMissingZoneList" type="checkbox" ${profile.applyBehavior.createMissingZoneList ? "checked" : ""} />
-                  <span>Create missing ZoneList when possible</span>
+                  <span>${escapeHTML(t("profile.createMissingZoneList"))}</span>
                 </label>
               </div>
             </section>
 
             <section id="storage" class="guide-section">
-              <h2>Storage</h2>
+              <h2>${escapeHTML(t("settings.storage"))}</h2>
               <dl class="settings-list">
                 <div>
-                  <dt>Path</dt>
-                  <dd>${escapeHTML(loadedPath || "Local settings cache")}</dd>
+                  <dt>${escapeHTML(t("settings.storagePath"))}</dt>
+                  <dd>${escapeHTML(loadedPath || t("settings.storageCache"))}</dd>
                 </div>
                 <div>
-                  <dt>Schema</dt>
+                  <dt>${escapeHTML(t("settings.storageSchema"))}</dt>
                   <dd>${escapeHTML(activeSettings.version)}</dd>
                 </div>
                 <div>
-                  <dt>App Version</dt>
+                  <dt>${escapeHTML(t("settings.storageAppVersion"))}</dt>
                   <dd>${escapeHTML(formatAppVersion(activeAppInfo))}</dd>
                 </div>
               </dl>
             </section>
 
             <div class="settings-actions">
-              <span id="settingsSaveStatus" class="settings-save-status">Unsaved changes are previewed immediately.</span>
-              <button id="settingsReset" type="button">Reset to Defaults</button>
-              <button id="settingsSave" type="submit">Save Settings</button>
+              <span id="settingsSaveStatus" class="settings-save-status">${escapeHTML(t("status.unsavedPreview"))}</span>
+              <button id="settingsReset" type="button">${escapeHTML(t("action.resetDefaults"))}</button>
+              <button id="settingsSave" type="submit">${escapeHTML(t("action.saveSettings"))}</button>
             </div>
           </form>`;
         bindSettingsForm();
+        translatePage(container);
       }
 
       function bindSettingsForm() {
@@ -300,10 +333,13 @@
         const saveStatus = document.querySelector("#settingsSaveStatus");
         const rangeInput = document.querySelector("#autoAnalyzeDelayRange");
         const numberInput = document.querySelector("#autoAnalyzeDelay");
-        const updatePreview = () => {
+        const updatePreview = (event) => {
           activeSettings = readFormSettings();
           applyAppSettings(activeSettings);
-          saveStatus.textContent = "Unsaved changes are previewed immediately.";
+          saveStatus.textContent = t("status.unsavedPreview");
+          if (event?.target?.id === "languageSelect" || event?.target?.matches("[data-analysis-tab-position]")) {
+            renderSettings({ path: loadedPath, settings: activeSettings });
+          }
         };
         form.addEventListener("input", (event) => {
           if (event.target === rangeInput) {
@@ -312,17 +348,17 @@
           if (event.target === numberInput) {
             rangeInput.value = numberInput.value;
           }
-          updatePreview();
+          updatePreview(event);
         });
         form.addEventListener("change", updatePreview);
         form.addEventListener("submit", async (event) => {
           event.preventDefault();
-          saveStatus.textContent = "Saving settings";
+          saveStatus.textContent = t("status.savingSettings");
           saveStatus.classList.add("status-loading");
           try {
             const result = await saveAppSettings(readFormSettings());
             saveStatus.classList.remove("status-loading");
-            saveStatus.textContent = "Settings saved.";
+            saveStatus.textContent = t("status.savedSettings");
             renderSettings(result);
           } catch (error) {
             saveStatus.classList.remove("status-loading");
@@ -362,6 +398,8 @@
           profile,
           appearance: {
             theme: document.querySelector("#themeSelect").value,
+            language: document.querySelector("#languageSelect").value,
+            analysisTabOrder: readAnalysisTabOrder(),
             geometry,
           },
           behavior: {
@@ -372,6 +410,10 @@
             geometrySyncLocate: document.querySelector("#geometrySyncLocateDefault").checked,
           },
         });
+      }
+
+      function readAnalysisTabOrder() {
+        return normalizeAnalyzeTabOrder([...document.querySelectorAll("[data-analysis-tab-position]")].map((select) => select.value));
       }
 
       function readProfileMetricMap(prefix) {

@@ -1,6 +1,7 @@
 import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
 import { renderDeferredGeometry, renderDiagnostics, renderEmpty, renderReport } from "./analysis-views.js";
 import { preloadGeometryRenderer, renderGeometry } from "./geometry-loader.js";
+import { t } from "./i18n.js";
 
 export const currentDocumentStorageKey = "idfAnalyzer.currentDocument";
 
@@ -15,7 +16,7 @@ export async function analyze(options = {}) {
   updateTextStats();
   updateDocumentActions();
   if (!api) {
-    setStatus("Run with Go/Wails to enable IDF or epJSON analysis", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     renderEmpty();
     return;
   }
@@ -28,7 +29,7 @@ export async function analyze(options = {}) {
   clearScheduledAnalyze();
   const runID = ++analysisRunID;
   activeAnalysisText = text;
-  setStatus(options.loadingMessage || "Analyzing input", "loading");
+  setStatus(options.loadingMessage || t("status.analyzingInput"), "loading");
   activeAnalysisPromise = runAnalysis(api, text, runID, options);
   return activeAnalysisPromise;
 }
@@ -61,7 +62,7 @@ async function runFullAnalysis(api, text, runID, options) {
     return null;
   }
   applyOverviewResult(result, text, { complete: true });
-  setStatus(options.statusMessage || "Analysis complete", "ok");
+  setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return result;
 }
 
@@ -71,7 +72,7 @@ async function runStagedAnalysis(api, text, runID, options) {
     return null;
   }
   applyOverviewResult(overview, text);
-  setStatus("Summary ready; checking diagnostics", "loading");
+  setStatus(t("status.summaryReadyDiagnostics"), "loading");
   await nextPaint();
 
   const diagnostics = await api.AnalyzeInputDiagnosticsText(text);
@@ -83,7 +84,7 @@ async function runStagedAnalysis(api, text, runID, options) {
   state.diagnosticsReady = true;
   state.analysisStage = "diagnostics";
   renderDiagnostics();
-  setStatus("Diagnostics ready; preparing geometry", "loading");
+  setStatus(t("status.diagnosticsReadyGeometry"), "loading");
   await nextPaint();
 
   const geometryPromise = api.AnalyzeInputGeometryText(text);
@@ -102,7 +103,7 @@ async function runStagedAnalysis(api, text, runID, options) {
   } else {
     renderDeferredGeometry(state.report.geometry);
   }
-  setStatus(options.statusMessage || "Analysis complete", "ok");
+  setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return { ...overview, report: state.report };
 }
 
@@ -138,7 +139,7 @@ export function scheduleAnalyzeAfterPaint(options = {}) {
   state.diagnosticsReady = false;
   state.geometryReady = false;
   updateDocumentActions();
-  setStatus(options.queuedMessage || "Analysis queued", "muted");
+  setStatus(options.queuedMessage || t("status.analysisQueued"), "muted");
   const delay = Number.isFinite(Number(options.delay)) ? Math.max(0, Number(options.delay)) : 40;
   afterPaintAnalyzeTimer = window.setTimeout(() => {
     afterPaintAnalyzeTimer = 0;
@@ -153,12 +154,12 @@ export function scheduleAutoAnalyze(delay = state.autoAnalyzeDelayMs) {
   clearScheduledAnalyze();
   state.lastAnalyzedText = "";
   updateDocumentActions();
-  setStatus("Editing; analysis pending", "muted");
+  setStatus(t("status.editingPending"), "muted");
   autoAnalyzeTimer = window.setTimeout(() => {
     autoAnalyzeTimer = 0;
     scheduleAnalyzeAfterPaint({
-      queuedMessage: "Editing paused; analysis queued",
-      statusMessage: "Auto analysis complete",
+      queuedMessage: t("status.editingPausedQueued"),
+      statusMessage: t("status.autoComplete"),
     });
   }, delay);
 }
@@ -218,9 +219,9 @@ export async function openInputFile() {
       filename: result.filename || "",
     });
     scheduleAnalyzeAfterPaint({
-      loadingMessage: `Analyzing ${result.filename || "input file"}`,
-      queuedMessage: `Opened ${result.filename || "input file"}; analysis queued`,
-      statusMessage: `Opened ${result.filename || "input file"}`,
+      loadingMessage: t("status.analyzingNamed", { name: result.filename || t("common.inputFile") }),
+      queuedMessage: t("status.openedQueued", { name: result.filename || t("common.inputFile") }),
+      statusMessage: t("status.openedNamed", { name: result.filename || t("common.inputFile") }),
     });
   } catch (error) {
     setStatus(error.message || String(error), "error");
@@ -232,16 +233,16 @@ export async function loadBrowserFile(file) {
   updateTextStats();
   registerLoadedDocument(elements.idfInput.value, { filename: file.name || "" });
   scheduleAnalyzeAfterPaint({
-    loadingMessage: `Analyzing ${file.name || "input file"}`,
-    queuedMessage: `Opened ${file.name || "input file"}; analysis queued`,
-    statusMessage: `Opened ${file.name || "input file"}`,
+    loadingMessage: t("status.analyzingNamed", { name: file.name || t("common.inputFile") }),
+    queuedMessage: t("status.openedQueued", { name: file.name || t("common.inputFile") }),
+    statusMessage: t("status.openedNamed", { name: file.name || t("common.inputFile") }),
   });
 }
 
 export async function saveInputFile() {
   const api = backend();
   if (!api || typeof api.SaveInputFile !== "function") {
-    setStatus("Run with Go/Wails to save to disk", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     return;
   }
 
@@ -258,7 +259,7 @@ export async function saveInputFile() {
     state.currentFilename = result.filename || state.currentFilename || suggestedFilename;
     state.savedText = text;
     updateDocumentActions();
-    setStatus(`Saved ${state.currentFilename || "input file"}`, "ok");
+    setStatus(t("status.savedNamed", { name: state.currentFilename || t("common.inputFile") }), "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
   }
@@ -272,15 +273,15 @@ export async function revertToLoadedDocument() {
   updateTextStats();
   markDocumentChanged();
   scheduleAnalyzeAfterPaint({
-    queuedMessage: "Reverted to opened input; analysis queued",
-    statusMessage: "Reverted to opened input",
+    queuedMessage: t("status.revertedQueued"),
+    statusMessage: t("status.reverted"),
   });
 }
 
 export async function removeUnused() {
   const api = backend();
   if (!api) {
-    setStatus("Backend unavailable", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     return;
   }
 
@@ -290,7 +291,7 @@ export async function removeUnused() {
     updateTextStats();
     markDocumentChanged();
     await analyze();
-    setStatus("Unused objects removed", "ok");
+    setStatus(t("status.unusedRemoved"), "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
   }
@@ -299,7 +300,7 @@ export async function removeUnused() {
 export async function exportSummary(format) {
   const api = backend();
   if (!api || typeof api.ExportSummaryText !== "function") {
-    setStatus("Backend unavailable", "warn");
+    setStatus(t("status.backendUnavailable"), "warn");
     return;
   }
 
@@ -312,7 +313,7 @@ export async function exportSummary(format) {
     link.download = result.filename || `summary.${format}`;
     link.click();
     URL.revokeObjectURL(url);
-    setStatus(`Summary ${String(format).toUpperCase()} exported`, "ok");
+    setStatus(t("status.summaryExported", { format: String(format).toUpperCase() }), "ok");
   } catch (error) {
     setStatus(error.message || String(error), "error");
   }

@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 export const state = {
   report: null,
   model: null,
@@ -156,5 +158,5 @@ export function escapeHTML(value) {
 export function updateTextStats() {
   const text = elements.idfInput.value;
   const lines = text.length === 0 ? 0 : text.split(/\r\n|\r|\n/).length;
-  elements.textStats.textContent = `${lines} lines`;
+  elements.textStats.textContent = t("count.lines", { count: lines });
 }

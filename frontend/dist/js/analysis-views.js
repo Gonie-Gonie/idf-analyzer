@@ -3,6 +3,7 @@ import { renderGeometry } from "./geometry-loader.js";
 import { renderHVAC } from "./hvac-views.js";
 import { renderInputViews } from "./input-views.js";
 import { renderProfile } from "./profile-views.js";
+import { t } from "./i18n.js";
 
 export function renderReport() {
   const report = state.report;
@@ -24,57 +25,61 @@ export function renderReport() {
 }
 
 export function renderEmpty() {
-  elements.summaryMetricCount.textContent = "0 metrics";
-  elements.summaryCategories.innerHTML = `<div class="empty">No summary metrics yet</div>`;
+  elements.summaryMetricCount.textContent = t("count.metrics", { count: 0 });
+  elements.summaryCategories.innerHTML = `<div class="empty">${t("summary.empty")}</div>`;
   if (elements.profileStats) {
-    elements.profileStats.textContent = "0 profiles";
+    elements.profileStats.textContent = t("count.profiles", { profiles: 0, items: 0 });
     elements.profileSettings.innerHTML = "";
-    elements.profileOverview.innerHTML = `<div class="empty">No profile analysis yet</div>`;
-    elements.profileDetail.innerHTML = `<div class="empty">Select a profile</div>`;
-    elements.profileMatrixStats.textContent = "0 zones";
-    elements.profileMatrix.innerHTML = `<div class="empty">No profile matrix yet</div>`;
-    elements.profileGraphStats.textContent = "Representative day";
-    elements.profileGraph.innerHTML = `<div class="empty">No profile graph yet</div>`;
+    elements.profileOverview.innerHTML = `<div class="empty">${t("profile.noAnalysis")}</div>`;
+    elements.profileDetail.innerHTML = `<div class="empty">${t("profile.noProfile")}</div>`;
+    elements.profileMatrixStats.textContent = t("count.zones", { count: 0 });
+    elements.profileMatrix.innerHTML = `<div class="empty">${t("profile.noMatrix")}</div>`;
+    elements.profileGraphStats.textContent = t("graph.representativeDay");
+    elements.profileGraph.innerHTML = `<div class="empty">${t("profile.noGraph")}</div>`;
     elements.profileApplyButton.disabled = true;
   }
   if (elements.hvacStats) {
-    elements.hvacStats.textContent = "0 loops, 0 zones";
+    elements.hvacStats.textContent = t("count.airPlantZone", { air: 0, plant: 0, zones: 0 });
     elements.hvacLoopSelect.innerHTML = "";
-    elements.hvacSummary.innerHTML = `<div class="empty">No HVAC analysis yet</div>`;
-    elements.hvacGraph.innerHTML = `<div class="empty">No loop graph yet</div>`;
-    elements.hvacInspectorStats.textContent = "Select a node or component";
-    elements.hvacInspector.innerHTML = `<div class="empty">No inspector data</div>`;
-    elements.hvacWarningStats.textContent = "0 warnings";
-    elements.hvacWarnings.innerHTML = `<div class="empty">No HVAC warnings</div>`;
+    elements.hvacSummary.innerHTML = `<div class="empty">${t("hvac.noHVACAnalysis")}</div>`;
+    elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.noLoopGraph")}</div>`;
+    elements.hvacInspectorStats.textContent = t("hvac.selectNode");
+    elements.hvacInspector.innerHTML = `<div class="empty">${t("hvac.noData")}</div>`;
+    elements.hvacWarningStats.textContent = t("count.warnings", { count: 0 });
+    elements.hvacWarnings.innerHTML = `<div class="empty">${t("hvac.noWarnings")}</div>`;
   }
-  elements.geometryStats.textContent = "0 zones, 0 surfaces, 0 windows";
-  elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;
+  elements.geometryStats.textContent = t("geometry.stats", { zones: 0, surfaces: 0, windows: 0 });
+  elements.geometryCanvasHost.innerHTML = `<div class="empty">${t("geometry.noGeometry")}</div>`;
   elements.geometryPlan.innerHTML = "";
-  elements.geometryDetails.innerHTML = `<div class="empty">Select a zone, wall, or window</div>`;
-  elements.diagnosticCount.textContent = "0 issues";
-  elements.diagnosticList.innerHTML = `<div class="empty">No diagnostics yet</div>`;
-  elements.textObjectView.innerHTML = `<div class="empty">No formatted input yet</div>`;
-  elements.jsonStructuredView.innerHTML = `<div class="empty">No structured input yet</div>`;
-  elements.fieldTable.innerHTML = `<div class="empty">No field table yet</div>`;
+  elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.selectObject")}</div>`;
+  elements.diagnosticCount.textContent = t("count.errorsWarnings", { errors: 0, warnings: 0 });
+  elements.diagnosticList.innerHTML = `<div class="empty">${t("diagnose.noDiagnosticsYet")}</div>`;
+  elements.textObjectView.innerHTML = `<div class="empty">${t("input.formattedEmpty")}</div>`;
+  elements.jsonStructuredView.innerHTML = `<div class="empty">${t("input.jsonEmpty")}</div>`;
+  elements.fieldTable.innerHTML = `<div class="empty">${t("input.tableEmpty")}</div>`;
   elements.fieldStats.textContent = "0 tables";
 }
 
 export function renderDeferredGeometry(geometry) {
   if (!state.geometryReady && state.report) {
-    elements.geometryStats.textContent = "Geometry pending";
-    elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">Geometry analysis is running</div>`;
+    elements.geometryStats.textContent = t("geometry.pending");
+    elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">${t("geometry.running")}</div>`;
     elements.geometryPlan.innerHTML = "";
-    elements.geometryDetails.innerHTML = `<div class="empty">Geometry will be ready shortly</div>`;
+    elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.detailsReadySoon")}</div>`;
     return;
   }
   if (!geometry) {
-    elements.geometryStats.textContent = "0 zones, 0 surfaces, 0 windows";
+    elements.geometryStats.textContent = t("geometry.stats", { zones: 0, surfaces: 0, windows: 0 });
     return;
   }
-  elements.geometryStats.textContent = `${geometry.zoneCount || 0} zones, ${geometry.surfaceCount || 0} surfaces, ${geometry.windowCount || 0} windows`;
-  elements.geometryCanvasHost.innerHTML = `<div class="empty">Open Geometry to render the model view</div>`;
+  elements.geometryStats.textContent = t("geometry.stats", {
+    zones: geometry.zoneCount || 0,
+    surfaces: geometry.surfaceCount || 0,
+    windows: geometry.windowCount || 0,
+  });
+  elements.geometryCanvasHost.innerHTML = `<div class="empty">${t("geometry.openToRender")}</div>`;
   elements.geometryPlan.innerHTML = "";
-  elements.geometryDetails.innerHTML = `<div class="empty">Open Geometry to inspect related objects</div>`;
+  elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.openToInspect")}</div>`;
 }
 
 export function renderSummary(summary = state.report?.summary) {
@@ -104,15 +109,15 @@ export function renderSummary(summary = state.report?.summary) {
     .join("");
 
   elements.summaryMetricCount.textContent = query
-    ? `${visibleMetricCount} of ${totalMetricCount} metrics`
-    : `${totalMetricCount} metrics`;
-  elements.summaryCategories.innerHTML = categoryHTML || `<div class="empty">No matching summary metrics</div>`;
+    ? t("count.metricsOf", { shown: visibleMetricCount, total: totalMetricCount })
+    : t("count.metrics", { count: totalMetricCount });
+  elements.summaryCategories.innerHTML = categoryHTML || `<div class="empty">${t("summary.noMatching")}</div>`;
 }
 
 export function renderDiagnostics(diagnostics = state.report?.diagnostics) {
   if (!state.diagnosticsReady && state.report) {
-    elements.diagnosticCount.textContent = "Diagnostics pending";
-    elements.diagnosticList.innerHTML = `<div class="empty status-loading">Diagnostics are running</div>`;
+    elements.diagnosticCount.textContent = t("diagnose.pending");
+    elements.diagnosticList.innerHTML = `<div class="empty status-loading">${t("diagnose.running")}</div>`;
     return;
   }
   const items = diagnostics || [];
@@ -121,11 +126,11 @@ export function renderDiagnostics(diagnostics = state.report?.diagnostics) {
   const errorCount = items.filter((item) => item.severity === "error").length;
   const warningCount = items.filter((item) => item.severity === "warning").length;
   elements.diagnosticCount.textContent = query
-    ? `${visible.length} of ${items.length} issues`
-    : `${errorCount} errors, ${warningCount} warnings`;
+    ? t("count.metricsOf", { shown: visible.length, total: items.length })
+    : t("count.errorsWarnings", { errors: errorCount, warnings: warningCount });
   elements.diagnosticList.innerHTML = visible.length
     ? visible.map(renderDiagnosticItem).join("")
-    : `<div class="empty">${items.length ? "No matching diagnostics" : "No diagnostics found"}</div>`;
+    : `<div class="empty">${items.length ? t("diagnose.noMatching") : t("diagnose.noDiagnostics")}</div>`;
 }
 
 function renderDiagnosticItem(item) {

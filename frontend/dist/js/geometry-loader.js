@@ -1,10 +1,15 @@
 import { elements, state } from "./state.js";
+import { t } from "./i18n.js";
 
 let geometryModule = null;
 let geometryModulePromise = null;
 
 function geometryStatsLabel(geometry) {
-  return `${geometry?.zoneCount || 0} zones, ${geometry?.surfaceCount || 0} surfaces, ${geometry?.windowCount || 0} windows`;
+  return t("geometry.stats", {
+    zones: geometry?.zoneCount || 0,
+    surfaces: geometry?.surfaceCount || 0,
+    windows: geometry?.windowCount || 0,
+  });
 }
 
 function renderGeometryPlaceholder(geometry) {
@@ -12,20 +17,20 @@ function renderGeometryPlaceholder(geometry) {
     return;
   }
   if (!state.geometryReady && state.report) {
-    elements.geometryStats.textContent = "Geometry pending";
-    elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">Geometry analysis is running</div>`;
+    elements.geometryStats.textContent = t("geometry.pending");
+    elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">${t("geometry.running")}</div>`;
     elements.geometryPlan.innerHTML = "";
-    elements.geometryDetails.innerHTML = `<div class="empty">Geometry will be ready shortly</div>`;
+    elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.detailsReadySoon")}</div>`;
     return;
   }
   elements.geometryStats.textContent = geometryStatsLabel(geometry);
   if (!geometry) {
-    elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;
+    elements.geometryCanvasHost.innerHTML = `<div class="empty">${t("geometry.noGeometry")}</div>`;
     elements.geometryPlan.innerHTML = "";
-    elements.geometryDetails.innerHTML = `<div class="empty">Select a zone, wall, or window</div>`;
+    elements.geometryDetails.innerHTML = `<div class="empty">${t("geometry.selectObject")}</div>`;
     return;
   }
-  elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">Loading geometry renderer</div>`;
+  elements.geometryCanvasHost.innerHTML = `<div class="empty status-loading">${t("geometry.loadingRenderer")}</div>`;
   elements.geometryPlan.innerHTML = "";
 }
 
