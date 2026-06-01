@@ -24,6 +24,7 @@
         <a href="#appearance" data-i18n="settings.appearance">Appearance</a>
         <a href="#geometry-colors" data-i18n="settings.geometryColors">Geometry Colors</a>
         <a href="#behavior" data-i18n="settings.behavior">Behavior</a>
+        <a href="#keyboard-shortcuts" data-i18n="settings.keyboardShortcuts">Keyboard Shortcuts</a>
         <a href="#profile-analysis" data-i18n="settings.profileAnalysis">Profile Analysis</a>
         <a href="#storage" data-i18n="settings.storage">Storage</a>
       </nav>
@@ -64,6 +65,22 @@
         ["selected", "settings.color.selected"],
       ];
       const profileDimensions = ["occupancy", "lighting", "equipment", "infiltration", "ventilation", "outdoor_air"];
+      const shortcutControls = [
+        ["save", "shortcut.save"],
+        ["open", "shortcut.open"],
+        ["undoView", "shortcut.undoView"],
+        ["redoView", "shortcut.redoView"],
+        ["jumpDefinition", "shortcut.jumpDefinition"],
+        ["jumpReferences", "shortcut.jumpReferences"],
+        ["inputText", "shortcut.inputText"],
+        ["inputJson", "shortcut.inputJson"],
+        ["inputTable", "shortcut.inputTable"],
+        ["tabSummary", "shortcut.tabSummary"],
+        ["tabProfile", "shortcut.tabProfile"],
+        ["tabHVAC", "shortcut.tabHVAC"],
+        ["tabDiagnose", "shortcut.tabDiagnose"],
+        ["tabGeometry", "shortcut.tabGeometry"],
+      ];
       const profileMetricOptions = {
         occupancy: [
           ["count", "People", "people"],
@@ -231,6 +248,26 @@
               </label>
             </section>
 
+            <section id="keyboard-shortcuts" class="guide-section">
+              <div class="settings-section-head">
+                <div>
+                  <h2>${escapeHTML(t("settings.keyboardShortcuts"))}</h2>
+                  <p>${escapeHTML(t("shortcut.description"))}</p>
+                </div>
+              </div>
+              <div class="settings-shortcut-grid">
+                ${shortcutControls
+                  .map(
+                    ([key, label]) => `
+                      <label class="settings-shortcut-field" for="shortcut-${escapeHTML(key)}">
+                        <span>${escapeHTML(t(label))}</span>
+                        <input id="shortcut-${escapeHTML(key)}" data-shortcut-id="${escapeHTML(key)}" type="text" value="${escapeHTML(activeSettings.interaction.shortcuts[key] || "")}" />
+                      </label>`,
+                  )
+                  .join("")}
+              </div>
+            </section>
+
             <section id="profile-analysis" class="guide-section">
               <div class="settings-section-head">
                 <div>
@@ -347,6 +384,7 @@
           }
         };
         bindAnalysisTabOrderControls(updatePreview);
+        bindShortcutCapture();
         form.addEventListener("input", (event) => {
           if (event.target === rangeInput) {
             numberInput.value = rangeInput.value;
@@ -376,6 +414,62 @@
           applyAppSettings(activeSettings);
           renderSettings({ path: loadedPath, settings: activeSettings });
         });
+      }
+
+      function bindShortcutCapture() {
+        document.querySelectorAll("[data-shortcut-id]").forEach((input) => {
+          input.addEventListener("keydown", (event) => {
+            if (event.key === "Tab") {
+              return;
+            }
+            const isFunctionKey = /^f\d{1,2}$/i.test(event.key || "");
+            const isModified = event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || isFunctionKey;
+            if (!isModified) {
+              return;
+            }
+            event.preventDefault();
+            if (event.key === "Backspace" || event.key === "Delete") {
+              input.value = "";
+            } else {
+              const accelerator = acceleratorForEvent(event);
+              if (!accelerator) {
+                return;
+              }
+              input.value = accelerator;
+            }
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          });
+        });
+      }
+
+      function acceleratorForEvent(event) {
+        const key = normalizedShortcutKey(event.key);
+        if (!key) {
+          return "";
+        }
+        const parts = [];
+        if (event.ctrlKey || event.metaKey) parts.push("Ctrl");
+        if (event.altKey) parts.push("Alt");
+        if (event.shiftKey) parts.push("Shift");
+        parts.push(key);
+        return parts.join("+");
+      }
+
+      function normalizedShortcutKey(value) {
+        const key = String(value || "").trim();
+        if (!key || key === "Control" || key === "Alt" || key === "Shift" || key === "Meta") {
+          return "";
+        }
+        if (/^f\d{1,2}$/i.test(key)) {
+          return key.toUpperCase();
+        }
+        if (key === " ") {
+          return "Space";
+        }
+        if (key.length === 1) {
+          return key.toUpperCase();
+        }
+        return key[0].toUpperCase() + key.slice(1);
       }
 
       function readFormSettings() {
@@ -414,8 +508,17 @@
           interaction: {
             syncRawTextPosition: document.querySelector("#syncRawTextPosition").checked,
             geometrySyncLocate: document.querySelector("#geometrySyncLocateDefault").checked,
+            shortcuts: readShortcutSettings(),
           },
         });
+      }
+
+      function readShortcutSettings() {
+        const shortcuts = {};
+        document.querySelectorAll("[data-shortcut-id]").forEach((input) => {
+          shortcuts[input.dataset.shortcutId] = input.value;
+        });
+        return shortcuts;
       }
 
       function readAnalysisTabOrder() {

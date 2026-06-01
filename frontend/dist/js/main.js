@@ -29,9 +29,19 @@ import {
   syncTextViewFromRawCaret,
 } from "./input-views.js";
 import { initializeVerticalSplitters, initializeWorkspaceSplitter } from "./layout.js";
-import { focusInputObject, handleAnalysisActivation, switchResultTab } from "./navigation.js";
+import {
+  focusInputObject,
+  handleAnalysisActivation,
+  handleInputJumpActivation,
+  jumpInputDefinition,
+  jumpInputReferences,
+  redoViewNavigation,
+  switchResultTab,
+  undoViewNavigation,
+} from "./navigation.js";
 import { initializeProfileControls, renderProfile } from "./profile-views.js";
 import { normalizeAnalyzeTabOrder, t, translatePage } from "./i18n.js";
+import { initializeKeyboardShortcuts } from "./shortcuts.js";
 
 loadAndApplyAppSettings().then((result) => applyRuntimeSettings(result.settings));
 
@@ -89,6 +99,11 @@ elements.hvacExpandButton.addEventListener("click", () => toggleExpandedPane("hv
 elements.geometryExpandButton.addEventListener("click", () => toggleExpandedPane("geometry"));
 elements.inputViewButtons.forEach((button) => {
   button.addEventListener("click", () => switchInputView(button.dataset.inputView));
+});
+elements.editorPanel.addEventListener("click", (event) => {
+  if (handleInputJumpActivation(event.target)) {
+    event.preventDefault();
+  }
 });
 window.addEventListener("resize", () => {
   if (state.activeResultTab === "geometry" || state.expandedPane === "geometry") {
@@ -209,6 +224,16 @@ initializeWorkspaceSplitter();
 initializeVerticalSplitters();
 initializeProfileControls();
 initializeHVACControls();
+initializeKeyboardShortcuts({
+  save: saveInputFile,
+  open: openInputFile,
+  undoView: undoViewNavigation,
+  redoView: redoViewNavigation,
+  jumpDefinition: jumpInputDefinition,
+  jumpReferences: jumpInputReferences,
+  switchInputView,
+  switchResultTab,
+});
 renderEmpty();
 updateDocumentActions();
 const restoredDocument = restoreCurrentDocument();
@@ -275,6 +300,9 @@ function applyRuntimeSettings(settings) {
       elements.geometrySyncLocate.checked = state.geometrySyncLocate;
     }
   }
+  if (settings.interaction?.shortcuts) {
+    state.keyboardShortcuts = settings.interaction.shortcuts;
+  }
   if (settings.profile) {
     state.profileSettings = settings.profile;
     if (state.report?.profile) {
@@ -303,6 +331,6 @@ function applyDefaultResultTab(orderInput) {
   }
   state.defaultResultTab = firstTab;
   if (!state.resultTabManuallySelected && state.activeResultTab !== firstTab) {
-    switchResultTab(firstTab);
+    switchResultTab(firstTab, { recordHistory: false });
   }
 }

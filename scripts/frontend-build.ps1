@@ -41,8 +41,10 @@ $modules = @(
     "profile-views.js",
     "sample.js",
     "settings-client.js",
+    "shortcuts.js",
     "state.js",
-    "tools.js"
+    "tools.js",
+    "view-history.js"
 )
 
 foreach ($module in $modules) {

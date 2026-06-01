@@ -384,6 +384,48 @@ button:disabled:hover {
   white-space: nowrap;
 }
 
+.field-input-wrap {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.json-object dd > .field-input-wrap {
+  display: grid;
+  overflow: visible;
+  white-space: normal;
+}
+
+.field-input-wrap.table {
+  min-width: 150px;
+}
+
+.input-jump-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  vertical-align: middle;
+}
+
+.input-jump-tools button {
+  min-width: 0;
+  min-height: 22px;
+  border-color: var(--surface-2);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--teal-dark);
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.input-jump-tools button:hover {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
 #textInputView,
 #jsonInputView,
 #tableInputView {
@@ -599,6 +641,16 @@ textarea {
   padding: 2px 5px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.field-value-input {
+  width: 100%;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--control);
+  color: var(--ink-strong);
+  padding: 2px 5px;
 }
 
 .text-field-input:hover {
@@ -4239,6 +4291,12 @@ th.input-jump-highlight {
   gap: 10px;
 }
 
+.settings-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+
 .settings-tab-order {
   display: grid;
   gap: 10px;
@@ -4374,7 +4432,8 @@ th.input-jump-highlight {
   opacity: 0.35;
 }
 
-.settings-profile-field {
+.settings-profile-field,
+.settings-shortcut-field {
   min-width: 0;
   min-height: 54px;
   border: 1px solid var(--surface-2);
@@ -4386,12 +4445,14 @@ th.input-jump-highlight {
   font-size: 13px;
 }
 
-.settings-profile-field span {
+.settings-profile-field span,
+.settings-shortcut-field span {
   color: var(--muted);
   font-weight: 700;
 }
 
-.settings-profile-field select {
+.settings-profile-field select,
+.settings-shortcut-field input {
   min-width: 0;
   min-height: 32px;
   border: 1px solid var(--line);
@@ -4399,6 +4460,11 @@ th.input-jump-highlight {
   background: var(--control);
   color: var(--ink);
   padding: 0 9px;
+}
+
+.settings-shortcut-field input {
+  font-family: "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
 }
 
 .settings-actions {

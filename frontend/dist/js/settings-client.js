@@ -31,6 +31,22 @@ export const defaultAppSettings = {
   interaction: {
     syncRawTextPosition: true,
     geometrySyncLocate: true,
+    shortcuts: {
+      save: "Ctrl+S",
+      open: "Ctrl+O",
+      undoView: "Ctrl+Z",
+      redoView: "Ctrl+Y, Ctrl+Shift+Z",
+      jumpDefinition: "F12",
+      jumpReferences: "Shift+F12",
+      inputText: "Ctrl+1",
+      inputJson: "Ctrl+2",
+      inputTable: "Ctrl+3",
+      tabSummary: "Ctrl+Alt+1",
+      tabProfile: "Ctrl+Alt+2",
+      tabHVAC: "Ctrl+Alt+3",
+      tabDiagnose: "Ctrl+Alt+4",
+      tabGeometry: "Ctrl+Alt+5",
+    },
   },
   profile: {
     enabledDimensions: ["occupancy", "lighting", "equipment", "infiltration", "ventilation", "outdoor_air"],
@@ -162,6 +178,7 @@ export function mergeSettings(settingsInput = {}) {
   const geometry = appearance.geometry || {};
   const behavior = settings.behavior || {};
   const interaction = settings.interaction || {};
+  const defaultShortcuts = defaultAppSettings.interaction.shortcuts;
   const profile = settings.profile || {};
   const applyBehavior = profile.applyBehavior || {};
   const defaultProfile = defaultAppSettings.profile;
@@ -197,6 +214,7 @@ export function mergeSettings(settingsInput = {}) {
         typeof interaction.geometrySyncLocate === "boolean"
           ? interaction.geometrySyncLocate
           : defaultAppSettings.interaction.geometrySyncLocate,
+      shortcuts: normalizeShortcuts(interaction.shortcuts, defaultShortcuts),
     },
     profile: {
       enabledDimensions: normalizeEnabledDimensions(profile.enabledDimensions, defaultProfile.enabledDimensions),
@@ -248,6 +266,21 @@ export function normalizeHexColor(value, fallback) {
 function normalizeTheme(value) {
   const theme = String(value || "").trim().toLowerCase();
   return theme === "light" || theme === "dark" || theme === "system" ? theme : defaultAppSettings.appearance.theme;
+}
+
+function normalizeShortcuts(value, fallback) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(
+    Object.entries(fallback).map(([id, defaultAccelerator]) => [
+      id,
+      normalizeShortcutValue(source[id], defaultAccelerator),
+    ]),
+  );
+}
+
+function normalizeShortcutValue(value, fallback) {
+  const shortcut = String(value || "").trim();
+  return shortcut || fallback;
 }
 
 function clampNumber(value, min, max, fallback) {

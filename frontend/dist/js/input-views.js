@@ -1,8 +1,10 @@
 import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
 import { t } from "./i18n.js";
+import { recordViewHistory } from "./view-history.js";
 
 let analyzeCallback = async () => {};
 let renderReportCallback = () => renderInputViews();
+let jumpIndexCache = { report: null, definitions: new Map(), references: new Map() };
 
 export function configureInputViews(callbacks) {
   analyzeCallback = callbacks.analyze || analyzeCallback;
@@ -230,6 +232,7 @@ function renderJSONInstance(object, isLastObject) {
         <span class="json-line" title="${escapeHTML(objectName)}"><span class="json-key">${formatJSONKey(objectName)}</span><span class="json-colon">: </span><span class="json-brace">{</span></span>
         <span class="json-summary-meta">
           ${sourceLabel}
+          ${renderInputJumpControls({ objectIndex: sourceIndex })}
           <span class="badge">${escapeHTML(t("count.fields", { count: fields.length }))}</span>
         </span>
       </summary>
@@ -246,10 +249,13 @@ function renderJSONInstance(object, isLastObject) {
 function renderJSONFieldRow(field, objectIndex, fieldIndex, isLastField) {
   const key = field.key || field.comment || `field_${fieldIndex + 1}`;
   return `
-    <div class="json-field-row">
+    <div class="json-field-row" data-object-index="${escapeHTML(objectIndex)}" data-field-index="${escapeHTML(fieldIndex)}" data-field-index-kind="model">
       <span class="json-key" title="${escapeHTML(field.comment || key)}">${formatJSONKey(key)}</span>
       <span class="json-colon">: </span>
-      <span class="json-field-value">${renderJSONEditorValue(field.value, { objectIndex, fieldIndex, fieldIndexKind: "model", path: [] }, 0, !isLastField)}</span>
+      <span class="json-field-value">
+        ${renderJSONEditorValue(field.value, { objectIndex, fieldIndex, fieldIndexKind: "model", path: [] }, 0, !isLastField)}
+        ${renderInputJumpControls({ objectIndex, fieldIndex, fieldIndexKind: "model", value: formatJSONValue(field.value) })}
+      </span>
     </div>
   `;
 }
@@ -404,7 +410,7 @@ function renderFormattedObject(object) {
     <section class="json-object text-object" data-object-index="${escapeHTML(objectIndex)}" data-object-type="${escapeHTML(object.type || "")}">
       <div class="json-object-head text-object-head" data-object-index="${escapeHTML(objectIndex)}" data-object-type="${escapeHTML(object.type || "")}">
         <strong title="${escapeHTML(primaryLabel)}">${escapeHTML(primaryLabel)}</strong>
-        <span class="row-sub">${secondaryLabel ? `${escapeHTML(secondaryLabel)} ` : ""}#${escapeHTML(objectIndex)}</span>
+        <span class="row-sub">${secondaryLabel ? `${escapeHTML(secondaryLabel)} ` : ""}#${escapeHTML(objectIndex)} ${renderInputJumpControls({ objectIndex })}</span>
       </div>
       <dl>
         ${fields.map((field, fieldIndex) => renderFormattedTextField(field, objectIndex, fieldIndex)).join("")}
@@ -419,13 +425,16 @@ function renderFormattedTextField(field, objectIndex, fieldIndex) {
   return `
     <dt title="${escapeHTML(label)}" data-object-index="${escapeHTML(objectIndex)}" data-field-index="${escapeHTML(fieldIndex)}">${escapeHTML(label)}</dt>
     <dd class="text-field-cell" title="${escapeHTML(label)}" data-object-index="${escapeHTML(objectIndex)}" data-field-index="${escapeHTML(fieldIndex)}">
-      <input class="text-field-input"
-        data-object-index="${escapeHTML(objectIndex)}"
-        data-field-index="${escapeHTML(fieldIndex)}"
-        data-field-index-kind="idf"
-        data-original="${escapeHTML(value)}"
-        list="${escapeHTML(fieldSuggestionListID(objectIndex, fieldIndex))}"
-        value="${escapeHTML(value)}" />
+      <span class="field-input-wrap">
+        <input class="text-field-input"
+          data-object-index="${escapeHTML(objectIndex)}"
+          data-field-index="${escapeHTML(fieldIndex)}"
+          data-field-index-kind="idf"
+          data-original="${escapeHTML(value)}"
+          list="${escapeHTML(fieldSuggestionListID(objectIndex, fieldIndex))}"
+          value="${escapeHTML(value)}" />
+        ${renderInputJumpControls({ objectIndex, fieldIndex, fieldIndexKind: "idf", value })}
+      </span>
     </dd>`;
 }
 
@@ -457,6 +466,180 @@ function bindFormattedTextControls() {
 
 function fieldSuggestionListID(objectIndex, fieldIndex) {
   return `fieldSuggestions-${objectIndex}-${fieldIndex}`;
+}
+
+function renderInputJumpControls(context) {
+  const definitionCount = resolveInputJumpTargets("definition", context).length;
+  const referenceCount = resolveInputJumpTargets("references", context).length;
+  if (!definitionCount && !referenceCount) {
+    return "";
+  }
+  return `
+    <span class="input-jump-tools" aria-label="${escapeHTML(t("input.jumpTools"))}">
+      ${
+        definitionCount
+          ? `<button type="button" data-input-jump-kind="definition" data-object-index="${escapeHTML(context.objectIndex)}" data-field-index="${escapeHTML(context.fieldIndex ?? "")}" data-field-index-kind="${escapeHTML(context.fieldIndexKind || "idf")}" title="${escapeHTML(t("input.jumpDefinition"))}">${escapeHTML(t("input.jumpDefinitionShort"))}</button>`
+          : ""
+      }
+      ${
+        referenceCount
+          ? `<button type="button" data-input-jump-kind="references" data-object-index="${escapeHTML(context.objectIndex)}" data-field-index="${escapeHTML(context.fieldIndex ?? "")}" data-field-index-kind="${escapeHTML(context.fieldIndexKind || "idf")}" title="${escapeHTML(t("input.jumpReferences"))}">${escapeHTML(t("input.jumpReferencesShort", { count: referenceCount }))}</button>`
+          : ""
+      }
+    </span>`;
+}
+
+export function currentInputJumpSource() {
+  if (document.activeElement === elements.idfInput) {
+    const text = elements.idfInput.value;
+    const token = isLikelyJSONText(text)
+      ? findJSONTokenAtOffset(text, elements.idfInput.selectionStart || 0)
+      : findIDFTokenAtOffset(text, elements.idfInput.selectionStart || 0);
+    if (!token) {
+      return null;
+    }
+    return jumpSourceForContext({
+      objectIndex: token.objectIndex,
+      fieldIndex: token.type === "field" ? token.fieldIndex : null,
+      fieldIndexKind: token.fieldIndexKind || "idf",
+    });
+  }
+
+  const element = document.activeElement?.closest?.("[data-object-index]");
+  if (!element) {
+    return null;
+  }
+  return jumpSourceForContext({
+    objectIndex: element.dataset.objectIndex,
+    fieldIndex: element.dataset.fieldIndex === undefined || element.dataset.fieldIndex === "" ? null : Number(element.dataset.fieldIndex),
+    fieldIndexKind: element.dataset.fieldIndexKind || "idf",
+    value: element.value,
+  });
+}
+
+export function jumpSourceForContext(context = {}) {
+  const objectIndex = Number(context.objectIndex);
+  if (!Number.isFinite(objectIndex)) {
+    return null;
+  }
+  const fieldIndex = context.fieldIndex === undefined || context.fieldIndex === null || context.fieldIndex === "" ? null : Number(context.fieldIndex);
+  const fieldIndexKind = context.fieldIndexKind || "idf";
+  const object = reportObjectByIndex(objectIndex);
+  const modelObject = modelObjectByIndex(objectIndex);
+  let field = null;
+  if (fieldIndex !== null && Number.isFinite(fieldIndex)) {
+    if (fieldIndexKind === "model") {
+      field = (modelObject?.fields || [])[fieldIndex] || null;
+    } else {
+      field = (object?.fields || [])[fieldIndex] || null;
+    }
+  }
+  return {
+    objectIndex,
+    objectType: object?.type || modelObject?.type || "",
+    objectName: object?.name || modelObject?.name || "",
+    fieldIndex: fieldIndex === null || !Number.isFinite(fieldIndex) ? null : fieldIndex,
+    fieldIndexKind,
+    fieldLabel: field?.comment || field?.key || "",
+    value: context.value !== undefined ? String(context.value || "") : field ? formatJSONValue(field.value) : object?.name || modelObject?.name || "",
+  };
+}
+
+export function resolveInputJumpTargets(kind, context = currentInputJumpSource()) {
+  const source = context?.objectName === undefined ? jumpSourceForContext(context) : context;
+  if (!source) {
+    return [];
+  }
+  const targetName = normalizeReferenceName(source.fieldIndex === null ? source.objectName : source.value);
+  if (!targetName) {
+    return [];
+  }
+  if (kind === "definition") {
+    return definitionTargetsForName(targetName, source);
+  }
+  if (kind === "references") {
+    return referenceTargetsForName(targetName, source);
+  }
+  return [];
+}
+
+function definitionTargetsForName(name, source) {
+  if (source.fieldIndex === null || source.fieldIndex === undefined) {
+    return [];
+  }
+  const matches = jumpIndex().definitions.get(name) || [];
+  if (!matches.length) {
+    return [];
+  }
+  const preferred = preferredDefinitionTarget(matches, source);
+  return preferred ? [{ objectIndex: preferred.index, objectType: preferred.type }] : [];
+}
+
+function preferredDefinitionTarget(matches, source) {
+  const nonCurrent = matches.filter((object) => Number(object.index) !== Number(source.objectIndex));
+  const candidates = nonCurrent.length ? nonCurrent : matches;
+  const label = String(source.fieldLabel || "").toLowerCase();
+  const typeHints = [
+    ["schedule", (type) => type.toLowerCase().startsWith("schedule:")],
+    ["construction", (type) => type.toLowerCase().startsWith("construction")],
+    ["material", (type) => type.toLowerCase().includes("material")],
+    ["zone", (type) => ["zone", "zonelist", "space", "spacelist"].includes(type.toLowerCase())],
+    ["curve", (type) => type.toLowerCase().startsWith("curve:")],
+    ["node", (type) => type.toLowerCase().includes("nodelist")],
+  ];
+  for (const [hint, predicate] of typeHints) {
+    if (label.includes(hint)) {
+      const match = candidates.find((object) => predicate(object.type || ""));
+      if (match) {
+        return match;
+      }
+    }
+  }
+  return candidates[0] || null;
+}
+
+function referenceTargetsForName(name, source) {
+  return (jumpIndex().references.get(name) || []).filter(
+    (target) => !(Number(target.objectIndex) === Number(source.objectIndex) && Number(target.fieldIndex) === Number(source.fieldIndex)),
+  );
+}
+
+function jumpIndex() {
+  const report = state.report;
+  if (jumpIndexCache.report === report) {
+    return jumpIndexCache;
+  }
+  const definitions = new Map();
+  const references = new Map();
+  (report?.objects || []).forEach((object) => {
+    const objectName = normalizeReferenceName(object.name);
+    if (objectName) {
+      if (!definitions.has(objectName)) {
+        definitions.set(objectName, []);
+      }
+      definitions.get(objectName).push(object);
+    }
+    (object.fields || []).forEach((field, fieldIndex) => {
+      const fieldName = normalizeReferenceName(formatJSONValue(field.value));
+      if (!fieldName) {
+        return;
+      }
+      if (!references.has(fieldName)) {
+        references.set(fieldName, []);
+      }
+      references.get(fieldName).push({ objectIndex: object.index, objectType: object.type, fieldIndex, fieldIndexKind: "idf" });
+    });
+  });
+  jumpIndexCache = { report, definitions, references };
+  return jumpIndexCache;
+}
+
+function normalizeReferenceName(value) {
+  const text = String(value || "").trim();
+  if (!text || /^[-+]?\d+(\.\d+)?$/.test(text)) {
+    return "";
+  }
+  return text.toLowerCase();
 }
 
 async function loadFieldSuggestions(input) {
@@ -561,6 +744,7 @@ function syncRawTextToFormattedTarget(element) {
   if (!state.syncTextRawPosition) {
     return;
   }
+  recordViewHistory();
   const objectIndex = Number(element.dataset.objectIndex);
   const fieldIndex = element.dataset.fieldIndex === undefined ? null : Number(element.dataset.fieldIndex);
   syncRawTextToObjectField(objectIndex, fieldIndex, element.dataset.fieldIndexKind || "idf");
@@ -880,12 +1064,12 @@ function highlightRawTextTarget() {
 }
 
 function reportObjectByIndex(objectIndex) {
-  return state.report?.objects?.find((object) => object.index === objectIndex) || null;
+  return state.report?.objects?.find((object) => Number(object.index) === Number(objectIndex)) || null;
 }
 
 function modelObjectByIndex(objectIndex) {
   return (
-    state.model?.objects?.find((object, index) => object.sourceIndex === objectIndex || index === objectIndex) || null
+    state.model?.objects?.find((object, index) => Number(object.sourceIndex) === Number(objectIndex) || index === Number(objectIndex)) || null
   );
 }
 
@@ -1203,11 +1387,14 @@ function renderObjectTypeCell(object, fieldIndex) {
   const value = field.value || "";
   const label = field.comment || `Field ${fieldIndex + 1}`;
   return `
-    <td title="${escapeHTML(label)}" data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}">
-      <input class="field-value-input" data-object-index="${escapeHTML(object.index)}"
-        data-field-index="${escapeHTML(fieldIndex)}" data-field-index-kind="idf" data-original="${escapeHTML(value)}"
-        list="${escapeHTML(fieldSuggestionListID(object.index, fieldIndex))}"
-        value="${escapeHTML(value)}" />
+    <td title="${escapeHTML(label)}" data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}" data-field-index="${escapeHTML(fieldIndex)}" data-field-index-kind="idf">
+      <span class="field-input-wrap table">
+        <input class="field-value-input" data-object-index="${escapeHTML(object.index)}"
+          data-field-index="${escapeHTML(fieldIndex)}" data-field-index-kind="idf" data-original="${escapeHTML(value)}"
+          list="${escapeHTML(fieldSuggestionListID(object.index, fieldIndex))}"
+          value="${escapeHTML(value)}" />
+        ${renderInputJumpControls({ objectIndex: object.index, fieldIndex, fieldIndexKind: "idf", value })}
+      </span>
     </td>`;
 }
 
@@ -1222,7 +1409,10 @@ async function applyTableValue(input) {
   await applyFieldValue(input, "Field updated");
 }
 
-export async function switchInputView(viewName) {
+export async function switchInputView(viewName, options = {}) {
+  if (options.recordHistory !== false && state.activeInputView !== viewName) {
+    recordViewHistory();
+  }
   state.activeInputView = viewName;
   elements.inputViewButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.inputView === viewName);

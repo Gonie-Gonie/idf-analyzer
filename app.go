@@ -130,8 +130,9 @@ type BehaviorSettings struct {
 }
 
 type InteractionSettings struct {
-	SyncRawTextPosition bool `json:"syncRawTextPosition"`
-	GeometrySyncLocate  bool `json:"geometrySyncLocate"`
+	SyncRawTextPosition bool              `json:"syncRawTextPosition"`
+	GeometrySyncLocate  bool              `json:"geometrySyncLocate"`
+	Shortcuts           map[string]string `json:"shortcuts"`
 }
 
 type SettingsResult struct {
@@ -890,6 +891,22 @@ func defaultAppSettings() AppSettings {
 		Interaction: InteractionSettings{
 			SyncRawTextPosition: true,
 			GeometrySyncLocate:  true,
+			Shortcuts: map[string]string{
+				"save":           "Ctrl+S",
+				"open":           "Ctrl+O",
+				"undoView":       "Ctrl+Z",
+				"redoView":       "Ctrl+Y, Ctrl+Shift+Z",
+				"jumpDefinition": "F12",
+				"jumpReferences": "Shift+F12",
+				"inputText":      "Ctrl+1",
+				"inputJson":      "Ctrl+2",
+				"inputTable":     "Ctrl+3",
+				"tabSummary":     "Ctrl+Alt+1",
+				"tabProfile":     "Ctrl+Alt+2",
+				"tabHVAC":        "Ctrl+Alt+3",
+				"tabDiagnose":    "Ctrl+Alt+4",
+				"tabGeometry":    "Ctrl+Alt+5",
+			},
 		},
 		Profile: idf.DefaultProfileAnalysisSettings(),
 	}
@@ -923,8 +940,21 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 	if settings.Behavior.AutoAnalyzeDelayMS > 5000 {
 		settings.Behavior.AutoAnalyzeDelayMS = 5000
 	}
+	settings.Interaction.Shortcuts = normalizeShortcutSettings(settings.Interaction.Shortcuts, defaults.Interaction.Shortcuts)
 	settings.Profile = normalizeProfileSettings(settings.Profile, defaults.Profile)
 	return settings
+}
+
+func normalizeShortcutSettings(values map[string]string, defaults map[string]string) map[string]string {
+	out := make(map[string]string, len(defaults))
+	for key, fallback := range defaults {
+		value := strings.TrimSpace(values[key])
+		if value == "" {
+			value = fallback
+		}
+		out[key] = value
+	}
+	return out
 }
 
 func normalizeAppLanguage(value string, fallback string) string {
