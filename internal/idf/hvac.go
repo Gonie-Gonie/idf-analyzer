@@ -57,6 +57,7 @@ type HVACComponent struct {
 	ObjectName       string          `json:"objectName"`
 	ObjectIndex      int             `json:"objectIndex,omitempty"`
 	Exists           bool            `json:"exists"`
+	LoopName         string          `json:"loopName,omitempty"`
 	ControlType      string          `json:"controlType,omitempty"`
 	InletNode        string          `json:"inletNode,omitempty"`
 	OutletNode       string          `json:"outletNode,omitempty"`
@@ -97,17 +98,19 @@ type HVACZoneChain struct {
 	TerminalUnits   []HVACComponent   `json:"terminalUnits,omitempty"`
 	ZoneEquipment   []HVACComponent   `json:"zoneEquipment,omitempty"`
 	PlantLoopNames  []string          `json:"plantLoopNames,omitempty"`
+	PlantEquipment  []HVACComponent   `json:"plantEquipment,omitempty"`
 	ServiceChains   []HVACServicePath `json:"serviceChains,omitempty"`
 	Warnings        []HVACWarning     `json:"warnings,omitempty"`
 }
 
 type HVACServicePath struct {
-	ZoneName     string `json:"zoneName"`
-	TerminalName string `json:"terminalName,omitempty"`
-	AirLoopName  string `json:"airLoopName,omitempty"`
-	Component    string `json:"component,omitempty"`
-	PlantLoop    string `json:"plantLoop,omitempty"`
-	Evidence     string `json:"evidence,omitempty"`
+	ZoneName        string `json:"zoneName"`
+	TerminalName    string `json:"terminalName,omitempty"`
+	AirLoopName     string `json:"airLoopName,omitempty"`
+	Component       string `json:"component,omitempty"`
+	PlantLoop       string `json:"plantLoop,omitempty"`
+	SourceComponent string `json:"sourceComponent,omitempty"`
+	Evidence        string `json:"evidence,omitempty"`
 }
 
 type HVACCrossLoopRelation struct {
@@ -401,21 +404,21 @@ func parseHVACBranch(ctx *hvacContext, obj Object) HVACBranch {
 		Name:        objectName(obj),
 		ObjectIndex: obj.Index,
 	}
-	for index := 2; index+3 < len(obj.Fields); index += 5 {
-		componentType := strings.TrimSpace(obj.Fields[index].Value)
-		componentName := strings.TrimSpace(obj.Fields[index+1].Value)
-		inletNode := strings.TrimSpace(obj.Fields[index+2].Value)
-		outletNode := strings.TrimSpace(obj.Fields[index+3].Value)
+	for _, reference := range branchComponentReferences(ctx, obj) {
+		componentType := strings.TrimSpace(obj.Fields[reference.TypeIndex].Value)
+		componentName := strings.TrimSpace(obj.Fields[reference.NameIndex].Value)
+		inletNode := strings.TrimSpace(obj.Fields[reference.InletIndex].Value)
+		outletNode := strings.TrimSpace(obj.Fields[reference.OutletIndex].Value)
 		if componentType == "" && componentName == "" && inletNode == "" && outletNode == "" {
 			continue
 		}
 		component := newHVACComponent(ctx, componentType, componentName)
 		component.InletNode = firstNonEmpty(component.InletNode, inletNode)
 		component.OutletNode = firstNonEmpty(component.OutletNode, outletNode)
-		component.InletFieldIndex = index + 2
-		component.OutletFieldIndex = index + 3
-		if index+4 < len(obj.Fields) {
-			component.ControlType = strings.TrimSpace(obj.Fields[index+4].Value)
+		component.InletFieldIndex = reference.InletIndex
+		component.OutletFieldIndex = reference.OutletIndex
+		if reference.ControlIndex >= 0 && reference.ControlIndex < len(obj.Fields) {
+			component.ControlType = strings.TrimSpace(obj.Fields[reference.ControlIndex].Value)
 		}
 		if componentType != "" && componentName != "" && !component.Exists {
 			branch.Warnings = append(branch.Warnings, hvacWarningForObject(obj, "missing_branch_component",
@@ -437,6 +440,183 @@ func parseHVACBranch(ctx *hvacContext, obj Object) HVACBranch {
 		branch.OutletNode = branch.Components[len(branch.Components)-1].OutletNode
 	}
 	return branch
+}
+
+type branchComponentReference struct {
+	TypeIndex    int
+	NameIndex    int
+	InletIndex   int
+	OutletIndex  int
+	ControlIndex int
+}
+
+func branchComponentReferences(ctx *hvacContext, obj Object) []branchComponentReference {
+	if references := branchComponentReferencesFromComments(obj); len(references) > 0 {
+		return references
+	}
+	stride4 := branchComponentReferencesByStride(obj, 4)
+	stride5 := branchComponentReferencesByStride(obj, 5)
+	if scoreBranchComponentReferences(ctx, obj, stride5) > scoreBranchComponentReferences(ctx, obj, stride4) {
+		return stride5
+	}
+	return stride4
+}
+
+func branchComponentReferencesFromComments(obj Object) []branchComponentReference {
+	type branchComponentCommentGroup struct {
+		typeIndex    int
+		nameIndex    int
+		inletIndex   int
+		outletIndex  int
+		controlIndex int
+	}
+	groups := map[int]branchComponentCommentGroup{}
+	seenGroups := map[int]bool{}
+	var order []int
+	for index, field := range obj.Fields {
+		comment := normalizeFieldName(field.Comment)
+		group, role := branchComponentCommentRole(comment)
+		if group == 0 || role == "" {
+			continue
+		}
+		info := groups[group]
+		if !seenGroups[group] {
+			order = append(order, group)
+			seenGroups[group] = true
+			info = branchComponentCommentGroup{typeIndex: -1, nameIndex: -1, inletIndex: -1, outletIndex: -1, controlIndex: -1}
+		}
+		switch role {
+		case "type":
+			info.typeIndex = index
+		case "name":
+			info.nameIndex = index
+		case "inlet":
+			info.inletIndex = index
+		case "outlet":
+			info.outletIndex = index
+		case "control":
+			info.controlIndex = index
+		}
+		groups[group] = info
+	}
+	sort.Ints(order)
+	var references []branchComponentReference
+	for _, group := range order {
+		info := groups[group]
+		if info.typeIndex >= 0 && info.nameIndex >= 0 && info.inletIndex >= 0 && info.outletIndex >= 0 {
+			references = append(references, branchComponentReference{
+				TypeIndex:    info.typeIndex,
+				NameIndex:    info.nameIndex,
+				InletIndex:   info.inletIndex,
+				OutletIndex:  info.outletIndex,
+				ControlIndex: info.controlIndex,
+			})
+		}
+	}
+	return references
+}
+
+func branchComponentCommentRole(comment string) (int, string) {
+	if !strings.Contains(comment, "component") {
+		return 0, ""
+	}
+	group := firstPositiveInteger(comment)
+	if group == 0 {
+		return 0, ""
+	}
+	switch {
+	case strings.Contains(comment, "object type"):
+		return group, "type"
+	case strings.Contains(comment, "inlet") && strings.Contains(comment, "node"):
+		return group, "inlet"
+	case strings.Contains(comment, "outlet") && strings.Contains(comment, "node"):
+		return group, "outlet"
+	case strings.Contains(comment, "control"):
+		return group, "control"
+	case strings.Contains(comment, "name") && !strings.Contains(comment, "node") && !strings.Contains(comment, "schedule"):
+		return group, "name"
+	default:
+		return 0, ""
+	}
+}
+
+func branchComponentReferencesByStride(obj Object, stride int) []branchComponentReference {
+	if stride != 4 && stride != 5 {
+		return nil
+	}
+	var references []branchComponentReference
+	for index := 2; index+3 < len(obj.Fields); index += stride {
+		if fieldsAreBlank(obj, index, index+1, index+2, index+3) {
+			continue
+		}
+		controlIndex := -1
+		if stride == 5 && index+4 < len(obj.Fields) {
+			controlIndex = index + 4
+		}
+		references = append(references, branchComponentReference{
+			TypeIndex:    index,
+			NameIndex:    index + 1,
+			InletIndex:   index + 2,
+			OutletIndex:  index + 3,
+			ControlIndex: controlIndex,
+		})
+	}
+	return references
+}
+
+func scoreBranchComponentReferences(ctx *hvacContext, obj Object, references []branchComponentReference) int {
+	score := 0
+	for index, reference := range references {
+		objectType := strings.TrimSpace(obj.Fields[reference.TypeIndex].Value)
+		objectNameValue := strings.TrimSpace(obj.Fields[reference.NameIndex].Value)
+		inletNode := strings.TrimSpace(obj.Fields[reference.InletIndex].Value)
+		outletNode := strings.TrimSpace(obj.Fields[reference.OutletIndex].Value)
+		if objectType == "" && objectNameValue == "" && inletNode == "" && outletNode == "" {
+			continue
+		}
+		score++
+		if isHVACComponentType(objectType) || isAirTerminalType(objectType) {
+			score += 3
+		}
+		if _, ok := ctx.objectsByTypeName[hvacObjectKey(objectType, objectNameValue)]; ok {
+			score += 5
+		}
+		if isBranchControlValue(objectType) {
+			score -= 4
+		}
+		if inletNode != "" {
+			score++
+		}
+		if outletNode != "" {
+			score++
+		}
+		if index > 0 {
+			previous := references[index-1]
+			previousOutlet := strings.TrimSpace(obj.Fields[previous.OutletIndex].Value)
+			if previousOutlet != "" && inletNode != "" && strings.EqualFold(previousOutlet, inletNode) {
+				score += 2
+			}
+		}
+	}
+	return score
+}
+
+func fieldsAreBlank(obj Object, indexes ...int) bool {
+	for _, index := range indexes {
+		if index >= 0 && index < len(obj.Fields) && strings.TrimSpace(obj.Fields[index].Value) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func isBranchControlValue(value string) bool {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "active", "passive", "bypass":
+		return true
+	default:
+		return false
+	}
 }
 
 func newHVACComponent(ctx *hvacContext, objectType string, objectNameValue string) HVACComponent {
@@ -467,6 +647,12 @@ func newHVACComponent(ctx *hvacContext, objectType string, objectNameValue strin
 		case "outlet", "air_outlet", "zone_outlet", "condenser_outlet":
 			component.OutletNode = firstNonEmpty(component.OutletNode, usage.NodeName)
 		}
+	}
+	if inlet := fieldValueByCatalogName(obj, "Air Inlet Node Name", "Inlet Node Name"); inlet != "" {
+		component.InletNode = inlet
+	}
+	if outlet := fieldValueByCatalogName(obj, "Air Outlet Node Name", "Outlet Node Name"); outlet != "" {
+		component.OutletNode = outlet
 	}
 	return component
 }
@@ -540,7 +726,7 @@ func waterCoilLoopWarnings(ctx *hvacContext, loop HVACLoop) []HVACWarning {
 					fmt.Sprintf("Water coil %s is on AirLoop %q but was not found on any PlantLoop branch.", componentLabel(component), loop.Name)))
 			}
 		case "PlantLoop":
-			if loopSideContainsComponent(loop.DemandSide, component) && !containsMapValue(loopTypes, "AirLoopHVAC") {
+			if loopSideContainsComponent(loop.DemandSide, component) && !containsMapValue(loopTypes, "AirLoopHVAC") && !componentReferencedByZoneHVAC(ctx, key) {
 				warnings = append(warnings, hvacWarningForComponent(component, "plant_demand_component_without_air_or_zone_use",
 					fmt.Sprintf("Plant demand component %s was not found on any AirLoop branch or ZoneHVAC equipment list.", componentLabel(component))))
 			}
@@ -584,11 +770,13 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 	}
 
 	for _, equipment := range relation.ZoneEquipment {
-		if isAirTerminalType(equipment.ObjectType) {
-			relation.TerminalUnits = append(relation.TerminalUnits, equipment)
-			if equipment.OutletNode != "" && len(zoneInletNodes) > 0 && !stringSliceContainsFold(zoneInletNodes, equipment.OutletNode) {
-				relation.Warnings = append(relation.Warnings, hvacWarningForComponent(equipment, "terminal_not_connected_to_zone_inlet",
-					fmt.Sprintf("Terminal %s outlet node %q is not in Zone %q inlet nodes.", componentLabel(equipment), equipment.OutletNode, zoneName)))
+		for _, terminal := range terminalsForZoneEquipment(ctx, equipment) {
+			if !componentSliceContains(relation.TerminalUnits, terminal) {
+				relation.TerminalUnits = append(relation.TerminalUnits, terminal)
+			}
+			if terminal.OutletNode != "" && len(zoneInletNodes) > 0 && !stringSliceContainsFold(zoneInletNodes, terminal.OutletNode) {
+				relation.Warnings = append(relation.Warnings, hvacWarningForComponent(terminal, "terminal_not_connected_to_zone_inlet",
+					fmt.Sprintf("Terminal %s outlet node %q is not in Zone %q inlet nodes.", componentLabel(terminal), terminal.OutletNode, zoneName)))
 			}
 		}
 	}
@@ -602,6 +790,7 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 	plantLoopNames := inferPlantLoopsForZone(ctx, loops, airLoopNames, relation.TerminalUnits, relation.ZoneEquipment)
 	relation.AirLoopNames = sortedStringSet(airLoopNames)
 	relation.PlantLoopNames = sortedStringSet(plantLoopNames)
+	relation.PlantEquipment = plantSourceEquipmentForLoopNames(loops, relation.PlantLoopNames)
 	if len(zoneReturnNodes) > 0 && len(relation.AirLoopNames) == 0 {
 		relation.Warnings = append(relation.Warnings, hvacWarningForObject(connectionObj, "zone_return_without_airloop",
 			fmt.Sprintf("Zone %q has return node(s) but no AirLoop relation could be inferred.", zoneName)))
@@ -660,7 +849,7 @@ func zoneEquipmentReferencesFromComments(equipmentList Object) []zoneEquipmentRe
 		}
 		group := firstPositiveInteger(comment)
 		if group == 0 {
-			group = index
+			continue
 		}
 		switch {
 		case strings.Contains(comment, "object type"):
@@ -668,7 +857,7 @@ func zoneEquipmentReferencesFromComments(equipmentList Object) []zoneEquipmentRe
 				order = append(order, group)
 			}
 			typeIndexes[group] = index
-		case strings.Contains(comment, "name") && !strings.Contains(comment, "list"):
+		case zoneEquipmentNameComment(comment):
 			nameIndexes[group] = index
 		}
 	}
@@ -685,6 +874,16 @@ func zoneEquipmentReferencesFromComments(equipmentList Object) []zoneEquipmentRe
 		}
 	}
 	return references
+}
+
+func zoneEquipmentNameComment(comment string) bool {
+	return strings.Contains(comment, "name") &&
+		!strings.Contains(comment, "object type") &&
+		!strings.Contains(comment, "node") &&
+		!strings.Contains(comment, "schedule") &&
+		!strings.Contains(comment, "sequence") &&
+		!strings.Contains(comment, "fraction") &&
+		!strings.Contains(comment, "list")
 }
 
 func bestZoneEquipmentListStartIndex(ctx *hvacContext, equipmentList Object) int {
@@ -745,11 +944,51 @@ func terminalsByZoneInlet(ctx *hvacContext, zoneInletNodes []string) []HVACCompo
 			continue
 		}
 		component := newHVACComponent(ctx, obj.Type, objectName(obj))
-		if component.OutletNode != "" && stringSliceContainsFold(zoneInletNodes, component.OutletNode) {
-			terminals = append(terminals, component)
+		for _, terminal := range terminalsForZoneEquipment(ctx, component) {
+			if terminal.OutletNode != "" && stringSliceContainsFold(zoneInletNodes, terminal.OutletNode) && !componentSliceContains(terminals, terminal) {
+				terminals = append(terminals, terminal)
+			}
 		}
 	}
 	return terminals
+}
+
+func terminalsForZoneEquipment(ctx *hvacContext, equipment HVACComponent) []HVACComponent {
+	if !isAirTerminalType(equipment.ObjectType) {
+		return nil
+	}
+	if isAirDistributionUnitType(equipment.ObjectType) {
+		if terminal, ok := resolveAirDistributionUnitTerminal(ctx, equipment); ok {
+			return []HVACComponent{terminal}
+		}
+	}
+	return []HVACComponent{equipment}
+}
+
+func resolveAirDistributionUnitTerminal(ctx *hvacContext, equipment HVACComponent) (HVACComponent, bool) {
+	if !isAirDistributionUnitType(equipment.ObjectType) || !equipment.Exists {
+		return HVACComponent{}, false
+	}
+	obj, ok := ctx.objectsByTypeName[hvacObjectKey(equipment.ObjectType, equipment.ObjectName)]
+	if !ok {
+		return HVACComponent{}, false
+	}
+	objectType := fieldValueByCatalogName(obj, "Air Terminal Object Type")
+	objectNameValue := fieldValueByCatalogName(obj, "Air Terminal Name")
+	if objectType == "" && len(obj.Fields) > 2 {
+		objectType = strings.TrimSpace(obj.Fields[2].Value)
+	}
+	if objectNameValue == "" && len(obj.Fields) > 3 {
+		objectNameValue = strings.TrimSpace(obj.Fields[3].Value)
+	}
+	if objectType == "" || objectNameValue == "" {
+		return HVACComponent{}, false
+	}
+	terminal := newHVACComponent(ctx, objectType, objectNameValue)
+	if equipment.OutletNode != "" {
+		terminal.OutletNode = equipment.OutletNode
+	}
+	return terminal, terminal.ObjectType != "" && terminal.ObjectName != ""
 }
 
 func inferAirLoopsForZone(ctx *hvacContext, loops []HVACLoop, terminals []HVACComponent, zoneInletNodes []string, zoneReturnNodes []string) map[string]bool {
@@ -794,7 +1033,7 @@ func inferPlantLoopsForZone(ctx *hvacContext, loops []HVACLoop, airLoopNames map
 		}
 	}
 	for _, component := range append(append([]HVACComponent{}, terminals...), equipment...) {
-		keys := referencedHVACComponentKeys(ctx, component)
+		keys := referencedHVACComponentKeysDepth(ctx, component, 3)
 		if key := hvacComponentKey(component); key != "" {
 			keys[key] = true
 		}
@@ -810,26 +1049,109 @@ func inferPlantLoopsForZone(ctx *hvacContext, loops []HVACLoop, airLoopNames map
 }
 
 func referencedHVACComponentKeys(ctx *hvacContext, component HVACComponent) map[string]bool {
+	return referencedHVACComponentKeysDepth(ctx, component, 1)
+}
+
+func referencedHVACComponentKeysDepth(ctx *hvacContext, component HVACComponent, depth int) map[string]bool {
 	keys := map[string]bool{}
-	if !component.Exists {
-		return keys
-	}
-	obj, ok := ctx.objectsByTypeName[hvacObjectKey(component.ObjectType, component.ObjectName)]
-	if !ok {
-		return keys
-	}
-	for _, field := range obj.Fields {
-		value := strings.TrimSpace(field.Value)
-		if value == "" {
-			continue
+	visited := map[string]bool{}
+	var visit func(HVACComponent, int)
+	visit = func(current HVACComponent, remaining int) {
+		if remaining < 0 || !current.Exists {
+			return
 		}
-		for _, candidate := range ctx.objectsByName[normalizeName(value)] {
-			if isHVACComponentType(candidate.Type) {
-				keys[hvacObjectKey(candidate.Type, objectName(candidate))] = true
+		currentKey := hvacComponentKey(current)
+		if currentKey == "" || visited[currentKey] {
+			return
+		}
+		visited[currentKey] = true
+		obj, ok := ctx.objectsByTypeName[hvacObjectKey(current.ObjectType, current.ObjectName)]
+		if !ok {
+			return
+		}
+		for _, field := range obj.Fields {
+			value := strings.TrimSpace(field.Value)
+			if value == "" {
+				continue
+			}
+			for _, candidate := range ctx.objectsByName[normalizeName(value)] {
+				if !isHVACComponentType(candidate.Type) && !isAirTerminalType(candidate.Type) {
+					continue
+				}
+				key := hvacObjectKey(candidate.Type, objectName(candidate))
+				if key == "" || key == currentKey {
+					continue
+				}
+				keys[key] = true
+				if remaining > 0 {
+					visit(newHVACComponent(ctx, candidate.Type, objectName(candidate)), remaining-1)
+				}
 			}
 		}
 	}
+	visit(component, depth)
 	return keys
+}
+
+func componentReferencedByZoneHVAC(ctx *hvacContext, wantedKey string) bool {
+	if wantedKey == "" {
+		return false
+	}
+	for _, obj := range ctx.doc.Objects {
+		if !strings.HasPrefix(strings.ToLower(strings.TrimSpace(obj.Type)), "zonehvac:") && !isAirTerminalType(obj.Type) {
+			continue
+		}
+		name := objectName(obj)
+		if name == "" {
+			continue
+		}
+		component := newHVACComponent(ctx, obj.Type, name)
+		if keys := referencedHVACComponentKeysDepth(ctx, component, 4); keys[wantedKey] {
+			return true
+		}
+	}
+	return false
+}
+
+func plantSourceEquipmentForLoopNames(loops []HVACLoop, loopNames []string) []HVACComponent {
+	wanted := map[string]bool{}
+	for _, loopName := range loopNames {
+		wanted[normalizeName(loopName)] = true
+	}
+	seen := map[string]bool{}
+	var equipment []HVACComponent
+	for _, loop := range loops {
+		if loop.Type != "PlantLoop" || !wanted[normalizeName(loop.Name)] {
+			continue
+		}
+		for _, component := range loop.SupplySideComponents() {
+			if !isPlantSourceEquipmentType(component.ObjectType) {
+				continue
+			}
+			key := hvacComponentKey(component)
+			if key == "" || seen[key] {
+				continue
+			}
+			seen[key] = true
+			component.LoopName = loop.Name
+			equipment = append(equipment, component)
+		}
+	}
+	sort.Slice(equipment, func(i, j int) bool {
+		if !strings.EqualFold(equipment[i].ObjectType, equipment[j].ObjectType) {
+			return strings.ToLower(equipment[i].ObjectType) < strings.ToLower(equipment[j].ObjectType)
+		}
+		return strings.ToLower(equipment[i].ObjectName) < strings.ToLower(equipment[j].ObjectName)
+	})
+	return equipment
+}
+
+func (loop HVACLoop) SupplySideComponents() []HVACComponent {
+	var components []HVACComponent
+	for _, branch := range loop.SupplySide.Branches {
+		components = append(components, branch.Components...)
+	}
+	return components
 }
 
 func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
@@ -851,13 +1173,17 @@ func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
 				if airLoopName == "" && plantLoopName == "" {
 					continue
 				}
-				paths = append(paths, HVACServicePath{
-					ZoneName:     relation.ZoneName,
-					TerminalName: componentLabel(terminal),
-					AirLoopName:  airLoopName,
-					PlantLoop:    plantLoopName,
-					Evidence:     "node/reference relation",
-				})
+				sourceComponents := plantSourceComponentsForServicePath(relation, plantLoopName)
+				for _, sourceComponent := range sourceComponents {
+					paths = append(paths, HVACServicePath{
+						ZoneName:        relation.ZoneName,
+						TerminalName:    componentLabel(terminal),
+						AirLoopName:     airLoopName,
+						PlantLoop:       plantLoopName,
+						SourceComponent: sourceComponent,
+						Evidence:        "node/reference relation",
+					})
+				}
 			}
 		}
 	}
@@ -871,6 +1197,23 @@ func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
 		}
 	}
 	return paths
+}
+
+func plantSourceComponentsForServicePath(relation HVACZoneChain, plantLoopName string) []string {
+	var labels []string
+	if plantLoopName == "" {
+		return []string{""}
+	}
+	for _, component := range relation.PlantEquipment {
+		if component.LoopName != "" && !strings.EqualFold(component.LoopName, plantLoopName) {
+			continue
+		}
+		labels = append(labels, componentLabel(component))
+	}
+	if len(labels) == 0 {
+		return []string{""}
+	}
+	return labels
 }
 
 func airLoopDemandNodes(ctx *hvacContext, loop HVACLoop) map[string]bool {
@@ -1442,8 +1785,12 @@ func isAirTerminalType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return strings.HasPrefix(lower, "airterminal:") ||
 		strings.Contains(lower, "airterminal") ||
-		lower == "zonehvac:airdistributionunit" ||
-		strings.Contains(lower, "airdistributionunit")
+		isAirDistributionUnitType(lower)
+}
+
+func isAirDistributionUnitType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	return lower == "zonehvac:airdistributionunit" || strings.Contains(lower, "airdistributionunit")
 }
 
 func isWaterCoilType(objectType string) bool {
@@ -1461,7 +1808,33 @@ func isHVACComponentType(objectType string) bool {
 		strings.HasPrefix(lower, "chiller:") ||
 		strings.HasPrefix(lower, "boiler:") ||
 		strings.HasPrefix(lower, "airterminal:") ||
-		strings.HasPrefix(lower, "zonehvac:")
+		strings.HasPrefix(lower, "zonehvac:") ||
+		strings.HasPrefix(lower, "airloophvac:") ||
+		strings.HasPrefix(lower, "plantcomponent:") ||
+		strings.HasPrefix(lower, "districtcooling") ||
+		strings.HasPrefix(lower, "districtheating") ||
+		strings.HasPrefix(lower, "coolingtower:") ||
+		strings.HasPrefix(lower, "heatpump:") ||
+		strings.HasPrefix(lower, "pipe:") ||
+		strings.HasPrefix(lower, "waterheater:") ||
+		strings.HasPrefix(lower, "thermalstorage:") ||
+		strings.HasPrefix(lower, "heat exchanger:") ||
+		strings.HasPrefix(lower, "heatexchanger:")
+}
+
+func isPlantSourceEquipmentType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	return strings.HasPrefix(lower, "chiller:") ||
+		strings.HasPrefix(lower, "boiler:") ||
+		strings.HasPrefix(lower, "districtcooling") ||
+		strings.HasPrefix(lower, "districtheating") ||
+		strings.HasPrefix(lower, "heatpump:") ||
+		strings.HasPrefix(lower, "plantcomponent:") ||
+		strings.HasPrefix(lower, "coolingtower:") ||
+		strings.HasPrefix(lower, "waterheater:") ||
+		strings.HasPrefix(lower, "thermalstorage:") ||
+		strings.HasPrefix(lower, "heat exchanger:") ||
+		strings.HasPrefix(lower, "heatexchanger:")
 }
 
 func isHVACEditableObjectType(objectType string) bool {

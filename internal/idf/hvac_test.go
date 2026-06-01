@@ -1,6 +1,10 @@
 package idf
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestAnalyzeHVACBuildsLoopAndZoneRelations(t *testing.T) {
 	doc := Document{Objects: []Object{
@@ -202,6 +206,41 @@ func TestAnalyzeHVACReadsZoneEquipmentListWithLoadDistributionScheme(t *testing.
 	}
 }
 
+func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
+	text, err := os.ReadFile("../../frontend/dist/samples/RefBldgLargeOfficeNew2004_Chicago.idf")
+	if err != nil {
+		t.Fatalf("read reference sample: %v", err)
+	}
+	doc, err := Parse(string(text))
+	if err != nil {
+		t.Fatalf("parse reference sample: %v", err)
+	}
+
+	report := AnalyzeHVAC(doc)
+	if report.AirLoopCount != 4 || report.PlantLoopCount != 3 || report.ZoneRelationCount != 16 {
+		t.Fatalf("counts = air %d plant %d zones %d, want 4/3/16", report.AirLoopCount, report.PlantLoopCount, report.ZoneRelationCount)
+	}
+	if report.WarningCount != 0 {
+		t.Fatalf("warnings = %#v, want none for reference sample", report.Warnings)
+	}
+	relation := findHVACTestingZoneRelation(report, "Basement")
+	if relation == nil {
+		t.Fatalf("Basement relation not found")
+	}
+	if !componentSliceContainsName(relation.ZoneEquipment, "Basement VAV Box") {
+		t.Fatalf("Basement zone equipment = %#v, want ADU wrapper", relation.ZoneEquipment)
+	}
+	if !componentSliceContainsName(relation.TerminalUnits, "Basement VAV Box Component") {
+		t.Fatalf("Basement terminals = %#v, want resolved VAV terminal", relation.TerminalUnits)
+	}
+	if !stringSliceContainsFold(relation.PlantLoopNames, "HeatSys1") || !stringSliceContainsFold(relation.PlantLoopNames, "CoolSys1") {
+		t.Fatalf("Basement plant loops = %#v, want HeatSys1 and CoolSys1", relation.PlantLoopNames)
+	}
+	if !componentSliceContainsName(relation.PlantEquipment, "HeatSys1 Boiler") || !componentSliceContainsName(relation.PlantEquipment, "CoolSys1 Chiller 1") {
+		t.Fatalf("Basement plant equipment = %#v, want source equipment", relation.PlantEquipment)
+	}
+}
+
 func findHVACTestingLoop(report HVACReport, name string) *HVACLoop {
 	for index := range report.Loops {
 		if report.Loops[index].Name == name {
@@ -211,9 +250,27 @@ func findHVACTestingLoop(report HVACReport, name string) *HVACLoop {
 	return nil
 }
 
+func findHVACTestingZoneRelation(report HVACReport, name string) *HVACZoneChain {
+	for index := range report.ZoneRelations {
+		if strings.EqualFold(report.ZoneRelations[index].ZoneName, name) {
+			return &report.ZoneRelations[index]
+		}
+	}
+	return nil
+}
+
 func hasHVACWarningCode(warnings []HVACWarning, code string) bool {
 	for _, warning := range warnings {
 		if warning.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func componentSliceContainsName(components []HVACComponent, name string) bool {
+	for _, component := range components {
+		if strings.EqualFold(component.ObjectName, name) {
 			return true
 		}
 	}

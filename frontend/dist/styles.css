@@ -1688,12 +1688,14 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   color: var(--amber);
 }
 
-.hvac-graph-node.plant rect {
+.hvac-graph-node.plant rect,
+.hvac-graph-node.source rect {
   fill: var(--ok-bg);
   stroke: var(--green);
 }
 
-.hvac-graph-node.plant {
+.hvac-graph-node.plant,
+.hvac-graph-node.source {
   color: var(--green);
 }
 

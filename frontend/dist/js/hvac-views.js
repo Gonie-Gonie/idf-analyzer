@@ -1109,6 +1109,13 @@ function selectedRelationGraphItem(relations) {
     const loopName = key.slice(6);
     return { kind: "plant", loopName, relations: relations.filter((relation) => (relation.plantLoopNames || []).includes(loopName)) };
   }
+  if (key.startsWith("source:")) {
+    const matching = relations.filter((relation) =>
+      uniqueRelationComponents(relation.plantEquipment || []).some((component) => relationComponentKey(component, "source") === key),
+    );
+    const component = matching.flatMap((relation) => relation.plantEquipment || []).find((item) => relationComponentKey(item, "source") === key);
+    return { kind: "component", component, label: component?.objectName || key.slice(7), relations: matching };
+  }
   if (key.startsWith("air:")) {
     const loopName = key.slice(4);
     return { kind: "air", loopName, relations: relations.filter((relation) => (relation.airLoopNames || []).includes(loopName)) };
@@ -1138,7 +1145,22 @@ function renderSelectedHVACDetail(selected) {
           <div><span>${t("common.inlet")}</span><strong>${escapeHTML(component.inletNode || "N/A")}</strong></div>
           <div><span>${t("common.outlet")}</span><strong>${escapeHTML(component.outletNode || "N/A")}</strong></div>
           <div><span>${t("common.water")}</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
+          ${component.loopName ? `<div><span>${t("hvac.viewLoop")}</span><strong>${escapeHTML(component.loopName)}</strong></div>` : ""}
         </div>
+        ${
+          (selected.relations || []).length
+            ? `<div class="hvac-detail-list">
+                ${(selected.relations || [])
+                  .map(
+                    (relation) =>
+                      `<div><strong>${renderObjectLink(relation.zoneObjectIndex, "Zone")} ${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML(
+                        [...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"),
+                      )}</span></div>`,
+                  )
+                  .join("")}
+              </div>`
+            : ""
+        }
         ${renderHVACEditableFields(component.editableFields)}
       </section>`;
   }
@@ -1451,13 +1473,16 @@ function uniqueRelationComponents(components) {
 }
 
 function relationGraphKeys(relation) {
-  const terminalKeys = uniqueRelationComponents([...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])]).map(relationComponentKey);
+  const terminalSource = (relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || [];
+  const terminalKeys = uniqueRelationComponents(terminalSource).map((component) => relationComponentKey(component, "terminal"));
   if (!terminalKeys.length && relation.zoneName) {
     terminalKeys.push(`terminal:direct:${relation.zoneName}`);
   }
+  const sourceKeys = uniqueRelationComponents(relation.plantEquipment || []).map((component) => relationComponentKey(component, "source"));
   return [
     relation.zoneName ? `zone:${relation.zoneName}` : "",
     ...(relation.plantLoopNames || []).map((name) => `plant:${name}`),
+    ...sourceKeys,
     ...(relation.airLoopNames || []).map((name) => `air:${name}`),
     ...terminalKeys,
   ].filter(Boolean);
@@ -1481,11 +1506,12 @@ function buildRelationGraph(relations) {
       meta: "Zone",
       objectIndex: relation.zoneObjectIndex,
     });
-    const terminalComponents = uniqueRelationComponents([...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])]);
+    const terminalSource = (relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || [];
+    const terminalComponents = uniqueRelationComponents(terminalSource);
     const terminalNodes = terminalComponents.length
       ? terminalComponents.map((component) =>
           ensureRelationNode(nodesByKey, {
-            key: relationComponentKey(component),
+            key: relationComponentKey(component, "terminal"),
             kind: "terminal",
             column: "terminal",
             label: component.objectName || component.objectType || "Equipment",
@@ -1505,9 +1531,21 @@ function buildRelationGraph(relations) {
     const airNodes = (relation.airLoopNames || []).map((name) =>
       ensureRelationNode(nodesByKey, { key: `air:${name}`, kind: "air", column: "air", label: name, meta: "AirLoopHVAC" }),
     );
-    const plantNodes = (relation.plantLoopNames || []).map((name) =>
-      ensureRelationNode(nodesByKey, { key: `plant:${name}`, kind: "plant", column: "plant", label: name, meta: "PlantLoop" }),
-    );
+    const sourceComponents = uniqueRelationComponents(relation.plantEquipment || []);
+    const plantNodes = sourceComponents.length
+      ? sourceComponents.map((component) =>
+          ensureRelationNode(nodesByKey, {
+            key: relationComponentKey(component, "source"),
+            kind: "source",
+            column: "plant",
+            label: component.objectName || component.objectType || "Source",
+            meta: [component.objectType, component.loopName].filter(Boolean).join(" / ") || (relation.plantLoopNames || []).join(", ") || "PlantLoop",
+            component,
+          }),
+        )
+      : (relation.plantLoopNames || []).map((name) =>
+          ensureRelationNode(nodesByKey, { key: `plant:${name}`, kind: "plant", column: "plant", label: name, meta: "PlantLoop" }),
+        );
     for (const terminal of terminalNodes) {
       addRelationLink(linksByKey, terminal, zoneNode, "terminal-zone", relation);
     }
@@ -1574,11 +1612,11 @@ function addRelationLink(linksByKey, from, to, kind, relation) {
   to.relatedKeys.push(from.key, key, ...relationKeys);
 }
 
-function relationComponentKey(component) {
+function relationComponentKey(component, prefix = "terminal") {
   if (Number.isFinite(Number(component?.objectIndex)) && Number(component.objectIndex) >= 0) {
-    return `terminal:${component.objectIndex}`;
+    return `${prefix}:${component.objectIndex}`;
   }
-  return `terminal:${component?.objectType || ""}:${component?.objectName || ""}`;
+  return `${prefix}:${component?.objectType || ""}:${component?.objectName || ""}`;
 }
 
 function selectionRelatedToLink(link) {
