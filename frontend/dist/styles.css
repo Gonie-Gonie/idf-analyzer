@@ -1622,6 +1622,22 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   pointer-events: none;
 }
 
+.hvac-loop-cross-indicator {
+  pointer-events: none;
+}
+
+.hvac-loop-cross-indicator circle {
+  fill: var(--selected-soft);
+  stroke: var(--focus);
+  stroke-width: 1.8;
+}
+
+.hvac-loop-cross-indicator text {
+  fill: var(--focus);
+  font-size: 9px;
+  font-weight: 900;
+}
+
 .hvac-loop-equipment:hover .icon-case,
 .hvac-loop-equipment.selected .icon-case,
 .hvac-loop-endpoint:hover circle,
@@ -2160,6 +2176,25 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   gap: 4px;
 }
 
+.hvac-cross-loop-buttons {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.hvac-cross-loop-buttons button {
+  max-width: 180px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
 .hvac-edit-field-list {
   display: flex;
   flex-wrap: wrap;
@@ -2226,6 +2261,91 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   grid-template-columns: minmax(170px, 1fr) minmax(160px, 1fr);
   gap: 8px;
   align-items: center;
+}
+
+.hvac-cross-loop-row {
+  width: 100%;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.hvac-cross-loop-row:hover {
+  border-color: var(--focus);
+  background: var(--selected-soft);
+}
+
+.hvac-cross-loop-map {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  background: var(--surface-3);
+  padding: 9px;
+}
+
+.hvac-cross-loop-svg {
+  width: 100%;
+  min-height: 126px;
+  display: block;
+}
+
+.hvac-cross-loop-component rect,
+.hvac-cross-loop-target rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.hvac-cross-loop-component rect {
+  fill: var(--warn-bg);
+  stroke: var(--amber);
+}
+
+.hvac-cross-loop-target {
+  cursor: pointer;
+  color: var(--green);
+}
+
+.hvac-cross-loop-target rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-cross-loop-target:hover rect {
+  stroke: var(--focus);
+  stroke-width: 2.8;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--focus), transparent 58%));
+}
+
+.hvac-cross-loop-target.missing {
+  opacity: 0.55;
+}
+
+.hvac-cross-loop-edge {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2.4;
+  stroke-dasharray: 7 5;
+}
+
+.hvac-cross-loop-svg .label {
+  fill: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.hvac-cross-loop-svg .meta {
+  fill: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.hvac-cross-loop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .hvac-relation-table {

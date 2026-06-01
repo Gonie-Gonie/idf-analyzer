@@ -5,6 +5,11 @@ export function initializeHVACControls() {
   elements.hvacFilter?.addEventListener("input", () => renderHVAC());
   elements.hvacSummary?.addEventListener("click", handleHVACNavigationClick);
   elements.hvacGraph?.addEventListener("click", (event) => {
+    const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
+    if (loopJump) {
+      jumpToHVACLoopByName(loopJump.dataset.hvacJumpLoopName || "", loopJump.dataset.hvacJumpGraphKey || "");
+      return;
+    }
     const editButton = event.target.closest("[data-hvac-edit-key]");
     if (editButton) {
       openHVACApplyDialog(editButton.dataset.hvacEditKey || "");
@@ -26,6 +31,11 @@ export function initializeHVACControls() {
     renderHVAC();
   });
   elements.hvacInspector?.addEventListener("click", (event) => {
+    const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
+    if (loopJump) {
+      jumpToHVACLoopByName(loopJump.dataset.hvacJumpLoopName || "", loopJump.dataset.hvacJumpGraphKey || "");
+      return;
+    }
     const outputButton = event.target.closest("[data-hvac-output-variable]");
     if (outputButton) {
       openHVACOutputDialog({
@@ -211,6 +221,11 @@ function renderHVACDiagnosticsCard(count, active) {
 }
 
 function handleHVACNavigationClick(event) {
+  const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
+  if (loopJump) {
+    jumpToHVACLoopByName(loopJump.dataset.hvacJumpLoopName || "", loopJump.dataset.hvacJumpGraphKey || "");
+    return;
+  }
   const loopButton = event.target.closest("[data-hvac-loop-id]");
   if (loopButton) {
     state.activeHVACView = "loop";
@@ -235,6 +250,23 @@ function handleHVACNavigationClick(event) {
     state.activeHVACNodeName = "";
     renderHVAC();
   }
+}
+
+function jumpToHVACLoopByName(loopName, graphKey = "") {
+  const loop = findHVACLoopByName(loopName);
+  if (!loop) {
+    return;
+  }
+  state.activeHVACView = "loop";
+  state.activeHVACLoopId = loop.id;
+  state.activeHVACGraphKey = graphKey || `loop:${loop.id}`;
+  state.activeHVACNodeName = state.activeHVACGraphKey.startsWith("node:") ? state.activeHVACGraphKey.slice(5) : "";
+  renderHVAC();
+}
+
+function findHVACLoopByName(loopName) {
+  const wanted = normalizeGraphName(loopName);
+  return (state.report?.hvac?.loops || []).find((loop) => normalizeGraphName(loop.name) === wanted) || null;
 }
 
 function groupHVACLoopsByType(loops) {
@@ -563,11 +595,12 @@ function renderLoopDiagramItem(item, position, side, relatedKeys = []) {
     iconKind: visual.iconKind,
     shortLabel: visual.shortLabel,
     objectType: component.objectType || "",
+    crossLoopNames: component.relatedLoopNames || [],
     className,
   });
 }
 
-function renderLoopEquipmentSymbol({ key, x, y, label, meta, iconKind, shortLabel, objectType = "", className = "" }) {
+function renderLoopEquipmentSymbol({ key, x, y, label, meta, iconKind, shortLabel, objectType = "", crossLoopNames = [], className = "" }) {
   const title = [label, meta].filter(Boolean).join(" - ");
   const iconClass = escapeHTML(iconKind || "component");
   return `
@@ -578,6 +611,19 @@ function renderLoopEquipmentSymbol({ key, x, y, label, meta, iconKind, shortLabe
       <circle class="pipe-port right" cx="${x + 42}" cy="${y}" r="5"></circle>
       ${renderLoopEquipmentBody(iconKind, x, y, objectType)}
       ${shortLabel ? `<text class="mini-label" x="${x}" y="${y + 35}" text-anchor="middle">${escapeHTML(truncateText(shortLabel, 12))}</text>` : ""}
+      ${renderLoopCrossIndicator(x, y, crossLoopNames)}
+    </g>`;
+}
+
+function renderLoopCrossIndicator(x, y, loopNames = []) {
+  if (!loopNames.length) {
+    return "";
+  }
+  return `
+    <g class="hvac-loop-cross-indicator" aria-hidden="true">
+      <title>${escapeHTML(`${t("hvac.crossLoop")}: ${loopNames.join(", ")}`)}</title>
+      <circle cx="${x + 29}" cy="${y - 27}" r="9"></circle>
+      <text x="${x + 29}" y="${y - 23}" text-anchor="middle">${escapeHTML(Math.min(loopNames.length, 9))}</text>
     </g>`;
 }
 
@@ -678,8 +724,24 @@ function renderHVACComponent(component) {
           ? `<div class="hvac-node-line compact water">${renderNodePill(component.waterInletNode, "Water In")}<span class="hvac-arrow">-&gt;</span>${renderNodePill(component.waterOutletNode, "Water Out")}</div>`
           : ""
       }
-      ${(component.relatedLoopNames || []).length ? `<small>${t("hvac.crossLoop")}: ${escapeHTML(component.relatedLoopNames.join(", "))}</small>` : ""}
+      ${(component.relatedLoopNames || []).length ? renderComponentCrossLoopButtons(component) : ""}
       ${renderHVACEditableFields(component.editableFields)}
+    </div>`;
+}
+
+function renderComponentCrossLoopButtons(component) {
+  const graphKey = componentGraphKey(component);
+  return `
+    <div class="hvac-cross-loop-buttons">
+      <small>${t("hvac.crossLoop")}</small>
+      ${(component.relatedLoopNames || [])
+        .map(
+          (loopName) => `
+            <button type="button" data-hvac-jump-loop-name="${escapeHTML(loopName)}" data-hvac-jump-graph-key="${escapeHTML(graphKey)}" title="${escapeHTML(loopName)}">
+              ${escapeHTML(loopName)}
+            </button>`,
+        )
+        .join("")}
     </div>`;
 }
 
@@ -725,15 +787,30 @@ function renderCrossLoopRelations(loop) {
       <div class="hvac-relation-list">
         ${relations
           .map(
-            (relation) => `
-              <div class="hvac-relation-row">
-                <strong>${escapeHTML(relation.componentType)} ${escapeHTML(relation.componentName)}</strong>
-                <span>${escapeHTML(relation.loopType)} ${escapeHTML(relation.loopName)}</span>
-              </div>`,
+            (relation) => {
+              const componentKey = componentKeyForCrossLoopRelation(loop, relation);
+              return `
+                <button class="hvac-relation-row hvac-cross-loop-row" type="button"
+                  data-hvac-jump-loop-name="${escapeHTML(relation.loopName)}"
+                  data-hvac-jump-graph-key="${escapeHTML(componentKey)}"
+                  title="${escapeHTML(`${relation.componentType} ${relation.componentName} -> ${relation.loopName}`)}">
+                  <strong>${escapeHTML(relation.componentType)} ${escapeHTML(relation.componentName)}</strong>
+                  <span>${escapeHTML(relation.loopType)} ${escapeHTML(relation.loopName)}</span>
+                </button>`;
+            },
           )
           .join("")}
       </div>
     </section>`;
+}
+
+function componentKeyForCrossLoopRelation(loop, relation) {
+  const component = loopComponents(loop).find(
+    (item) =>
+      String(item.objectType || "").toLowerCase() === String(relation.componentType || "").toLowerCase() &&
+      String(item.objectName || "").toLowerCase() === String(relation.componentName || "").toLowerCase(),
+  );
+  return component ? componentGraphKey(component) : "";
 }
 
 function renderHVACRelations(hvac, query) {
@@ -1247,6 +1324,7 @@ function renderSelectedHVACDetail(selected) {
           <div><span>${t("common.water")}</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
           ${component.loopName ? `<div><span>${t("hvac.viewLoop")}</span><strong>${escapeHTML(component.loopName)}</strong></div>` : ""}
         </div>
+        ${renderComponentCrossLoopMap(component)}
         ${
           (selected.relations || []).length
             ? `<div class="hvac-detail-list">
@@ -1337,6 +1415,61 @@ function renderSelectedHVACDetail(selected) {
       <div class="hvac-detail-grid">
         <div><span>${t("hvac.relatedZones")}</span><strong>${escapeHTML((selected.loop?.relatedZones || []).length)}</strong></div>
         <div><span>${t("hvac.crossLoopLinksLabel")}</span><strong>${escapeHTML((selected.loop?.relatedLoops || []).length)}</strong></div>
+      </div>
+    </section>`;
+}
+
+function renderComponentCrossLoopMap(component = {}) {
+  const relatedLoopNames = [...new Set(component.relatedLoopNames || [])].filter(Boolean);
+  if (!relatedLoopNames.length) {
+    return "";
+  }
+  const componentKey = componentGraphKey(component);
+  const rows = relatedLoopNames.map((loopName, index) => {
+    const loop = findHVACLoopByName(loopName);
+    const y = 44 + index * 58;
+    return { loopName, loop, y };
+  });
+  const height = Math.max(126, 42 + rows.length * 58);
+  const componentY = height / 2;
+  return `
+    <section class="hvac-cross-loop-map">
+      <div class="hvac-section-head compact">
+        <h3>${t("hvac.crossLoopRelations")}</h3>
+        <span>${t("hvac.crossLoop")}</span>
+      </div>
+      <svg class="hvac-cross-loop-svg" viewBox="0 0 720 ${height}" role="img" aria-label="${escapeHTML(t("hvac.crossLoopRelations"))}">
+        <g class="hvac-cross-loop-component">
+          <rect x="24" y="${componentY - 24}" width="238" height="48" rx="8"></rect>
+          <text class="label" x="42" y="${componentY - 4}">${escapeHTML(truncateText(component.objectName || component.objectType || t("common.component"), 28))}</text>
+          <text class="meta" x="42" y="${componentY + 14}">${escapeHTML(truncateText(component.objectType || t("common.component"), 32))}</text>
+        </g>
+        ${rows
+          .map(
+            ({ loopName, loop, y }) => `
+              <path class="hvac-cross-loop-edge" d="M262,${componentY} C338,${componentY} 378,${y} 454,${y}"></path>
+              <g class="hvac-cross-loop-target ${loop ? "" : "missing"}" data-hvac-jump-loop-name="${escapeHTML(loopName)}" data-hvac-jump-graph-key="${escapeHTML(componentKey)}">
+                <title>${escapeHTML(`${t("action.open")} ${loopName}`)}</title>
+                <rect x="454" y="${y - 24}" width="240" height="48" rx="8"></rect>
+                <text class="label" x="474" y="${y - 4}">${escapeHTML(truncateText(loopName, 30))}</text>
+                <text class="meta" x="474" y="${y + 14}">${escapeHTML(truncateText(loop?.type || t("hvac.viewLoop"), 32))}</text>
+              </g>`,
+          )
+          .join("")}
+      </svg>
+      <div class="hvac-cross-loop-actions">
+        ${rows
+          .map(
+            ({ loopName, loop }) => `
+              <button class="hvac-edit-button" type="button" ${loop ? "" : "disabled"}
+                data-hvac-jump-loop-name="${escapeHTML(loopName)}"
+                data-hvac-jump-graph-key="${escapeHTML(componentKey)}"
+                title="${escapeHTML(loopName)}">
+                <span>${escapeHTML(loopName)}</span>
+                <small>${escapeHTML(loop?.type || t("hvac.viewLoop"))}</small>
+              </button>`,
+          )
+          .join("")}
       </div>
     </section>`;
 }
