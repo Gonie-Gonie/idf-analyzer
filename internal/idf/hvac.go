@@ -66,6 +66,7 @@ type HVACComponent struct {
 	OutletFieldIndex int             `json:"outletFieldIndex,omitempty"`
 	NodeUsages       []HVACNodeUsage `json:"nodeUsages,omitempty"`
 	RelatedLoopNames []string        `json:"relatedLoopNames,omitempty"`
+	EditableFields   []HVACEditField `json:"editableFields,omitempty"`
 }
 
 type HVACConnector struct {
@@ -127,6 +128,21 @@ type HVACWarning struct {
 	FieldIndex  int    `json:"fieldIndex,omitempty"`
 	Field       string `json:"field,omitempty"`
 	Value       string `json:"value,omitempty"`
+}
+
+type HVACEditField struct {
+	ObjectIndex     int                    `json:"objectIndex"`
+	ObjectType      string                 `json:"objectType"`
+	ObjectName      string                 `json:"objectName,omitempty"`
+	FieldIndex      int                    `json:"fieldIndex"`
+	FieldName       string                 `json:"fieldName,omitempty"`
+	CurrentValue    string                 `json:"currentValue"`
+	EditKind        string                 `json:"editKind"`
+	ValueType       string                 `json:"valueType"`
+	AllowAutosize   bool                   `json:"allowAutosize,omitempty"`
+	SuggestedValues []FieldValueSuggestion `json:"suggestedValues,omitempty"`
+	RequiresPreview bool                   `json:"requiresPreview"`
+	Impact          string                 `json:"impact,omitempty"`
 }
 
 type hvacContext struct {
@@ -439,6 +455,7 @@ func newHVACComponent(ctx *hvacContext, objectType string, objectNameValue strin
 	component.Exists = true
 	component.ObjectIndex = obj.Index
 	component.NodeUsages = nodeUsagesForObject(ctx, obj)
+	component.EditableFields = editableHVACFields(ctx.doc, obj)
 	for _, usage := range component.NodeUsages {
 		switch usage.Role {
 		case "water_inlet", "plant_inlet":
@@ -602,6 +619,7 @@ func equipmentFromZoneEquipmentList(ctx *hvacContext, equipmentList Object, rela
 			continue
 		}
 		component := newHVACComponent(ctx, objectType, objectNameValue)
+		component.EditableFields = append(component.EditableFields, editableZoneEquipmentSequenceFields(ctx.doc, equipmentList, index)...)
 		if !component.Exists {
 			relation.Warnings = append(relation.Warnings, hvacWarningForObject(equipmentList, "missing_zone_equipment",
 				fmt.Sprintf("ZoneHVAC:EquipmentList %q references missing %s %q.", objectName(equipmentList), objectType, objectNameValue)))
@@ -932,6 +950,150 @@ func nodeUsagesForObject(ctx *hvacContext, obj Object) []HVACNodeUsage {
 	return usages
 }
 
+func editableHVACFields(doc Document, obj Object) []HVACEditField {
+	if !isHVACEditableObjectType(obj.Type) {
+		return nil
+	}
+	var fields []HVACEditField
+	for fieldIndex := range obj.Fields {
+		editField, ok := hvacEditableFieldAt(doc, obj, fieldIndex)
+		if ok {
+			fields = append(fields, editField)
+		}
+	}
+	return fields
+}
+
+func editableZoneEquipmentSequenceFields(doc Document, obj Object, equipmentStartIndex int) []HVACEditField {
+	var fields []HVACEditField
+	for _, fieldIndex := range []int{equipmentStartIndex + 2, equipmentStartIndex + 3} {
+		if fieldIndex < 0 || fieldIndex >= len(obj.Fields) {
+			continue
+		}
+		fieldName := "Equipment sequence"
+		if fieldIndex == equipmentStartIndex+2 {
+			fieldName = "Cooling sequence"
+		}
+		if fieldIndex == equipmentStartIndex+3 {
+			fieldName = "Heating/no-load sequence"
+		}
+		fields = append(fields, HVACEditField{
+			ObjectIndex:     obj.Index,
+			ObjectType:      obj.Type,
+			ObjectName:      objectName(obj),
+			FieldIndex:      fieldIndex,
+			FieldName:       fieldName,
+			CurrentValue:    strings.TrimSpace(obj.Fields[fieldIndex].Value),
+			EditKind:        "sequence",
+			ValueType:       "integer",
+			RequiresPreview: true,
+			Impact:          "Changes ZoneHVAC equipment priority order.",
+		})
+	}
+	return fields
+}
+
+func hvacEditableFieldAt(doc Document, obj Object, fieldIndex int) (HVACEditField, bool) {
+	if fieldIndex < 0 || fieldIndex >= len(obj.Fields) || !isHVACEditableObjectType(obj.Type) {
+		return HVACEditField{}, false
+	}
+	field := obj.Fields[fieldIndex]
+	fieldName := catalogFieldName(obj, fieldIndex)
+	if strings.TrimSpace(fieldName) == "" {
+		fieldName = field.Comment
+	}
+	editKind, valueType, allowAutosize := classifyHVACEditableField(obj, fieldIndex, fieldName)
+	if editKind == "" {
+		return HVACEditField{}, false
+	}
+	editField := HVACEditField{
+		ObjectIndex:     obj.Index,
+		ObjectType:      obj.Type,
+		ObjectName:      objectName(obj),
+		FieldIndex:      fieldIndex,
+		FieldName:       fieldName,
+		CurrentValue:    strings.TrimSpace(field.Value),
+		EditKind:        editKind,
+		ValueType:       valueType,
+		AllowAutosize:   allowAutosize,
+		RequiresPreview: true,
+		Impact:          hvacEditImpact(editKind),
+	}
+	editField.SuggestedValues = hvacEditSuggestions(doc, editField)
+	return editField, true
+}
+
+func classifyHVACEditableField(obj Object, fieldIndex int, fieldName string) (string, string, bool) {
+	normalized := normalizeFieldName(fieldName)
+	if strings.EqualFold(obj.Type, "ZoneHVAC:EquipmentList") && fieldIndex > 0 {
+		if strings.Contains(normalized, "sequence") || fieldIndex%4 == 3 || fieldIndex%4 == 0 {
+			return "sequence", "integer", false
+		}
+	}
+	switch {
+	case strings.Contains(normalized, "availability") && strings.Contains(normalized, "schedule"):
+		return "availability_schedule", "reference", false
+	case strings.Contains(normalized, "schedule") && strings.Contains(normalized, "name"):
+		return "schedule", "reference", false
+	case strings.Contains(normalized, "flow rate") || strings.Contains(normalized, "air flow"):
+		return "flow", "number", true
+	case strings.Contains(normalized, "capacity"):
+		return "capacity", "number", true
+	case strings.Contains(normalized, "sequence"):
+		return "sequence", "integer", false
+	default:
+		return "", "", false
+	}
+}
+
+func hvacEditSuggestions(doc Document, field HVACEditField) []FieldValueSuggestion {
+	switch field.EditKind {
+	case "availability_schedule", "schedule":
+		return objectNameSuggestionsByPredicate(doc, func(objectType string) bool {
+			return isScheduleType(objectType)
+		})
+	case "flow", "capacity":
+		if field.AllowAutosize {
+			return []FieldValueSuggestion{{Value: "Autosize", Source: "catalog"}}
+		}
+	case "sequence":
+		return []FieldValueSuggestion{
+			{Value: "1", Source: "catalog"},
+			{Value: "2", Source: "catalog"},
+			{Value: "3", Source: "catalog"},
+		}
+	}
+	return nil
+}
+
+func hvacEditImpact(editKind string) string {
+	switch editKind {
+	case "availability_schedule", "schedule":
+		return "Changes when the component or equipment is available."
+	case "flow":
+		return "Changes design or maximum flow sizing for the selected HVAC object."
+	case "capacity":
+		return "Changes component capacity sizing or overrides Autosize."
+	case "sequence":
+		return "Changes ZoneHVAC equipment priority order."
+	default:
+		return "Changes an HVAC object field."
+	}
+}
+
+func objectNameSuggestionsByPredicate(doc Document, match func(string) bool) []FieldValueSuggestion {
+	var suggestions []FieldValueSuggestion
+	for _, obj := range doc.Objects {
+		if !match(obj.Type) {
+			continue
+		}
+		if name := objectName(obj); name != "" {
+			suggestions = append(suggestions, FieldValueSuggestion{Value: name, Label: obj.Type, Source: "document"})
+		}
+	}
+	return uniqueFieldSuggestions(suggestions)
+}
+
 func hvacConnectionDiagnostics(doc Document) []Diagnostic {
 	report := AnalyzeHVAC(doc)
 	var diagnostics []Diagnostic
@@ -1185,6 +1347,20 @@ func isWaterCoilType(objectType string) bool {
 func isHVACComponentType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return strings.HasPrefix(lower, "coil:") ||
+		strings.HasPrefix(lower, "fan:") ||
+		strings.HasPrefix(lower, "pump:") ||
+		strings.HasPrefix(lower, "chiller:") ||
+		strings.HasPrefix(lower, "boiler:") ||
+		strings.HasPrefix(lower, "airterminal:") ||
+		strings.HasPrefix(lower, "zonehvac:")
+}
+
+func isHVACEditableObjectType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	return lower == "airloophvac" ||
+		lower == "plantloop" ||
+		lower == "zonehvac:equipmentlist" ||
+		strings.HasPrefix(lower, "coil:") ||
 		strings.HasPrefix(lower, "fan:") ||
 		strings.HasPrefix(lower, "pump:") ||
 		strings.HasPrefix(lower, "chiller:") ||

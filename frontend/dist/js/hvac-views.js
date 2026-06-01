@@ -1,4 +1,4 @@
-import { elements, escapeHTML, state } from "./state.js";
+import { backend, elements, escapeHTML, state } from "./state.js";
 
 export function initializeHVACControls() {
   elements.hvacLoopSelect?.addEventListener("change", () => {
@@ -14,12 +14,33 @@ export function initializeHVACControls() {
     });
   });
   elements.hvacGraph?.addEventListener("click", (event) => {
+    const editButton = event.target.closest("[data-hvac-edit-key]");
+    if (editButton) {
+      openHVACApplyDialog(editButton.dataset.hvacEditKey || "");
+      return;
+    }
     const nodeButton = event.target.closest("[data-hvac-node]");
     if (!nodeButton) {
       return;
     }
     state.activeHVACNodeName = nodeButton.dataset.hvacNode || "";
     renderHVAC();
+  });
+  elements.hvacApplyClose?.addEventListener("click", closeHVACApplyDialog);
+  elements.hvacPreviewApply?.addEventListener("click", previewHVACApply);
+  elements.hvacApplyForm?.addEventListener("submit", applyHVACEdit);
+  elements.hvacApplyBody?.addEventListener("input", () => {
+    state.hvacApplyPreview = null;
+    if (elements.hvacConfirmApply) {
+      elements.hvacConfirmApply.disabled = true;
+    }
+    if (elements.hvacApplyStatus) {
+      elements.hvacApplyStatus.textContent = "Run preview before applying.";
+    }
+    const previewList = elements.hvacApplyBody.querySelector("#hvacApplyPreviewList");
+    if (previewList) {
+      previewList.innerHTML = `<div class="empty">Run preview before applying.</div>`;
+    }
   });
 }
 
@@ -191,6 +212,26 @@ function renderHVACComponent(component) {
           : ""
       }
       ${(component.relatedLoopNames || []).length ? `<small>Cross-loop: ${escapeHTML(component.relatedLoopNames.join(", "))}</small>` : ""}
+      ${renderHVACEditableFields(component.editableFields)}
+    </div>`;
+}
+
+function renderHVACEditableFields(fields = []) {
+  if (!fields.length) {
+    return "";
+  }
+  return `
+    <div class="hvac-edit-field-list">
+      ${fields
+        .slice(0, 4)
+        .map(
+          (field) => `
+            <button class="hvac-edit-button" data-hvac-edit-key="${escapeHTML(hvacEditKey(field))}" type="button">
+              <span>${escapeHTML(hvacEditLabel(field))}</span>
+              <small>${escapeHTML(field.currentValue || "blank")}</small>
+            </button>`,
+        )
+        .join("")}
     </div>`;
 }
 
@@ -397,4 +438,182 @@ function warningMatchesQuery(warning, query) {
 function loopComponents(loop) {
   const sides = [loop.supplySide, loop.demandSide].filter(Boolean);
   return sides.flatMap((side) => (side.branches || []).flatMap((branch) => branch.components || []));
+}
+
+function hvacEditKey(field) {
+  return `${field.objectIndex}:${field.fieldIndex}`;
+}
+
+function hvacEditLabel(field) {
+  if (field.editKind === "availability_schedule") {
+    return "Availability";
+  }
+  if (field.editKind === "flow") {
+    return "Flow";
+  }
+  if (field.editKind === "capacity") {
+    return "Capacity";
+  }
+  if (field.editKind === "sequence") {
+    return "Sequence";
+  }
+  return field.fieldName || "Field";
+}
+
+function allHVACEditableFields(hvac = state.report?.hvac) {
+  const loops = hvac?.loops || [];
+  const loopFields = loops.flatMap((loop) => loopComponents(loop).flatMap((component) => component.editableFields || []));
+  const relationFields = (hvac?.zoneRelations || []).flatMap((relation) =>
+    [...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])].flatMap((component) => component.editableFields || []),
+  );
+  const byKey = new Map();
+  [...loopFields, ...relationFields].forEach((field) => byKey.set(hvacEditKey(field), field));
+  return [...byKey.values()];
+}
+
+function findHVACEditableField(key) {
+  return allHVACEditableFields().find((field) => hvacEditKey(field) === key) || null;
+}
+
+function openHVACApplyDialog(key) {
+  const field = findHVACEditableField(key);
+  if (!field) {
+    return;
+  }
+  state.hvacApplyField = field;
+  state.hvacApplyPreview = null;
+  const listID = "hvacApplyValueSuggestions";
+  elements.hvacApplyBody.innerHTML = `
+    <section>
+      <h4>${escapeHTML(field.objectType)} ${escapeHTML(field.objectName || "")}</h4>
+      <p>${escapeHTML(field.impact || "Changes this HVAC field.")}</p>
+      <div class="settings-profile-grid">
+        <label class="settings-profile-field">
+          <span>Field</span>
+          <input type="text" value="${escapeHTML(field.fieldName || `Field ${Number(field.fieldIndex) + 1}`)}" readonly />
+        </label>
+        <label class="settings-profile-field">
+          <span>Current</span>
+          <input type="text" value="${escapeHTML(field.currentValue || "")}" readonly />
+        </label>
+        <label class="settings-profile-field">
+          <span>New value</span>
+          <input id="hvacApplyValue" type="text" value="${escapeHTML(field.currentValue || "")}" list="${listID}" />
+          <datalist id="${listID}">
+            ${(field.suggestedValues || []).map((item) => `<option value="${escapeHTML(item.value || "")}" label="${escapeHTML(item.label || item.source || "")}"></option>`).join("")}
+          </datalist>
+        </label>
+      </div>
+    </section>
+    <section>
+      <h4>Preview</h4>
+      <div id="hvacApplyPreviewList" class="profile-apply-preview"><div class="empty">Run preview before applying.</div></div>
+    </section>`;
+  elements.hvacApplyStatus.textContent = "Review changes before applying.";
+  elements.hvacConfirmApply.disabled = true;
+  elements.hvacApplyDialog.classList.remove("hidden");
+  elements.hvacApplyBody.querySelector("#hvacApplyValue")?.focus();
+}
+
+function closeHVACApplyDialog() {
+  elements.hvacApplyDialog.classList.add("hidden");
+}
+
+async function previewHVACApply() {
+  const request = hvacApplyRequest();
+  if (!request) {
+    return;
+  }
+  try {
+    elements.hvacApplyStatus.textContent = "Building preview";
+    const preview = await callHVACApplyAPI("PreviewHVACApplyText", "/api/hvac-apply-preview", request);
+    state.hvacApplyPreview = preview;
+    renderHVACApplyPreview(preview);
+    elements.hvacConfirmApply.disabled = !preview.canApply;
+    elements.hvacApplyStatus.textContent = preview.canApply ? "Preview ready." : "Preview has blocking warnings.";
+  } catch (error) {
+    elements.hvacApplyStatus.textContent = error?.message || String(error);
+    elements.hvacConfirmApply.disabled = true;
+  }
+}
+
+async function applyHVACEdit(event) {
+  event.preventDefault();
+  const request = hvacApplyRequest();
+  if (!request) {
+    return;
+  }
+  try {
+    elements.hvacApplyStatus.textContent = "Applying HVAC change";
+    const result = await callHVACApplyAPI("ApplyHVACText", "/api/hvac-apply", request);
+    window.dispatchEvent(new CustomEvent("idfAnalyzer:hvacApplied", { detail: result }));
+    closeHVACApplyDialog();
+  } catch (error) {
+    elements.hvacApplyStatus.textContent = error?.message || String(error);
+  }
+}
+
+function hvacApplyRequest() {
+  const field = state.hvacApplyField;
+  if (!field) {
+    return null;
+  }
+  const value = elements.hvacApplyBody.querySelector("#hvacApplyValue")?.value ?? "";
+  return {
+    changes: [
+      {
+        objectIndex: Number(field.objectIndex),
+        fieldIndex: Number(field.fieldIndex),
+        value,
+      },
+    ],
+  };
+}
+
+async function callHVACApplyAPI(methodName, endpoint, request) {
+  const api = backend();
+  if (api && typeof api[methodName] === "function") {
+    return api[methodName](elements.idfInput.value, request);
+  }
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: elements.idfInput.value, apply: request }),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return response.json();
+}
+
+function renderHVACApplyPreview(preview) {
+  const list = elements.hvacApplyBody.querySelector("#hvacApplyPreviewList");
+  if (!list) {
+    return;
+  }
+  const changes = preview?.changes || [];
+  const warnings = preview?.warnings || [];
+  list.innerHTML = `
+    ${warnings.map(renderHVACApplyWarning).join("")}
+    ${
+      changes.length
+        ? changes.map(renderHVACApplyChange).join("")
+        : `<div class="empty">${warnings.length ? "No changes can be applied yet" : "No field changes"}</div>`
+    }`;
+}
+
+function renderHVACApplyChange(change) {
+  return `
+    <div class="profile-apply-change">
+      <strong>${escapeHTML(change.message || "")}</strong>
+      <span>${escapeHTML(change.objectType || "")} ${escapeHTML(change.objectName || "")} / ${escapeHTML(change.fieldName || "")}</span>
+    </div>`;
+}
+
+function renderHVACApplyWarning(warning) {
+  return `
+    <div class="profile-warning ${escapeHTML(warning.severity || "warning")}">
+      <strong>${escapeHTML(warning.code || "warning")}</strong>
+      <span>${escapeHTML(warning.message || "")}</span>
+    </div>`;
 }

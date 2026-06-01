@@ -91,6 +91,16 @@ type ProfileApplyTextResult struct {
 	Preview idf.ProfileApplyPreview `json:"preview"`
 }
 
+type HVACApplyTextResult struct {
+	Text    string               `json:"text"`
+	Format  string               `json:"format,omitempty"`
+	Version string               `json:"version,omitempty"`
+	Model   *epinput.Model       `json:"model,omitempty"`
+	EPJSON  string               `json:"epjson,omitempty"`
+	Report  *idf.Report          `json:"report"`
+	Preview idf.HVACApplyPreview `json:"preview"`
+}
+
 type AppSettings struct {
 	Version     int                         `json:"version"`
 	Appearance  AppearanceSettings          `json:"appearance"`
@@ -545,6 +555,48 @@ func (a *App) ApplyProfileText(text string, request idf.ProfileApplyRequest) (*P
 		return nil, err
 	}
 	return &ProfileApplyTextResult{
+		Text:    resultText,
+		Format:  string(updatedModel.Format),
+		Version: updatedModel.Version.Raw,
+		Model:   updatedModel,
+		EPJSON:  epjsonText,
+		Report:  &report,
+		Preview: preview,
+	}, nil
+}
+
+func (a *App) PreviewHVACApplyText(text string, request idf.HVACApplyRequest) (*idf.HVACApplyPreview, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	preview := idf.PreviewApplyHVAC(doc, request)
+	return &preview, nil
+}
+
+func (a *App) ApplyHVACText(text string, request idf.HVACApplyRequest) (*HVACApplyTextResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	updated, preview := idf.ApplyHVAC(doc, request)
+	if !preview.CanApply {
+		return nil, fmt.Errorf("HVAC preview has blocking warnings")
+	}
+	resultText := writeDocumentInOriginalFormat(updated, model)
+	updatedModel, err := epinput.Parse("", []byte(resultText))
+	if err != nil {
+		return nil, err
+	}
+	updatedDoc := epinput.ToIDFDocument(updatedModel)
+	report := idf.Analyze(updatedDoc)
+	epjsonText, err := epinput.Write(updatedModel, epinput.FormatEPJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &HVACApplyTextResult{
 		Text:    resultText,
 		Format:  string(updatedModel.Format),
 		Version: updatedModel.Version.Raw,

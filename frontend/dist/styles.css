@@ -1438,6 +1438,29 @@ textarea {
   gap: 4px;
 }
 
+.hvac-edit-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.hvac-edit-button {
+  min-height: 28px;
+  border-radius: 6px;
+  padding: 3px 7px;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.hvac-edit-button span,
+.hvac-edit-button small {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hvac-component.missing {
   border-left: 4px solid var(--amber);
 }

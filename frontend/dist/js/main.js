@@ -135,6 +135,25 @@ window.addEventListener("idfAnalyzer:profileApplied", (event) => {
   const changeCount = result.preview?.changes?.length || 0;
   setStatus(`Profile applied (${changeCount} changes)`, "ok");
 });
+window.addEventListener("idfAnalyzer:hvacApplied", (event) => {
+  const result = event.detail || {};
+  if (!result.text || !result.report) {
+    return;
+  }
+  elements.idfInput.value = result.text;
+  updateTextStats();
+  state.report = result.report;
+  state.model = result.model || null;
+  state.epjsonText = result.epjson || "";
+  state.lastAnalyzedText = result.text;
+  state.analysisStage = "complete";
+  state.diagnosticsReady = true;
+  state.geometryReady = true;
+  renderReport();
+  updateDocumentActions();
+  const changeCount = result.preview?.changes?.filter((change) => change.requiresSave).length || 0;
+  setStatus(`HVAC change applied (${changeCount} changes)`, "ok");
+});
 
 initializeWorkspaceSplitter();
 initializeVerticalSplitters();
