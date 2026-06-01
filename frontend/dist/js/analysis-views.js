@@ -1,5 +1,6 @@
 import { elements, escapeHTML, state } from "./state.js";
 import { renderGeometry } from "./geometry-loader.js";
+import { renderHVAC } from "./hvac-views.js";
 import { renderInputViews } from "./input-views.js";
 import { renderProfile } from "./profile-views.js";
 
@@ -12,6 +13,7 @@ export function renderReport() {
 
   renderSummary(report.summary);
   renderProfile(report.profile);
+  renderHVAC(report.hvac);
   renderDiagnostics(report.diagnostics);
   if (state.activeResultTab === "geometry") {
     renderGeometry(report.geometry);
@@ -34,6 +36,16 @@ export function renderEmpty() {
     elements.profileGraphStats.textContent = "Representative day";
     elements.profileGraph.innerHTML = `<div class="empty">No profile graph yet</div>`;
     elements.profileApplyButton.disabled = true;
+  }
+  if (elements.hvacStats) {
+    elements.hvacStats.textContent = "0 loops, 0 zones";
+    elements.hvacLoopSelect.innerHTML = "";
+    elements.hvacSummary.innerHTML = `<div class="empty">No HVAC analysis yet</div>`;
+    elements.hvacGraph.innerHTML = `<div class="empty">No loop graph yet</div>`;
+    elements.hvacInspectorStats.textContent = "Select a node or component";
+    elements.hvacInspector.innerHTML = `<div class="empty">No inspector data</div>`;
+    elements.hvacWarningStats.textContent = "0 warnings";
+    elements.hvacWarnings.innerHTML = `<div class="empty">No HVAC warnings</div>`;
   }
   elements.geometryStats.textContent = "0 zones, 0 surfaces, 0 windows";
   elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;

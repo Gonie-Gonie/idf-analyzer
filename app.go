@@ -231,6 +231,15 @@ func (a *App) AnalyzeInputProfileText(text string) (*idf.ProfileReport, error) {
 	return &profile, nil
 }
 
+func (a *App) AnalyzeInputHVACText(text string) (*idf.HVACReport, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	hvac := idf.AnalyzeHVAC(epinput.ToIDFDocument(model))
+	return &hvac, nil
+}
+
 func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includeEPJSON bool) (*InputAnalysisResult, error) {
 	model, err := epinput.Parse("", []byte(text))
 	if err != nil {

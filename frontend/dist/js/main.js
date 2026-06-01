@@ -20,6 +20,7 @@ import {
 } from "./actions.js";
 import { renderDiagnostics, renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
 import { renderGeometry, resizeGeometry, setGeometryMode, setGeometryStory } from "./geometry-loader.js";
+import { initializeHVACControls } from "./hvac-views.js";
 import {
   configureInputViews,
   setInputFilter,
@@ -138,6 +139,7 @@ window.addEventListener("idfAnalyzer:profileApplied", (event) => {
 initializeWorkspaceSplitter();
 initializeVerticalSplitters();
 initializeProfileControls();
+initializeHVACControls();
 renderEmpty();
 updateDocumentActions();
 const restoredDocument = restoreCurrentDocument();

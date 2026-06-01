@@ -75,6 +75,7 @@ func AnalyzeDiagnostics(doc Document) []Diagnostic {
 	diagnostics = append(diagnostics, geometryDiagnostics(doc)...)
 	diagnostics = append(diagnostics, scheduleDiagnostics(doc)...)
 	diagnostics = append(diagnostics, hvacNodeDiagnostics(doc)...)
+	diagnostics = append(diagnostics, hvacConnectionDiagnostics(doc)...)
 
 	sort.SliceStable(diagnostics, func(i, j int) bool {
 		if diagnostics[i].Severity != diagnostics[j].Severity {

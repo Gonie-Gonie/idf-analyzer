@@ -116,7 +116,7 @@ export function handleAnalysisActivation(element) {
 }
 
 export function switchResultTab(tabName) {
-  state.activeResultTab = ["profile", "geometry", "diagnose"].includes(tabName) ? tabName : "summary";
+  state.activeResultTab = ["profile", "hvac", "geometry", "diagnose"].includes(tabName) ? tabName : "summary";
   elements.resultTabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.resultTab === state.activeResultTab);
   });

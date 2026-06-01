@@ -79,6 +79,7 @@
           <nav class="tabs" aria-label="Result tabs">
             <button class="tab active" data-result-tab="summary" type="button">Summary</button>
             <button class="tab" data-result-tab="profile" type="button">Profile</button>
+            <button class="tab" data-result-tab="hvac" type="button">HVAC</button>
             <button class="tab" data-result-tab="diagnose" type="button">Diagnose</button>
             <button class="tab" data-result-tab="geometry" type="button">Geometry</button>
           </nav>
@@ -149,6 +150,48 @@
                   <button id="profileConfirmApply" type="submit" disabled>Apply</button>
                 </div>
               </form>
+            </div>
+          </div>
+
+          <div class="result-pane" id="hvacPane">
+            <div class="summary-head hvac-head">
+              <div>
+                <h2>HVAC</h2>
+                <span id="hvacStats">0 loops, 0 zones</span>
+              </div>
+              <div class="summary-tools hvac-tools">
+                <select id="hvacLoopSelect" aria-label="HVAC loop selector"></select>
+                <div class="hvac-view-tabs" role="group" aria-label="HVAC views">
+                  <button class="hvac-view-button active" data-hvac-view="loop" type="button">Loop</button>
+                  <button class="hvac-view-button" data-hvac-view="relation" type="button">Relation</button>
+                  <button class="hvac-view-button" data-hvac-view="diagnostics" type="button">Diagnostics</button>
+                </div>
+                <input id="hvacFilter" type="search" placeholder="Filter loops, zones, nodes" />
+              </div>
+            </div>
+            <div class="hvac-pane">
+              <div id="hvacSummary" class="hvac-summary"></div>
+              <div class="hvac-layout">
+                <section class="hvac-main" aria-label="HVAC graph">
+                  <div id="hvacGraph" class="hvac-graph"></div>
+                </section>
+                <aside class="hvac-side" aria-label="HVAC inspector">
+                  <section class="hvac-inspector-section">
+                    <div class="hvac-section-head">
+                      <h3>Inspector</h3>
+                      <span id="hvacInspectorStats">Select a node or component</span>
+                    </div>
+                    <div id="hvacInspector" class="hvac-inspector"></div>
+                  </section>
+                  <section class="hvac-inspector-section">
+                    <div class="hvac-section-head">
+                      <h3>Warnings</h3>
+                      <span id="hvacWarningStats">0 warnings</span>
+                    </div>
+                    <div id="hvacWarnings" class="hvac-warning-list"></div>
+                  </section>
+                </aside>
+              </div>
             </div>
           </div>
 

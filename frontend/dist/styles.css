@@ -1171,6 +1171,380 @@ textarea {
   color: var(--red);
 }
 
+.hvac-head select,
+.hvac-tools input {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--ink);
+}
+
+.hvac-head select {
+  max-width: 260px;
+  padding: 0 8px;
+}
+
+.hvac-view-tabs {
+  display: inline-flex;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.hvac-view-button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0 10px;
+}
+
+.hvac-view-button.active {
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+
+.hvac-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.hvac-summary {
+  margin-bottom: 12px;
+}
+
+.hvac-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(90px, 1fr));
+  gap: 8px;
+}
+
+.hvac-stat {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 9px 10px;
+}
+
+.hvac-stat span,
+.hvac-stat strong {
+  display: block;
+}
+
+.hvac-stat span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-stat strong {
+  margin-top: 4px;
+  color: var(--ink-strong);
+  font-size: 18px;
+}
+
+.hvac-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 34%);
+  gap: 12px;
+  align-items: start;
+}
+
+.hvac-main,
+.hvac-side {
+  min-width: 0;
+}
+
+.hvac-side {
+  display: grid;
+  gap: 12px;
+}
+
+.hvac-graph,
+.hvac-inspector-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.hvac-graph {
+  min-height: 360px;
+  overflow: auto;
+}
+
+.hvac-loop-title,
+.hvac-section-head,
+.hvac-branch-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hvac-loop-title {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-loop-title h3,
+.hvac-section-head h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.hvac-loop-title span,
+.hvac-section-head span,
+.hvac-side-meta span,
+.hvac-component span,
+.hvac-component small,
+.hvac-warning span,
+.hvac-inspector-title span,
+.hvac-node-usage span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-loop-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.hvac-loop-meta span,
+.hvac-side-meta span,
+.hvac-tag-list span,
+.hvac-connector div span {
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 3px 7px;
+}
+
+.hvac-loop-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.hvac-loop-side {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-3);
+}
+
+.hvac-node-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.hvac-node-line.compact {
+  margin-top: 4px;
+}
+
+.hvac-node-line.water {
+  color: var(--teal-dark);
+}
+
+.hvac-node {
+  min-height: 28px;
+  max-width: 100%;
+  border-color: var(--line);
+  border-radius: 6px;
+  background: var(--control);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 3px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hvac-node small {
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.hvac-node.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+
+.hvac-node.empty-node {
+  opacity: 0.7;
+}
+
+.hvac-arrow {
+  color: var(--muted);
+}
+
+.hvac-side-meta,
+.hvac-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.hvac-branch-list,
+.hvac-component-list,
+.hvac-connector-list,
+.hvac-relation-list,
+.hvac-warning-list,
+.hvac-diagnostic-list,
+.hvac-inspector {
+  display: grid;
+  gap: 8px;
+}
+
+.hvac-branch-list,
+.hvac-connector-list {
+  margin-top: 10px;
+}
+
+.hvac-branch,
+.hvac-connector,
+.hvac-component,
+.hvac-relation-row,
+.hvac-warning,
+.hvac-node-usage {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 9px;
+}
+
+.hvac-component {
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-component.missing {
+  border-left: 4px solid var(--amber);
+}
+
+.hvac-component-main,
+.hvac-warning,
+.hvac-node-usage {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.hvac-component-main strong,
+.hvac-component-main span,
+.hvac-branch-head strong,
+.hvac-warning strong,
+.hvac-warning span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-inline-warning {
+  margin-top: 8px;
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--amber);
+  padding: 7px;
+  font-size: 12px;
+}
+
+.hvac-cross-loop {
+  padding: 0 12px 12px;
+}
+
+.hvac-relation-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(160px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.hvac-relation-table {
+  min-width: 760px;
+}
+
+.hvac-relation-table-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.1fr) minmax(160px, 1fr) minmax(140px, 0.9fr) minmax(140px, 0.9fr) minmax(170px, 1.2fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--surface-2);
+  font-size: 12px;
+}
+
+.hvac-relation-table-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-head);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.hvac-inspector-section {
+  padding: 10px;
+}
+
+.hvac-inspector {
+  margin-top: 10px;
+}
+
+.hvac-inspector-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-inspector-kv {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-inspector-kv span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-warning {
+  border-left: 4px solid var(--amber);
+}
+
+.hvac-warning.error {
+  border-left-color: var(--red);
+}
+
 .profile-pane {
   flex: 1;
   min-height: 0;
@@ -3289,10 +3663,20 @@ th.input-jump-highlight {
 
   .summary-tools input,
   .summary-tools button,
+  .summary-tools select,
   .geometry-tools button,
   .geometry-tools select {
     flex: 1 1 160px;
     width: auto;
+  }
+
+  .hvac-stat-grid {
+    grid-template-columns: repeat(3, minmax(90px, 1fr));
+  }
+
+  .hvac-layout,
+  .hvac-loop-columns {
+    grid-template-columns: 1fr;
   }
 
   .profile-layout {
@@ -3351,6 +3735,17 @@ th.input-jump-highlight {
   .summary-row {
     grid-template-columns: minmax(0, 1fr);
     align-items: start;
+  }
+
+  .hvac-stat-grid {
+    grid-template-columns: repeat(2, minmax(90px, 1fr));
+  }
+
+  .hvac-component-main,
+  .hvac-warning,
+  .hvac-node-usage,
+  .hvac-relation-row {
+    grid-template-columns: 1fr;
   }
 
   .summary-status {

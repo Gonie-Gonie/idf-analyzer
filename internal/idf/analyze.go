@@ -16,6 +16,7 @@ type Report struct {
 	UnusedObjects   []NamedObject    `json:"unusedObjects"`
 	Summary         SummaryReport    `json:"summary"`
 	Profile         ProfileReport    `json:"profile"`
+	HVAC            HVACReport       `json:"hvac"`
 	Geometry        GeometryReport   `json:"geometry"`
 	Diagnostics     []Diagnostic     `json:"diagnostics"`
 }
@@ -73,6 +74,7 @@ func AnalyzeOverview(doc Document) Report {
 	report := analyzeCore(doc)
 	report.Summary = AnalyzeSummary(doc)
 	report.Profile = AnalyzeProfile(doc)
+	report.HVAC = AnalyzeHVAC(doc)
 	return report
 }
 
@@ -81,11 +83,12 @@ func Analyze(doc Document) Report {
 	var unusedObjects []NamedObject
 	var summary SummaryReport
 	var profile ProfileReport
+	var hvac HVACReport
 	var geometry GeometryReport
 	var diagnostics []Diagnostic
 
 	var wg sync.WaitGroup
-	wg.Add(5)
+	wg.Add(6)
 	go func() {
 		defer wg.Done()
 		unusedObjects = FindUnusedObjects(doc)
@@ -100,6 +103,10 @@ func Analyze(doc Document) Report {
 	}()
 	go func() {
 		defer wg.Done()
+		hvac = AnalyzeHVAC(doc)
+	}()
+	go func() {
+		defer wg.Done()
 		geometry = AnalyzeGeometry(doc)
 	}()
 	go func() {
@@ -111,6 +118,7 @@ func Analyze(doc Document) Report {
 	report.UnusedObjects = unusedObjects
 	report.Summary = summary
 	report.Profile = profile
+	report.HVAC = hvac
 	report.Geometry = geometry
 	report.Diagnostics = diagnostics
 	return report
