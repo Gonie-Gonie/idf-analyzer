@@ -53,6 +53,19 @@ function Get-WailsProductVersion {
     return [string]$config.info.productVersion
 }
 
+function Get-WailsProductName {
+    param([string]$Path)
+
+    $config = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    if ($config.info -and $config.info.productName) {
+        return [string]$config.info.productName
+    }
+    if ($config.name) {
+        return [string]$config.name
+    }
+    return "IDF Analyzer"
+}
+
 function Set-WailsReleaseMetadata {
     param(
         [string]$Path,
@@ -102,6 +115,40 @@ function Set-AppInfoModuleVersion {
     $text = $titleRegex.Replace($text, "title: `"IDF Analyzer v$TargetVersion`"", 1)
     $text = $outputRegex.Replace($text, "outputFilename: `"idf-analyzer-v$TargetVersion`"", 1)
     Write-TextFile -Path $Path -Text $text
+}
+
+function Set-StaticHTMLAppVersion {
+    param(
+        [string[]]$Paths,
+        [string]$ProductName,
+        [string]$TargetVersion
+    )
+
+    $brandLabel = "$($ProductName.ToUpperInvariant()) V$TargetVersion"
+    foreach ($path in $Paths) {
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Missing static HTML file: $path"
+        }
+
+        $text = Normalize-NewLine -Text (Get-Content -LiteralPath $path -Raw)
+        $text = [regex]::Replace(
+            $text,
+            '(?i)(<[^>]*\bdata-app-version\b[^>]*>)v\d+\.\d+\.\d+(</[^>]+>)',
+            [System.Text.RegularExpressions.MatchEvaluator]{
+                param($match)
+                return $match.Groups[1].Value + "v$TargetVersion" + $match.Groups[2].Value
+            }
+        )
+        $text = [regex]::Replace(
+            $text,
+            '(?i)(<[^>]*\bdata-app-brand-version\b[^>]*>)[^<]*(</[^>]+>)',
+            [System.Text.RegularExpressions.MatchEvaluator]{
+                param($match)
+                return $match.Groups[1].Value + $brandLabel + $match.Groups[2].Value
+            }
+        )
+        Write-TextFile -Path $path -Text $text
+    }
 }
 
 function Parse-SemVer {
@@ -590,6 +637,12 @@ $releaseNotesDir = Join-Path $repoRoot "docs\release-notes"
 $unreleasedPath = Join-Path $releaseNotesDir "unreleased.md"
 $wailsPath = Join-Path $repoRoot "wails.json"
 $appInfoPath = Join-Path $repoRoot "frontend\dist\js\app-info.js"
+$staticHTMLPaths = @(
+    (Join-Path $repoRoot "frontend\dist\index.html"),
+    (Join-Path $repoRoot "frontend\dist\guide.html"),
+    (Join-Path $repoRoot "frontend\dist\tools.html"),
+    (Join-Path $repoRoot "frontend\dist\settings.html")
+)
 $changelogPath = Join-Path $repoRoot "CHANGELOG.md"
 $releaseDate = (Get-Date).ToString("yyyy-MM-dd")
 
@@ -631,6 +684,7 @@ if ($noteSource.Source -eq "versioned" -and $temporaryVersionedPath -ne $version
 
 Set-WailsReleaseMetadata -Path $wailsPath -TargetVersion $targetVersion
 Set-AppInfoModuleVersion -Path $appInfoPath -TargetVersion $targetVersion
+Set-StaticHTMLAppVersion -Paths $staticHTMLPaths -ProductName (Get-WailsProductName -Path $wailsPath) -TargetVersion $targetVersion
 Update-Changelog -Path $changelogPath -TargetVersion $targetVersion -ReleaseDate $releaseDate -ReleaseNoteBody $noteSource.Body
 Write-VersionedReleaseNotes -Path $versionedNotesPath -TargetVersion $targetVersion -ReleaseDate $releaseDate -ReleaseNoteBody $noteSource.Body
 
@@ -647,6 +701,7 @@ if ($shouldCommit) {
     $metadataPaths = @(
         $wailsPath,
         $appInfoPath,
+        $staticHTMLPaths,
         $changelogPath,
         $unreleasedPath,
         $versionedNotesPath

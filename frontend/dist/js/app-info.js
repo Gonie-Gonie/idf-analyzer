@@ -62,7 +62,8 @@ export function formatAppVersion(appInfoInput) {
 function normalizeAppInfo(input = {}) {
   const name = String(input.name || bundledAppInfo.name).trim() || bundledAppInfo.name;
   const version = String(input.version || bundledAppInfo.version).trim() || bundledAppInfo.version;
-  const outputFilename = String(input.outputFilename || bundledAppInfo.outputFilename).trim() || bundledAppInfo.outputFilename;
+  const defaultOutputFilename = `idf-analyzer-v${version}`;
+  const outputFilename = String(input.outputFilename || defaultOutputFilename).trim() || defaultOutputFilename;
   const title = String(input.title || `${name} v${version}`).trim() || `${name} v${version}`;
   return { name, version, title, outputFilename };
 }

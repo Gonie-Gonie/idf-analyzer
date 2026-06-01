@@ -1406,7 +1406,7 @@ function tableObjectLabel(object) {
 }
 
 async function applyTableValue(input) {
-  await applyFieldValue(input, "Field updated");
+  await applyFieldValue(input, t("input.fieldUpdated"));
 }
 
 export async function switchInputView(viewName, options = {}) {

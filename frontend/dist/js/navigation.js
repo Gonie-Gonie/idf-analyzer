@@ -128,7 +128,7 @@ export async function focusInputObject(target, options = {}) {
     element = findInputTarget(target);
   }
   if (!element) {
-    setStatus("Object target not found in input view", "warn");
+    setStatus(t("input.objectTargetMissing"), "warn");
     return;
   }
 
@@ -140,7 +140,7 @@ export async function focusInputObject(target, options = {}) {
   scrollInputTargetIntoView(element);
   highlightInputTarget(element);
   focusNavigatedInputTarget(element);
-  setStatus("Input object located", "ok");
+  setStatus(t("input.objectLocated"), "ok");
 }
 
 export function handleInputJumpActivation(element) {
