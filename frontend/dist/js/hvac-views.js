@@ -4,6 +4,8 @@ import { t } from "./i18n.js";
 export function initializeHVACControls() {
   elements.hvacFilter?.addEventListener("input", () => renderHVAC());
   elements.hvacSummary?.addEventListener("click", handleHVACNavigationClick);
+  elements.hvacSummary?.addEventListener("toggle", handleHVACNavigationToggle, true);
+  document.addEventListener("click", handleHVACOutsideClick);
   elements.hvacGraph?.addEventListener("click", (event) => {
     const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
     if (loopJump) {
@@ -250,6 +252,27 @@ function handleHVACNavigationClick(event) {
     state.activeHVACNodeName = "";
     renderHVAC();
   }
+}
+
+function handleHVACNavigationToggle(event) {
+  const openedMenu = event.target?.matches?.("details.hvac-nav-card[open]") ? event.target : null;
+  if (!openedMenu || !elements.hvacSummary?.contains(openedMenu)) {
+    return;
+  }
+  elements.hvacSummary.querySelectorAll("details.hvac-nav-card[open]").forEach((menu) => {
+    if (menu !== openedMenu) {
+      menu.open = false;
+    }
+  });
+}
+
+function handleHVACOutsideClick(event) {
+  if (!elements.hvacSummary || elements.hvacSummary.contains(event.target)) {
+    return;
+  }
+  elements.hvacSummary.querySelectorAll("details.hvac-nav-card[open]").forEach((menu) => {
+    menu.open = false;
+  });
 }
 
 function jumpToHVACLoopByName(loopName, graphKey = "") {

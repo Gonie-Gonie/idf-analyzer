@@ -1233,6 +1233,8 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 
 .hvac-summary {
   margin-bottom: 12px;
+  position: relative;
+  z-index: 30;
 }
 
 .hvac-navigator {
@@ -1243,17 +1245,23 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 
 .hvac-nav-card {
   min-width: 0;
+  position: relative;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   color: var(--ink);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .hvac-nav-card.active {
   border-color: var(--teal);
   background: var(--teal-soft);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--teal) 28%, transparent);
+}
+
+.hvac-nav-card[open] {
+  z-index: 40;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.16);
 }
 
 .hvac-nav-card summary,
@@ -1330,10 +1338,17 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .hvac-nav-menu {
-  max-height: 260px;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 45;
+  max-height: min(320px, 48vh);
   overflow: auto;
-  border-top: 1px solid var(--line);
-  background: var(--control);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 18px 36px rgba(17, 24, 39, 0.18);
   padding: 5px;
   display: grid;
   gap: 4px;
