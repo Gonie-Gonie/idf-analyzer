@@ -106,12 +106,17 @@ type GeometryMetric struct {
 }
 
 type GeometryConstruction struct {
-	Name           string                  `json:"name"`
-	ObjectType     string                  `json:"objectType"`
-	ObjectIndex    int                     `json:"objectIndex"`
-	Layers         []GeometryMaterialLayer `json:"layers"`
-	TotalThickness float64                 `json:"totalThickness,omitempty"`
-	HasThickness   bool                    `json:"hasThickness"`
+	Name                  string                  `json:"name"`
+	ObjectType            string                  `json:"objectType"`
+	ObjectIndex           int                     `json:"objectIndex"`
+	Layers                []GeometryMaterialLayer `json:"layers"`
+	TotalThickness        float64                 `json:"totalThickness,omitempty"`
+	HasThickness          bool                    `json:"hasThickness"`
+	ThermalResistance     float64                 `json:"thermalResistance,omitempty"`
+	UValue                float64                 `json:"uValue,omitempty"`
+	ArealHeatCapacity     float64                 `json:"arealHeatCapacity,omitempty"`
+	HasThermalPerformance bool                    `json:"hasThermalPerformance"`
+	HasArealHeatCapacity  bool                    `json:"hasArealHeatCapacity"`
 }
 
 type GeometryMaterialLayer struct {
@@ -121,9 +126,11 @@ type GeometryMaterialLayer struct {
 	Thickness         float64 `json:"thickness,omitempty"`
 	HasThickness      bool    `json:"hasThickness"`
 	ThermalResistance float64 `json:"thermalResistance,omitempty"`
+	UFactor           float64 `json:"uFactor,omitempty"`
 	Conductivity      float64 `json:"conductivity,omitempty"`
 	Density           float64 `json:"density,omitempty"`
 	SpecificHeat      float64 `json:"specificHeat,omitempty"`
+	ArealHeatCapacity float64 `json:"arealHeatCapacity,omitempty"`
 }
 
 type geometryContext struct {
@@ -573,6 +580,7 @@ func geometryConstructionsFromDocument(doc Document) []GeometryConstruction {
 			}
 		}
 		construction.TotalThickness = roundedNumber(construction.TotalThickness, 4)
+		finalizeGeometryConstructionPerformance(&construction)
 		constructions = append(constructions, construction)
 	}
 	return constructions
@@ -600,6 +608,9 @@ func geometryMaterialsByName(doc Document) map[string]GeometryMaterialLayer {
 		if resistance, ok := findNumericFieldByCommentWords(obj, "thermal", "resistance"); ok {
 			layer.ThermalResistance = roundedNumber(resistance, 4)
 		}
+		if uFactor, ok := findNumericFieldByCommentWords(obj, "u", "factor"); ok {
+			layer.UFactor = roundedNumber(uFactor, 4)
+		}
 		if conductivity, ok := findNumericFieldByCommentWords(obj, "conductivity"); ok {
 			layer.Conductivity = roundedNumber(conductivity, 4)
 		}
@@ -609,9 +620,48 @@ func geometryMaterialsByName(doc Document) map[string]GeometryMaterialLayer {
 		if specificHeat, ok := findNumericFieldByCommentWords(obj, "specific", "heat"); ok {
 			layer.SpecificHeat = roundedNumber(specificHeat, 2)
 		}
+		if layer.HasThickness && layer.Density > 0 && layer.SpecificHeat > 0 {
+			layer.ArealHeatCapacity = roundedNumber(layer.Thickness*layer.Density*layer.SpecificHeat, 1)
+		}
 		materials[normalizeName(name)] = layer
 	}
 	return materials
+}
+
+func finalizeGeometryConstructionPerformance(construction *GeometryConstruction) {
+	for _, layer := range construction.Layers {
+		resistance := geometryLayerThermalResistance(layer)
+		if resistance > 0 {
+			construction.ThermalResistance += resistance
+			construction.HasThermalPerformance = true
+		}
+		if layer.ArealHeatCapacity > 0 {
+			construction.ArealHeatCapacity += layer.ArealHeatCapacity
+			construction.HasArealHeatCapacity = true
+		}
+	}
+	if construction.HasThermalPerformance {
+		construction.ThermalResistance = roundedNumber(construction.ThermalResistance, 4)
+		if construction.ThermalResistance > 0 {
+			construction.UValue = roundedNumber(1/construction.ThermalResistance, 4)
+		}
+	}
+	if construction.HasArealHeatCapacity {
+		construction.ArealHeatCapacity = roundedNumber(construction.ArealHeatCapacity, 1)
+	}
+}
+
+func geometryLayerThermalResistance(layer GeometryMaterialLayer) float64 {
+	if layer.ThermalResistance > 0 {
+		return layer.ThermalResistance
+	}
+	if layer.UFactor > 0 {
+		return 1 / layer.UFactor
+	}
+	if layer.HasThickness && layer.Thickness > 0 && layer.Conductivity > 0 {
+		return layer.Thickness / layer.Conductivity
+	}
+	return 0
 }
 
 func isGeometryMaterialType(objectType string) bool {

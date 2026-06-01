@@ -603,14 +603,14 @@ function geometryRelatedGroupsForZone(geometry, zone) {
         const adjacentZone = adjacentSurface ? zoneByName(geometry, adjacentSurface.zoneName) : null;
         return [
           adjacentZone && adjacentZone.id !== zone.id ? relatedItemForZone(adjacentZone, "Adjacent zone") : null,
-          adjacentSurface ? relatedItemForSurface(adjacentSurface, "Adjacent surface") : referencedBoundaryItem(surface),
+          adjacentSurface ? relatedItemForSurface(adjacentSurface, "Adjacent surface", geometry) : referencedBoundaryItem(surface),
         ];
       })
       .filter(Boolean),
   );
   return [
-    { title: "Boundary Surfaces", items: surfaces.map((surface) => relatedItemForSurface(surface, surface.surfaceType || "Surface")) },
-    { title: "Openings", items: windows.map((windowItem) => relatedItemForWindow(windowItem, windowItem.surfaceType || "Window")) },
+    { title: "Boundary Surfaces", items: surfaces.map((surface) => relatedItemForSurface(surface, surface.surfaceType || "Surface", geometry)) },
+    { title: "Openings", items: windows.map((windowItem) => relatedItemForWindow(windowItem, windowItem.surfaceType || "Window", geometry)) },
     { title: "Adjacent", items: adjacent },
   ];
 }
@@ -622,11 +622,11 @@ function geometryRelatedGroupsForSurface(geometry, surface) {
   const adjacentZone = adjacentSurface ? zoneByName(geometry, adjacentSurface.zoneName) : null;
   const adjacentItems = [
     adjacentZone && adjacentZone.id !== parentZone?.id ? relatedItemForZone(adjacentZone, "Adjacent zone") : null,
-    adjacentSurface ? relatedItemForSurface(adjacentSurface, "Adjacent surface") : referencedBoundaryItem(surface),
+    adjacentSurface ? relatedItemForSurface(adjacentSurface, "Adjacent surface", geometry) : referencedBoundaryItem(surface),
   ].filter(Boolean);
   return [
     { title: "Parent", items: parentZone ? [relatedItemForZone(parentZone, "Zone")] : [] },
-    { title: "Openings", items: windows.map((windowItem) => relatedItemForWindow(windowItem, windowItem.surfaceType || "Window")) },
+    { title: "Openings", items: windows.map((windowItem) => relatedItemForWindow(windowItem, windowItem.surfaceType || "Window", geometry)) },
     { title: "Adjacent", items: adjacentItems },
   ];
 }
@@ -640,8 +640,8 @@ function geometryRelatedGroupsForWindow(geometry, windowItem) {
     ? windowsForSurface(geometry, parentSurface).filter((item) => item.id !== windowItem.id)
     : [];
   return [
-    { title: "Parent", items: [parentZone && relatedItemForZone(parentZone, "Zone"), parentSurface && relatedItemForSurface(parentSurface, "Base surface")].filter(Boolean) },
-    { title: "Sibling Openings", items: siblingWindows.map((item) => relatedItemForWindow(item, item.surfaceType || "Window")) },
+    { title: "Parent", items: [parentZone && relatedItemForZone(parentZone, "Zone"), parentSurface && relatedItemForSurface(parentSurface, "Base surface", geometry)].filter(Boolean) },
+    { title: "Sibling Openings", items: siblingWindows.map((item) => relatedItemForWindow(item, item.surfaceType || "Window", geometry)) },
   ];
 }
 
@@ -678,7 +678,7 @@ function renderConstructionSection(geometry, entity) {
   return `
     <section class="geometry-construction-section">
       <h4>${t("geometry.construction", {}, "Construction")}</h4>
-      ${construction ? renderConstructionGraphic(construction) : `<div class="empty">${t("geometry.noConstruction", {}, "No construction layers parsed")}: ${escapeHTML(constructionName)}</div>`}
+      ${construction ? renderConstructionGraphic(construction, constructionSidesForEntity(geometry, entity)) : `<div class="empty">${t("geometry.noConstruction", {}, "No construction layers parsed")}: ${escapeHTML(constructionName)}</div>`}
     </section>`;
 }
 
@@ -688,24 +688,108 @@ function constructionForEntity(geometry, entity) {
   if (!key) {
     return null;
   }
-  return (geometry?.constructions || []).find((construction) => normalizeGeometryName(construction.name) === key) || null;
+  return constructionForName(geometry, constructionName);
 }
 
-function renderConstructionGraphic(construction) {
+function constructionForName(geometry, constructionName) {
+  const key = normalizeGeometryName(constructionName);
+  return key ? (geometry?.constructions || []).find((construction) => normalizeGeometryName(construction.name) === key) || null : null;
+}
+
+function constructionPerformance(construction) {
+  if (!construction) {
+    return { uValue: 0, arealHeatCapacity: 0 };
+  }
+  const layers = construction.layers || [];
+  const resistance = layers.reduce((sum, layer) => sum + layerThermalResistance(layer), 0);
+  const arealHeatCapacity = layers.reduce((sum, layer) => sum + layerArealHeatCapacity(layer), 0);
+  return {
+    uValue: Number(construction.uValue) || (resistance > 0 ? 1 / resistance : 0),
+    arealHeatCapacity: Number(construction.arealHeatCapacity) || arealHeatCapacity,
+  };
+}
+
+function layerThermalResistance(layer) {
+  if (Number(layer.thermalResistance) > 0) {
+    return Number(layer.thermalResistance);
+  }
+  if (Number(layer.uFactor) > 0) {
+    return 1 / Number(layer.uFactor);
+  }
+  if (layer.hasThickness && Number(layer.thickness) > 0 && Number(layer.conductivity) > 0) {
+    return Number(layer.thickness) / Number(layer.conductivity);
+  }
+  return 0;
+}
+
+function layerArealHeatCapacity(layer) {
+  if (Number(layer.arealHeatCapacity) > 0) {
+    return Number(layer.arealHeatCapacity);
+  }
+  if (layer.hasThickness && Number(layer.thickness) > 0 && Number(layer.density) > 0 && Number(layer.specificHeat) > 0) {
+    return Number(layer.thickness) * Number(layer.density) * Number(layer.specificHeat);
+  }
+  return 0;
+}
+
+function constructionSidesForEntity(geometry, entity) {
+  if (entity?.kind === "surface") {
+    const surface = entity.item;
+    return {
+      outside: surfaceOutsideLabel(geometry, surface),
+      inside: `${t("geometry.thisSurface", {}, "This surface")}${surface.zoneName ? ` / ${surface.zoneName}` : ""}`,
+    };
+  }
+  if (entity?.kind === "window") {
+    const windowItem = entity.item;
+    const baseSurface = windowItem.baseSurfaceId
+      ? surfaceByID(geometry, windowItem.baseSurfaceId)
+      : surfaceByName(geometry, windowItem.baseSurfaceName);
+    return {
+      outside: baseSurface ? surfaceOutsideLabel(geometry, baseSurface) : windowItem.baseSurfaceName || t("common.notAvailable", {}, "N/A"),
+      inside: `${t("geometry.thisOpening", {}, "This opening")}${windowItem.zoneName ? ` / ${windowItem.zoneName}` : ""}`,
+    };
+  }
+  return {
+    outside: t("common.notAvailable", {}, "N/A"),
+    inside: t("common.notAvailable", {}, "N/A"),
+  };
+}
+
+function surfaceOutsideLabel(geometry, surface) {
+  const boundary = surface?.outsideBoundary || "";
+  const boundaryName = boundaryObjectName(surface);
+  const adjacentSurface = boundaryName ? surfaceByName(geometry, boundaryName) : null;
+  const adjacentZone = adjacentSurface ? zoneByName(geometry, adjacentSurface.zoneName) : null;
+  if (adjacentSurface) {
+    return `${boundary || "Surface"}: ${adjacentSurface.name || boundaryName}${adjacentZone?.name ? ` / ${adjacentZone.name}` : ""}`;
+  }
+  if (boundaryName) {
+    return `${boundary || "Boundary"}: ${boundaryName}`;
+  }
+  return boundary || t("common.notAvailable", {}, "N/A");
+}
+
+function renderConstructionGraphic(construction, sides) {
   const layers = construction.layers || [];
   const totalThickness = layers.reduce((sum, layer) => sum + (layer.hasThickness ? Number(layer.thickness) || 0 : 0), 0);
+  const performance = constructionPerformance(construction);
   return `
     <div class="construction-card">
       <div class="construction-card-head">
         <strong>${escapeHTML(construction.name)}</strong>
         <span>${construction.hasThickness ? `${t("geometry.totalThickness", {}, "Total thickness")} ${formatThickness(construction.totalThickness || totalThickness)}` : t("geometry.thicknessUnknown", {}, "Thickness unknown")} / ${t("geometry.outsideToInside", {}, "Outside to inside")}</span>
       </div>
+      <div class="construction-performance">
+        <span><strong>${t("geometry.uValue", {}, "U-value")}</strong><em>${formatUValue(performance.uValue)}</em></span>
+        <span><strong>${t("geometry.heatCapacity", {}, "Heat capacity")}</strong><em>${formatArealHeatCapacity(performance.arealHeatCapacity)}</em></span>
+      </div>
       <div class="construction-stack-frame">
-        <span class="construction-side-label">${t("geometry.outside", {}, "Outside")}</span>
+        <span class="construction-side-label">${t("geometry.outside", {}, "Outside")} <em>${escapeHTML(sides.outside)}</em></span>
         <div class="construction-stack" role="img" aria-label="${escapeHTML(construction.name)} construction layers">
           ${layers.length ? layers.map((layer, index) => renderConstructionLayer(layer, index, totalThickness)).join("") : `<div class="empty">${t("geometry.noConstruction", {}, "No construction layers parsed")}</div>`}
         </div>
-        <span class="construction-side-label">${t("geometry.inside", {}, "Inside")}</span>
+        <span class="construction-side-label">${t("geometry.inside", {}, "Inside")} <em>${escapeHTML(sides.inside)}</em></span>
       </div>
     </div>`;
 }
@@ -718,6 +802,7 @@ function renderConstructionLayer(layer, index, totalThickness) {
   const details = [
     layer.objectType,
     layer.thermalResistance ? `R ${formatNumber(layer.thermalResistance)}` : "",
+    layer.uFactor ? `U ${formatNumber(layer.uFactor)}` : "",
     layer.conductivity ? `k ${formatNumber(layer.conductivity)}` : "",
   ].filter(Boolean);
   return `
@@ -766,11 +851,36 @@ function formatThickness(value) {
   return `${number.toLocaleString(undefined, { maximumFractionDigits: 3 })} m`;
 }
 
+function formatUValue(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return t("common.notAvailable", {}, "N/A");
+  }
+  return `${number.toLocaleString(undefined, { maximumFractionDigits: 3 })} W/m2-K`;
+}
+
+function formatArealHeatCapacity(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return t("common.notAvailable", {}, "N/A");
+  }
+  return `${(number / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} kJ/m2-K`;
+}
+
+function formatArea(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return t("common.notAvailable", {}, "N/A");
+  }
+  return `${number.toLocaleString(undefined, { maximumFractionDigits: 2 })} m2`;
+}
+
 function renderRelatedItem(item) {
   const content = `
     <span class="geometry-related-main">
       <strong>${escapeHTML(item.title)}</strong>
       <span>${escapeHTML(item.subtitle)}</span>
+      ${item.detail ? `<em>${escapeHTML(item.detail)}</em>` : ""}
     </span>
     <span class="geometry-related-role">${escapeHTML(item.role)}</span>`;
   if (item.kind && item.id) {
@@ -810,23 +920,39 @@ function relatedItemForZone(zone, role) {
   };
 }
 
-function relatedItemForSurface(surface, role) {
+function relatedItemForSurface(surface, role, geometry = state.report?.geometry) {
+  const construction = constructionForName(geometry, surface.construction);
+  const performance = constructionPerformance(construction);
+  const details = [
+    `${t("geometry.area", {}, "Area")} ${formatArea(surface.area)}`,
+    `${t("geometry.uValue", {}, "U-value")} ${formatUValue(performance.uValue)}`,
+    `${t("geometry.boundary", {}, "Boundary")} ${surfaceOutsideLabel(geometry, surface)}`,
+  ];
   return {
     kind: "surface",
     id: surface.id,
     role,
     title: surface.name || surface.type,
-    subtitle: `${surface.surfaceType || surface.type}${surface.zoneName ? ` / ${surface.zoneName}` : ""}`,
+    subtitle: `${surface.surfaceType || surface.type}${surface.construction ? ` / ${surface.construction}` : ""}`,
+    detail: details.join(" / "),
   };
 }
 
-function relatedItemForWindow(windowItem, role) {
+function relatedItemForWindow(windowItem, role, geometry = state.report?.geometry) {
+  const construction = constructionForName(geometry, windowItem.construction);
+  const performance = constructionPerformance(construction);
+  const details = [
+    `${t("geometry.area", {}, "Area")} ${formatArea(windowItem.area)}`,
+    `${t("geometry.uValue", {}, "U-value")} ${formatUValue(performance.uValue)}`,
+    windowItem.baseSurfaceName ? `${t("geometry.baseSurface", {}, "Base surface")} ${windowItem.baseSurfaceName}` : "",
+  ].filter(Boolean);
   return {
     kind: "window",
     id: windowItem.id,
     role,
     title: windowItem.name || windowItem.type,
-    subtitle: windowItem.baseSurfaceName ? `On ${windowItem.baseSurfaceName}` : windowItem.type,
+    subtitle: `${windowItem.surfaceType || windowItem.type}${windowItem.construction ? ` / ${windowItem.construction}` : ""}`,
+    detail: details.join(" / "),
   };
 }
 
@@ -856,25 +982,25 @@ function uniqueRelatedItems(items) {
 
 function zoneByName(geometry, zoneName) {
   const key = normalizeGeometryName(zoneName);
-  return key ? (geometry.zones || []).find((zone) => normalizeGeometryName(zone.name) === key) || null : null;
+  return key ? (geometry?.zones || []).find((zone) => normalizeGeometryName(zone.name) === key) || null : null;
 }
 
 function surfaceByID(geometry, id) {
-  return (geometry.surfaces || []).find((surface) => surface.id === id) || null;
+  return (geometry?.surfaces || []).find((surface) => surface.id === id) || null;
 }
 
 function surfaceByName(geometry, name) {
   const key = normalizeGeometryName(name);
-  return key ? (geometry.surfaces || []).find((surface) => normalizeGeometryName(surface.name) === key) || null : null;
+  return key ? (geometry?.surfaces || []).find((surface) => normalizeGeometryName(surface.name) === key) || null : null;
 }
 
 function windowByID(geometry, id) {
-  return (geometry.windows || []).find((windowItem) => windowItem.id === id) || null;
+  return (geometry?.windows || []).find((windowItem) => windowItem.id === id) || null;
 }
 
 function windowsForSurface(geometry, surface) {
   const surfaceName = normalizeGeometryName(surface?.name);
-  return (geometry.windows || []).filter(
+  return (geometry?.windows || []).filter(
     (windowItem) =>
       (surface?.id && windowItem.baseSurfaceId === surface.id) ||
       (surfaceName && normalizeGeometryName(windowItem.baseSurfaceName) === surfaceName),
