@@ -11,6 +11,7 @@ export const state = {
   activeHVACLoopId: "",
   activeHVACView: "loop",
   activeHVACNodeName: "",
+  activeHVACGraphKey: "",
   hvacApplyField: null,
   hvacApplyPreview: null,
   profileGraphViewMode: "",

@@ -1280,6 +1280,287 @@ textarea {
   overflow: auto;
 }
 
+.hvac-graphic-shell {
+  min-width: 820px;
+  padding: 12px;
+}
+
+.hvac-loop-svg,
+.hvac-relation-svg {
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  background: var(--surface-3);
+}
+
+.hvac-loop-path {
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  cursor: pointer;
+}
+
+.hvac-loop-path:hover,
+.hvac-loop-path.selected {
+  stroke-width: 6;
+}
+
+.hvac-arrow-marker {
+  fill: var(--teal);
+}
+
+.hvac-loop-label,
+.hvac-loop-name,
+.hvac-column-title {
+  fill: var(--ink);
+  font-weight: 700;
+}
+
+.hvac-loop-label {
+  fill: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.hvac-loop-name,
+.hvac-column-title {
+  font-size: 15px;
+}
+
+.hvac-loop-endpoint {
+  cursor: pointer;
+}
+
+.hvac-loop-endpoint circle {
+  fill: var(--surface);
+  stroke: var(--teal);
+  stroke-width: 3;
+}
+
+.hvac-loop-endpoint text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-graph-node {
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.hvac-graph-node rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.hvac-graph-node.supply rect,
+.hvac-graph-node.air rect {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+}
+
+.hvac-graph-node.demand rect,
+.hvac-graph-node.terminal rect {
+  fill: var(--warn-bg);
+  stroke: var(--amber);
+}
+
+.hvac-graph-node.plant rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-graph-node.zone rect {
+  fill: var(--selected-soft);
+  stroke: var(--focus);
+}
+
+.hvac-graph-node.missing rect {
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+}
+
+.hvac-graph-node .label {
+  fill: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.hvac-graph-node .meta {
+  fill: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.hvac-graph-node:hover rect,
+.hvac-graph-node.selected rect,
+.hvac-loop-endpoint:hover circle,
+.hvac-loop-endpoint.selected circle,
+.hvac-branch-badge:hover rect,
+.hvac-branch-badge.selected rect {
+  stroke: var(--focus);
+  stroke-width: 3;
+}
+
+.hvac-graph-node.related rect,
+.hvac-loop-endpoint.related circle,
+.hvac-branch-badge.related rect {
+  stroke: var(--teal-dark);
+  stroke-width: 2.5;
+}
+
+.hvac-graph-node.dimmed,
+.hvac-loop-endpoint.dimmed,
+.hvac-branch-badge.dimmed {
+  opacity: 0.34;
+}
+
+.hvac-branch-badge {
+  cursor: pointer;
+}
+
+.hvac-branch-badge rect {
+  fill: var(--surface);
+  stroke: var(--line);
+}
+
+.hvac-branch-badge text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-graph-link {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.5;
+  cursor: pointer;
+}
+
+.hvac-graph-link.plant-air,
+.hvac-graph-link.plant-terminal {
+  stroke: var(--green);
+}
+
+.hvac-graph-link.air-terminal {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.terminal-zone {
+  stroke: var(--focus);
+}
+
+.hvac-graph-link:hover,
+.hvac-graph-link.selected {
+  stroke-width: 5;
+}
+
+.hvac-graph-link.related {
+  stroke-width: 4;
+}
+
+.hvac-graph-link.dimmed {
+  opacity: 0.22;
+}
+
+.hvac-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hvac-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.hvac-legend-supply,
+.hvac-legend-air {
+  background: var(--teal-soft);
+  border-color: var(--teal);
+}
+
+.hvac-legend-demand,
+.hvac-legend-terminal {
+  background: var(--warn-bg);
+  border-color: var(--amber);
+}
+
+.hvac-legend-source {
+  background: var(--ok-bg);
+  border-color: var(--green);
+}
+
+.hvac-legend-zone {
+  background: var(--selected-soft);
+  border-color: var(--focus);
+}
+
+.hvac-graph-detail {
+  margin: 0 12px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.hvac-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hvac-detail-grid div,
+.hvac-detail-list div {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--surface-3);
+}
+
+.hvac-detail-grid span,
+.hvac-detail-list span,
+.hvac-detail-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-detail-grid strong,
+.hvac-detail-list strong {
+  display: block;
+  margin-top: 3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.hvac-detail-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
 .hvac-loop-title,
 .hvac-section-head,
 .hvac-branch-head {
