@@ -42,7 +42,6 @@ $modules = @(
     "sample.js",
     "settings-client.js",
     "shortcuts.js",
-    "scroll-ux.js",
     "state.js",
     "tools.js",
     "view-history.js"
