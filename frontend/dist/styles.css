@@ -1413,6 +1413,7 @@ textarea {
 }
 
 .hvac-graph-node {
+  color: var(--ink-soft);
   cursor: pointer;
   transition:
     opacity 120ms ease,
@@ -1431,10 +1432,20 @@ textarea {
   stroke: var(--teal);
 }
 
+.hvac-graph-node.supply,
+.hvac-graph-node.air {
+  color: var(--teal-dark);
+}
+
 .hvac-graph-node.demand rect,
 .hvac-graph-node.terminal rect {
   fill: var(--warn-bg);
   stroke: var(--amber);
+}
+
+.hvac-graph-node.demand,
+.hvac-graph-node.terminal {
+  color: var(--amber);
 }
 
 .hvac-graph-node.plant rect {
@@ -1442,9 +1453,17 @@ textarea {
   stroke: var(--green);
 }
 
+.hvac-graph-node.plant {
+  color: var(--green);
+}
+
 .hvac-graph-node.zone rect {
   fill: var(--selected-soft);
   stroke: var(--focus);
+}
+
+.hvac-graph-node.zone {
+  color: var(--focus);
 }
 
 .hvac-graph-node.missing rect {
@@ -1465,6 +1484,29 @@ textarea {
   pointer-events: none;
 }
 
+.hvac-node-icon {
+  pointer-events: none;
+}
+
+.hvac-node-icon .icon-bg {
+  fill: color-mix(in srgb, currentColor, var(--surface) 84%);
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.hvac-node-icon .icon-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.hvac-node-icon .icon-fill,
+.hvac-node-icon .icon-dot {
+  fill: currentColor;
+}
+
 .hvac-graph-node:hover rect,
 .hvac-graph-node.selected rect,
 .hvac-loop-endpoint:hover circle,
@@ -1473,19 +1515,21 @@ textarea {
 .hvac-branch-badge.selected rect {
   stroke: var(--focus);
   stroke-width: 3;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--focus), transparent 55%));
 }
 
 .hvac-graph-node.related rect,
 .hvac-loop-endpoint.related circle,
 .hvac-branch-badge.related rect {
   stroke: var(--teal-dark);
-  stroke-width: 2.5;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--teal), transparent 60%));
 }
 
 .hvac-graph-node.dimmed,
 .hvac-loop-endpoint.dimmed,
 .hvac-branch-badge.dimmed {
-  opacity: 0.34;
+  opacity: 0.2;
 }
 
 .hvac-branch-badge {
@@ -1507,6 +1551,9 @@ textarea {
   stroke: var(--line);
   stroke-width: 2.5;
   cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    stroke-width 120ms ease;
 }
 
 .hvac-graph-link.plant-air,
@@ -1525,14 +1572,17 @@ textarea {
 .hvac-graph-link:hover,
 .hvac-graph-link.selected {
   stroke-width: 5;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor, transparent 62%));
 }
 
 .hvac-graph-link.related {
-  stroke-width: 4;
+  stroke-width: 4.8;
+  opacity: 0.95;
 }
 
 .hvac-graph-link.dimmed {
-  opacity: 0.22;
+  opacity: 0.1;
 }
 
 .hvac-legend {

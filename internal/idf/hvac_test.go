@@ -156,6 +156,52 @@ func TestAnalyzeHVACReportsMissingBranch(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACReadsZoneEquipmentListWithLoadDistributionScheme(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "NodeList", Fields: []Field{
+			{Value: "Office Inlets"},
+			{Value: "Office Supply Inlet"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Inlets"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat"},
+			{Value: "Office Terminal"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 4, Type: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Fields: []Field{
+			{Value: "Office Terminal", Comment: "Name"},
+			{Value: "Air Demand Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Supply Inlet", Comment: "Air Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	if len(report.ZoneRelations) != 1 {
+		t.Fatalf("zone relation count = %d, want 1", len(report.ZoneRelations))
+	}
+	relation := report.ZoneRelations[0]
+	if got := len(relation.ZoneEquipment); got != 1 {
+		t.Fatalf("zone equipment count = %d, want 1: %#v", got, relation.ZoneEquipment)
+	}
+	if got := len(relation.TerminalUnits); got != 1 {
+		t.Fatalf("terminal count = %d, want 1: %#v", got, relation.TerminalUnits)
+	}
+	if relation.ZoneEquipment[0].ObjectName != "Office Terminal" {
+		t.Fatalf("zone equipment = %#v, want Office Terminal", relation.ZoneEquipment[0])
+	}
+}
+
 func findHVACTestingLoop(report HVACReport, name string) *HVACLoop {
 	for index := range report.Loops {
 		if report.Loops[index].Name == name {

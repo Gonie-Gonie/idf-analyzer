@@ -321,9 +321,10 @@ function renderLoopEndpoint(x, y, nodeName, label) {
   const selected = graphSelectionClass(key, [nodeName ? `node:${nodeName}` : ""]);
   return `
     <g class="hvac-loop-endpoint ${selected}" data-hvac-graph-key="${escapeHTML(key)}">
+      <title>${escapeHTML([label, nodeName].filter(Boolean).join(" - "))}</title>
       <circle cx="${x}" cy="${y}" r="9"></circle>
       <text x="${x}" y="${y - 17}" text-anchor="middle">${escapeHTML(label)}</text>
-      <text x="${x}" y="${y + 29}" text-anchor="middle">${escapeHTML(truncateText(nodeName || "N/A", 22))}</text>
+      <text x="${x}" y="${y + 29}" text-anchor="middle">${escapeHTML(truncateText(nodeName || "N/A", 18))}</text>
     </g>`;
 }
 
@@ -337,10 +338,12 @@ function renderLoopDiagramItem(item, position, side) {
       key,
       x: position.x,
       y: position.y,
-      width: 138,
-      height: 48,
+      width: 118,
+      height: 54,
       label: item.zone,
       meta: "Zone",
+      iconKind: "zone",
+      shortLabel: "Zone",
       className: `zone ${graphSelectionClass(key)}`,
     });
   }
@@ -354,20 +357,25 @@ function renderLoopDiagramItem(item, position, side) {
       height: 46,
       label: item.label,
       meta: "No parsed components",
+      iconKind: "component",
+      shortLabel: "Empty",
       className: `placeholder ${graphSelectionClass(key)}`,
     });
   }
   const component = item.component;
   const key = componentGraphKey(component);
   const className = `${side} ${component.exists ? "" : "missing"} ${graphSelectionClass(key, componentGraphRelatedKeys(component))}`;
+  const visual = componentVisual(component);
   return renderGraphNode({
     key,
     x: position.x,
     y: position.y,
-    width: 152,
+    width: 124,
     height: 58,
     label: component.objectName || component.objectType || "Component",
     meta: component.objectType || "Component",
+    iconKind: visual.iconKind,
+    shortLabel: visual.shortLabel,
     className,
   });
 }
@@ -384,6 +392,7 @@ function renderLoopBranchBadges(side = {}, x, y, label) {
       const itemY = y + index * 24;
       return `
         <g class="hvac-branch-badge ${graphSelectionClass(key)}" data-hvac-graph-key="${escapeHTML(key)}">
+          <title>${escapeHTML(`${label}: ${branch.name || "Branch"}`)}</title>
           <rect x="${x}" y="${itemY}" width="240" height="18" rx="5"></rect>
           <text x="${x + 8}" y="${itemY + 13}">${escapeHTML(label)}: ${escapeHTML(truncateText(branch.name || "Branch", 26))}</text>
         </g>`;
@@ -391,14 +400,20 @@ function renderLoopBranchBadges(side = {}, x, y, label) {
     .join("");
 }
 
-function renderGraphNode({ key, x, y, width, height, label, meta, className = "" }) {
-  const lines = labelLines(label, 20);
-  const textY = y - height / 2 + 22;
+function renderGraphNode({ key, x, y, width, height, label, meta, className = "", iconKind = "", shortLabel = "", tooltip = "" }) {
+  const hasIcon = Boolean(iconKind);
+  const labelMax = hasIcon ? Math.max(8, Math.floor((width - 58) / 7)) : Math.max(10, Math.floor((width - 18) / 7));
+  const metaMax = hasIcon ? Math.max(8, Math.floor((width - 58) / 6)) : Math.max(10, Math.floor((width - 18) / 6));
+  const textX = hasIcon ? x - width / 2 + 48 : x;
+  const textAnchor = hasIcon ? "start" : "middle";
+  const title = tooltip || [label, meta].filter(Boolean).join(" - ");
   return `
-    <g class="hvac-graph-node ${className}" data-hvac-graph-key="${escapeHTML(key)}">
+    <g class="hvac-graph-node ${className}" data-hvac-graph-key="${escapeHTML(key)}" aria-label="${escapeHTML(title)}">
+      <title>${escapeHTML(title)}</title>
       <rect x="${x - width / 2}" y="${y - height / 2}" width="${width}" height="${height}" rx="8"></rect>
-      ${lines.map((line, index) => `<text class="label" x="${x}" y="${textY + index * 14}" text-anchor="middle">${escapeHTML(line)}</text>`).join("")}
-      <text class="meta" x="${x}" y="${y + height / 2 - 9}" text-anchor="middle">${escapeHTML(truncateText(meta || "", 24))}</text>
+      ${hasIcon ? renderHVACNodeIcon(iconKind, x - width / 2 + 25, y) : ""}
+      <text class="label" x="${textX}" y="${y - 4}" text-anchor="${textAnchor}">${escapeHTML(truncateText(shortLabel || label || "", labelMax))}</text>
+      <text class="meta" x="${textX}" y="${y + 14}" text-anchor="${textAnchor}">${escapeHTML(truncateText(meta || "", metaMax))}</text>
     </g>`;
 }
 
@@ -582,14 +597,18 @@ function renderHVACRelationGraph(relations) {
 function renderRelationLink(link) {
   const related = selectionRelatedToLink(link);
   const selected = state.activeHVACGraphKey === link.key ? "selected" : related ? "related" : state.activeHVACGraphKey ? "dimmed" : "";
+  const title = `${link.from.label || ""} -> ${link.to.label || ""} (${t("hvac.relatedZoneCount", { count: (link.relations || []).length })})`;
   return `
     <path class="hvac-graph-link ${escapeHTML(link.kind)} ${selected}"
       data-hvac-graph-key="${escapeHTML(link.key)}"
       d="M${link.from.x},${link.from.y} C${link.from.x + 80},${link.from.y} ${link.to.x - 80},${link.to.y} ${link.to.x},${link.to.y}"
-      marker-end="url(#hvacRelationArrow)"></path>`;
+      marker-end="url(#hvacRelationArrow)">
+      <title>${escapeHTML(title)}</title>
+    </path>`;
 }
 
 function renderRelationNode(node) {
+  const visual = relationNodeVisual(node);
   return renderGraphNode({
     key: node.key,
     x: node.x,
@@ -598,6 +617,8 @@ function renderRelationNode(node) {
     height: node.height,
     label: node.label,
     meta: node.meta,
+    iconKind: visual.iconKind,
+    shortLabel: visual.shortLabel,
     className: `${node.kind} ${graphSelectionClass(node.key, node.relatedKeys || [])}`,
   });
 }
@@ -989,6 +1010,7 @@ function renderSelectedHVACDetail(selected) {
           <span>Zone</span>
         </div>
         <div class="hvac-detail-grid">
+          <div><span>${t("common.object")}</span><strong>${renderObjectLink(relation?.zoneObjectIndex, "Zone") || "N/A"}</strong></div>
           <div><span>Air loops</span><strong>${escapeHTML(loopNames.join(", ") || "N/A")}</strong></div>
           <div><span>Plant loops</span><strong>${escapeHTML((relation?.plantLoopNames || []).join(", ") || "N/A")}</strong></div>
           <div><span>${t("hvac.terminals")}</span><strong>${escapeHTML((relation?.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
@@ -1004,7 +1026,7 @@ function renderSelectedHVACDetail(selected) {
           <span>${selected.kind === "plant" ? "PlantLoop" : "AirLoopHVAC"}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML((relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
+          ${(selected.relations || []).map((relation) => `<div><strong>${renderObjectLink(relation.zoneObjectIndex, "Zone")} ${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML((relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
         </div>
       </section>`;
   }
@@ -1016,7 +1038,7 @@ function renderSelectedHVACDetail(selected) {
           <span>${escapeHTML(t("hvac.relatedZoneCount", { count: (selected.relations || []).length }))}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML([...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"))}</span></div>`).join("")}
+          ${(selected.relations || []).map((relation) => `<div><strong>${renderObjectLink(relation.zoneObjectIndex, "Zone")} ${escapeHTML(relation.zoneName)}</strong><span>${escapeHTML([...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"))}</span></div>`).join("")}
         </div>
       </section>`;
   }
@@ -1033,38 +1055,184 @@ function renderSelectedHVACDetail(selected) {
     </section>`;
 }
 
-function labelLines(value, maxLength) {
-  const text = String(value || "");
-  if (text.length <= maxLength) {
-    return [text];
-  }
-  const words = text.split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    const candidate = line ? `${line} ${word}` : word;
-    if (candidate.length > maxLength && line) {
-      lines.push(line);
-      line = word;
-    } else {
-      line = candidate;
-    }
-    if (lines.length === 2) {
-      break;
-    }
-  }
-  if (line && lines.length < 2) {
-    lines.push(line);
-  }
-  return lines.map((lineValue) => (lineValue.length > maxLength ? truncateText(lineValue, maxLength) : lineValue));
-}
-
 function truncateText(value, maxLength) {
   const text = String(value || "");
   if (text.length <= maxLength) {
     return text;
   }
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function componentVisual(component = {}) {
+  const iconKind = hvacVisualKindForType(component.objectType || "");
+  return {
+    iconKind,
+    shortLabel: hvacVisualLabel(iconKind, component.objectType || component.objectName || ""),
+  };
+}
+
+function relationNodeVisual(node = {}) {
+  if (node.component) {
+    return componentVisual(node.component);
+  }
+  switch (node.kind) {
+    case "plant":
+      return { iconKind: "plant", shortLabel: "Plant" };
+    case "air":
+      return { iconKind: "air", shortLabel: "Air Loop" };
+    case "terminal":
+      return { iconKind: "terminal", shortLabel: "Terminal" };
+    case "zone":
+      return { iconKind: "zone", shortLabel: "Zone" };
+    default:
+      return { iconKind: "component", shortLabel: truncateText(node.label || "Item", 10) };
+  }
+}
+
+function hvacVisualKindForType(objectType) {
+  const lower = String(objectType || "").toLowerCase();
+  if (lower.includes("fan")) {
+    return "fan";
+  }
+  if (lower.includes("coil")) {
+    return "coil";
+  }
+  if (lower.includes("pump")) {
+    return "pump";
+  }
+  if (lower.includes("chiller")) {
+    return "chiller";
+  }
+  if (lower.includes("boiler")) {
+    return "boiler";
+  }
+  if (lower.includes("airterminal") || lower.includes("airdistributionunit")) {
+    return "terminal";
+  }
+  if (lower.startsWith("zonehvac:")) {
+    return "terminal";
+  }
+  return "component";
+}
+
+function hvacVisualLabel(iconKind, objectType) {
+  const lower = String(objectType || "").toLowerCase();
+  if (iconKind === "coil" && lower.includes("cooling")) {
+    return "Cool Coil";
+  }
+  if (iconKind === "coil" && lower.includes("heating")) {
+    return "Heat Coil";
+  }
+  switch (iconKind) {
+    case "fan":
+      return "Fan";
+    case "coil":
+      return "Coil";
+    case "pump":
+      return "Pump";
+    case "chiller":
+      return "Chiller";
+    case "boiler":
+      return "Boiler";
+    case "terminal":
+      return "Terminal";
+    default:
+      return "Component";
+  }
+}
+
+function renderHVACNodeIcon(kind, cx, cy) {
+  const safeKind = escapeHTML(kind || "component");
+  switch (kind) {
+    case "fan":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <circle class="icon-bg" cx="${cx}" cy="${cy}" r="15"></circle>
+          <path class="icon-fill" d="M${cx},${cy - 2} C${cx + 10},${cy - 15} ${cx + 18},${cy - 2} ${cx + 4},${cy + 1} Z"></path>
+          <path class="icon-fill" d="M${cx - 2},${cy + 1} C${cx - 17},${cy + 5} ${cx - 10},${cy + 18} ${cx + 1},${cy + 5} Z"></path>
+          <path class="icon-fill" d="M${cx + 1},${cy + 2} C${cx + 6},${cy + 17} ${cx + 18},${cy + 8} ${cx + 5},${cy - 2} Z"></path>
+          <circle class="icon-dot" cx="${cx}" cy="${cy}" r="3"></circle>
+        </g>`;
+    case "coil":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <rect class="icon-bg" x="${cx - 15}" y="${cy - 14}" width="30" height="28" rx="6"></rect>
+          <path class="icon-line" d="M${cx - 10},${cy + 7} L${cx - 5},${cy - 7} L${cx},${cy + 7} L${cx + 5},${cy - 7} L${cx + 10},${cy + 7}"></path>
+        </g>`;
+    case "pump":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <circle class="icon-bg" cx="${cx}" cy="${cy}" r="15"></circle>
+          <path class="icon-line" d="M${cx - 10},${cy} H${cx + 8}"></path>
+          <path class="icon-line" d="M${cx + 3},${cy - 5} L${cx + 9},${cy} L${cx + 3},${cy + 5}"></path>
+        </g>`;
+    case "chiller":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <rect class="icon-bg" x="${cx - 15}" y="${cy - 14}" width="30" height="28" rx="5"></rect>
+          <path class="icon-line" d="M${cx},${cy - 9} V${cy + 9} M${cx - 8},${cy - 5} L${cx + 8},${cy + 5} M${cx + 8},${cy - 5} L${cx - 8},${cy + 5}"></path>
+        </g>`;
+    case "boiler":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <rect class="icon-bg" x="${cx - 15}" y="${cy - 14}" width="30" height="28" rx="5"></rect>
+          <path class="icon-fill" d="M${cx},${cy - 10} C${cx + 9},${cy - 2} ${cx + 6},${cy + 10} ${cx},${cy + 10} C${cx - 7},${cy + 10} ${cx - 9},${cy + 1} ${cx - 3},${cy - 4} C${cx - 1},${cy - 6} ${cx - 1},${cy - 8} ${cx},${cy - 10} Z"></path>
+        </g>`;
+    case "terminal":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <rect class="icon-bg" x="${cx - 15}" y="${cy - 14}" width="30" height="28" rx="6"></rect>
+          <path class="icon-line" d="M${cx - 9},${cy - 5} H${cx + 9} M${cx},${cy - 5} V${cy + 8} M${cx - 6},${cy + 8} H${cx + 6}"></path>
+        </g>`;
+    case "plant":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <path class="icon-bg" d="M${cx},${cy - 16} L${cx + 15},${cy - 7} V${cy + 7} L${cx},${cy + 16} L${cx - 15},${cy + 7} V${cy - 7} Z"></path>
+          <path class="icon-line" d="M${cx - 8},${cy + 5} C${cx - 3},${cy - 6} ${cx + 3},${cy + 6} ${cx + 8},${cy - 5}"></path>
+        </g>`;
+    case "air":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <circle class="icon-bg" cx="${cx}" cy="${cy}" r="15"></circle>
+          <path class="icon-line" d="M${cx - 10},${cy - 5} C${cx - 3},${cy - 10} ${cx + 7},${cy - 9} ${cx + 10},${cy - 4} M${cx - 11},${cy + 1} H${cx + 8} M${cx - 8},${cy + 7} C${cx - 1},${cy + 11} ${cx + 7},${cy + 10} ${cx + 10},${cy + 5}"></path>
+        </g>`;
+    case "zone":
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <rect class="icon-bg" x="${cx - 15}" y="${cy - 14}" width="30" height="28" rx="4"></rect>
+          <path class="icon-line" d="M${cx - 8},${cy + 8} V${cy - 7} H${cx + 8} V${cy + 8} M${cx - 8},${cy - 1} H${cx + 8} M${cx},${cy - 7} V${cy + 8}"></path>
+        </g>`;
+    default:
+      return `
+        <g class="hvac-node-icon ${safeKind}" aria-hidden="true">
+          <circle class="icon-bg" cx="${cx}" cy="${cy}" r="15"></circle>
+          <path class="icon-line" d="M${cx - 7},${cy} H${cx + 7} M${cx},${cy - 7} V${cy + 7}"></path>
+        </g>`;
+  }
+}
+
+function uniqueRelationComponents(components) {
+  const byKey = new Map();
+  for (const component of components) {
+    const key = relationComponentKey(component);
+    if (!byKey.has(key)) {
+      byKey.set(key, component);
+    }
+  }
+  return [...byKey.values()];
+}
+
+function relationGraphKeys(relation) {
+  const terminalKeys = uniqueRelationComponents([...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])]).map(relationComponentKey);
+  if (!terminalKeys.length && relation.zoneName) {
+    terminalKeys.push(`terminal:direct:${relation.zoneName}`);
+  }
+  return [
+    relation.zoneName ? `zone:${relation.zoneName}` : "",
+    ...(relation.plantLoopNames || []).map((name) => `plant:${name}`),
+    ...(relation.airLoopNames || []).map((name) => `air:${name}`),
+    ...terminalKeys,
+  ].filter(Boolean);
 }
 
 function buildRelationGraph(relations) {
@@ -1085,7 +1253,7 @@ function buildRelationGraph(relations) {
       meta: "Zone",
       objectIndex: relation.zoneObjectIndex,
     });
-    const terminalComponents = [...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])];
+    const terminalComponents = uniqueRelationComponents([...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])]);
     const terminalNodes = terminalComponents.length
       ? terminalComponents.map((component) =>
           ensureRelationNode(nodesByKey, {
@@ -1144,9 +1312,12 @@ function buildRelationGraph(relations) {
     columnNodes.forEach((node, index) => {
       node.x = column.x;
       node.y = 86 + index * 74 + Math.max(0, (height - (100 + columnNodes.length * 74)) / 2);
-      node.width = column.id === "terminal" ? 182 : 168;
-      node.height = 54;
+      node.width = column.id === "terminal" ? 166 : 148;
+      node.height = 56;
     });
+  }
+  for (const node of nodes) {
+    node.relatedKeys = [...new Set((node.relatedKeys || []).filter((key) => key && key !== node.key))];
   }
   const height = Math.max(430, ...columns.map((column) => 130 + (byColumn.get(column.id)?.length || 0) * 74));
   const links = [...linksByKey.values()].map((link) => ({
@@ -1170,8 +1341,9 @@ function addRelationLink(linksByKey, from, to, kind, relation) {
     linksByKey.set(key, { key, from, to, kind, relations: [] });
   }
   linksByKey.get(key).relations.push(relation);
-  from.relatedKeys.push(to.key, key);
-  to.relatedKeys.push(from.key, key);
+  const relationKeys = relationGraphKeys(relation);
+  from.relatedKeys.push(to.key, key, ...relationKeys);
+  to.relatedKeys.push(from.key, key, ...relationKeys);
 }
 
 function relationComponentKey(component) {
@@ -1182,12 +1354,14 @@ function relationComponentKey(component) {
 }
 
 function selectionRelatedToLink(link) {
+  const selectedKey = state.activeHVACGraphKey;
   return (
-    state.activeHVACGraphKey &&
-    (state.activeHVACGraphKey === link.from.key ||
-      state.activeHVACGraphKey === link.to.key ||
-      link.from.relatedKeys.includes(state.activeHVACGraphKey) ||
-      link.to.relatedKeys.includes(state.activeHVACGraphKey))
+    selectedKey &&
+    (selectedKey === link.from.key ||
+      selectedKey === link.to.key ||
+      link.from.relatedKeys.includes(selectedKey) ||
+      link.to.relatedKeys.includes(selectedKey) ||
+      (link.relations || []).some((relation) => relationGraphKeys(relation).includes(selectedKey)))
   );
 }
 
@@ -1198,11 +1372,7 @@ function relationsForGraphKey(relations, key) {
   const raw = key.slice("relation-link:".length);
   const [fromKey, toKey] = raw.split("->");
   return relations.filter((relation) => {
-    const zoneKeys = [`zone:${relation.zoneName}`];
-    const plantKeys = (relation.plantLoopNames || []).map((name) => `plant:${name}`);
-    const airKeys = (relation.airLoopNames || []).map((name) => `air:${name}`);
-    const terminalKeys = [...(relation.terminalUnits || []), ...(relation.zoneEquipment || [])].map(relationComponentKey);
-    const all = [...zoneKeys, ...plantKeys, ...airKeys, ...terminalKeys];
+    const all = relationGraphKeys(relation);
     return all.includes(fromKey) && all.includes(toKey);
   });
 }

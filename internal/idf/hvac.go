@@ -612,14 +612,14 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 
 func equipmentFromZoneEquipmentList(ctx *hvacContext, equipmentList Object, relation *HVACZoneChain) []HVACComponent {
 	var equipment []HVACComponent
-	for index := 1; index+1 < len(equipmentList.Fields); index += 4 {
-		objectType := strings.TrimSpace(equipmentList.Fields[index].Value)
-		objectNameValue := strings.TrimSpace(equipmentList.Fields[index+1].Value)
+	for _, reference := range zoneEquipmentReferences(ctx, equipmentList) {
+		objectType := strings.TrimSpace(equipmentList.Fields[reference.TypeIndex].Value)
+		objectNameValue := strings.TrimSpace(equipmentList.Fields[reference.NameIndex].Value)
 		if objectType == "" && objectNameValue == "" {
 			continue
 		}
 		component := newHVACComponent(ctx, objectType, objectNameValue)
-		component.EditableFields = append(component.EditableFields, editableZoneEquipmentSequenceFields(ctx.doc, equipmentList, index)...)
+		component.EditableFields = append(component.EditableFields, editableZoneEquipmentSequenceFields(ctx.doc, equipmentList, reference.TypeIndex)...)
 		if !component.Exists {
 			relation.Warnings = append(relation.Warnings, hvacWarningForObject(equipmentList, "missing_zone_equipment",
 				fmt.Sprintf("ZoneHVAC:EquipmentList %q references missing %s %q.", objectName(equipmentList), objectType, objectNameValue)))
@@ -627,6 +627,112 @@ func equipmentFromZoneEquipmentList(ctx *hvacContext, equipmentList Object, rela
 		equipment = append(equipment, component)
 	}
 	return equipment
+}
+
+type zoneEquipmentReference struct {
+	TypeIndex int
+	NameIndex int
+}
+
+func zoneEquipmentReferences(ctx *hvacContext, equipmentList Object) []zoneEquipmentReference {
+	if references := zoneEquipmentReferencesFromComments(equipmentList); len(references) > 0 {
+		return references
+	}
+	start := bestZoneEquipmentListStartIndex(ctx, equipmentList)
+	var references []zoneEquipmentReference
+	for index := start; index+1 < len(equipmentList.Fields); index += 4 {
+		references = append(references, zoneEquipmentReference{
+			TypeIndex: index,
+			NameIndex: index + 1,
+		})
+	}
+	return references
+}
+
+func zoneEquipmentReferencesFromComments(equipmentList Object) []zoneEquipmentReference {
+	typeIndexes := map[int]int{}
+	nameIndexes := map[int]int{}
+	var order []int
+	for index, field := range equipmentList.Fields {
+		comment := normalizeFieldName(field.Comment)
+		if !strings.Contains(comment, "equipment") {
+			continue
+		}
+		group := firstPositiveInteger(comment)
+		if group == 0 {
+			group = index
+		}
+		switch {
+		case strings.Contains(comment, "object type"):
+			if _, exists := typeIndexes[group]; !exists {
+				order = append(order, group)
+			}
+			typeIndexes[group] = index
+		case strings.Contains(comment, "name") && !strings.Contains(comment, "list"):
+			nameIndexes[group] = index
+		}
+	}
+	sort.Ints(order)
+	var references []zoneEquipmentReference
+	for _, group := range order {
+		typeIndex, hasType := typeIndexes[group]
+		nameIndex, hasName := nameIndexes[group]
+		if hasType && hasName {
+			references = append(references, zoneEquipmentReference{
+				TypeIndex: typeIndex,
+				NameIndex: nameIndex,
+			})
+		}
+	}
+	return references
+}
+
+func bestZoneEquipmentListStartIndex(ctx *hvacContext, equipmentList Object) int {
+	start := 1
+	bestScore := -1
+	for _, candidate := range []int{1, 2} {
+		score := scoreZoneEquipmentListStart(ctx, equipmentList, candidate)
+		if score > bestScore {
+			start = candidate
+			bestScore = score
+		}
+	}
+	return start
+}
+
+func scoreZoneEquipmentListStart(ctx *hvacContext, equipmentList Object, start int) int {
+	score := 0
+	for index := start; index+1 < len(equipmentList.Fields); index += 4 {
+		objectType := strings.TrimSpace(equipmentList.Fields[index].Value)
+		objectNameValue := strings.TrimSpace(equipmentList.Fields[index+1].Value)
+		if objectType == "" && objectNameValue == "" {
+			continue
+		}
+		score++
+		if isHVACComponentType(objectType) || isAirTerminalType(objectType) {
+			score += 2
+		}
+		if _, ok := ctx.objectsByTypeName[hvacObjectKey(objectType, objectNameValue)]; ok {
+			score += 3
+		}
+	}
+	return score
+}
+
+func firstPositiveInteger(value string) int {
+	number := 0
+	reading := false
+	for _, char := range value {
+		if char >= '0' && char <= '9' {
+			reading = true
+			number = number*10 + int(char-'0')
+			continue
+		}
+		if reading {
+			break
+		}
+	}
+	return number
 }
 
 func terminalsByZoneInlet(ctx *hvacContext, zoneInletNodes []string) []HVACComponent {
@@ -1334,7 +1440,10 @@ func componentSliceContains(components []HVACComponent, wanted HVACComponent) bo
 
 func isAirTerminalType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
-	return strings.HasPrefix(lower, "airterminal:") || strings.Contains(lower, "airterminal")
+	return strings.HasPrefix(lower, "airterminal:") ||
+		strings.Contains(lower, "airterminal") ||
+		lower == "zonehvac:airdistributionunit" ||
+		strings.Contains(lower, "airdistributionunit")
 }
 
 func isWaterCoilType(objectType string) bool {
