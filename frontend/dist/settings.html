@@ -428,6 +428,57 @@
           return;
         }
         let draggedTab = "";
+        let insertionIndex = -1;
+        const getItems = () => [...list.querySelectorAll("[data-analysis-tab-id]")];
+        const clearInsertionMarkers = () => {
+          list.classList.remove("drag-active");
+          getItems().forEach((item) => item.classList.remove("insertion-before", "insertion-after"));
+          insertionIndex = -1;
+        };
+        const markInsertionIndex = (index) => {
+          const items = getItems();
+          if (!items.length) {
+            return;
+          }
+          insertionIndex = Math.max(0, Math.min(items.length, index));
+          list.classList.add("drag-active");
+          items.forEach((item) => item.classList.remove("insertion-before", "insertion-after"));
+          if (insertionIndex >= items.length) {
+            items[items.length - 1].classList.add("insertion-after");
+            return;
+          }
+          items[insertionIndex].classList.add("insertion-before");
+        };
+        const insertionIndexForPointer = (clientY) => {
+          const items = getItems();
+          const index = items.findIndex((item) => {
+            const rect = item.getBoundingClientRect();
+            return clientY < rect.top + rect.height / 2;
+          });
+          return index === -1 ? items.length : index;
+        };
+        list.addEventListener("dragover", (event) => {
+          if (!draggedTab && !event.dataTransfer?.types?.includes("text/plain")) {
+            return;
+          }
+          event.preventDefault();
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = "move";
+          }
+          markInsertionIndex(insertionIndexForPointer(event.clientY));
+        });
+        list.addEventListener("dragleave", (event) => {
+          if (!list.contains(event.relatedTarget)) {
+            clearInsertionMarkers();
+          }
+        });
+        list.addEventListener("drop", (event) => {
+          event.preventDefault();
+          const sourceTab = event.dataTransfer?.getData("text/plain") || draggedTab;
+          const targetIndex = insertionIndex >= 0 ? insertionIndex : insertionIndexForPointer(event.clientY);
+          clearInsertionMarkers();
+          moveAnalysisTabToInsertionIndex(sourceTab, targetIndex, updatePreview);
+        });
         list.querySelectorAll("[data-analysis-tab-id]").forEach((item) => {
           item.addEventListener("dragstart", (event) => {
             draggedTab = item.dataset.analysisTabId || "";
@@ -439,25 +490,8 @@
           });
           item.addEventListener("dragend", () => {
             draggedTab = "";
-            item.classList.remove("dragging", "drag-over");
-          });
-          item.addEventListener("dragover", (event) => {
-            event.preventDefault();
-            list.querySelectorAll(".drag-over").forEach((element) => element.classList.remove("drag-over"));
-            item.classList.add("drag-over");
-            if (event.dataTransfer) {
-              event.dataTransfer.dropEffect = "move";
-            }
-          });
-          item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-          item.addEventListener("drop", (event) => {
-            event.preventDefault();
-            item.classList.remove("drag-over");
-            const sourceTab = event.dataTransfer?.getData("text/plain") || draggedTab;
-            const targetTab = item.dataset.analysisTabId || "";
-            const targetRect = item.getBoundingClientRect();
-            const targetOffset = event.clientY > targetRect.top + targetRect.height / 2 ? 1 : 0;
-            moveAnalysisTabToTarget(sourceTab, targetTab, targetOffset, updatePreview);
+            item.classList.remove("dragging");
+            clearInsertionMarkers();
           });
         });
         list.querySelectorAll("[data-analysis-tab-move]").forEach((button) => {
@@ -477,18 +511,17 @@
         moveAnalysisTabToIndex(tab, from + step, updatePreview);
       }
 
-      function moveAnalysisTabToTarget(sourceTab, targetTab, targetOffset, updatePreview) {
+      function moveAnalysisTabToInsertionIndex(tab, insertionIndex, updatePreview) {
         const order = readAnalysisTabOrder();
-        const from = order.indexOf(sourceTab);
-        const target = order.indexOf(targetTab);
-        if (from < 0 || target < 0 || sourceTab === targetTab) {
+        const from = order.indexOf(tab);
+        if (from < 0) {
           return;
         }
-        let to = target + targetOffset;
+        let to = Math.max(0, Math.min(order.length, insertionIndex));
         if (from < to) {
           to -= 1;
         }
-        moveAnalysisTabToIndex(sourceTab, to, updatePreview);
+        moveAnalysisTabToIndex(tab, to, updatePreview);
       }
 
       function moveAnalysisTabToIndex(tab, index, updatePreview) {
