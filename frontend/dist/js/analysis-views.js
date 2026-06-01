@@ -1,6 +1,7 @@
 import { elements, escapeHTML, state } from "./state.js";
 import { renderGeometry } from "./geometry-loader.js";
 import { renderInputViews } from "./input-views.js";
+import { renderProfile } from "./profile-views.js";
 
 export function renderReport() {
   const report = state.report;
@@ -10,6 +11,7 @@ export function renderReport() {
   }
 
   renderSummary(report.summary);
+  renderProfile(report.profile);
   renderDiagnostics(report.diagnostics);
   if (state.activeResultTab === "geometry") {
     renderGeometry(report.geometry);
@@ -22,6 +24,17 @@ export function renderReport() {
 export function renderEmpty() {
   elements.summaryMetricCount.textContent = "0 metrics";
   elements.summaryCategories.innerHTML = `<div class="empty">No summary metrics yet</div>`;
+  if (elements.profileStats) {
+    elements.profileStats.textContent = "0 profiles";
+    elements.profileSettings.innerHTML = "";
+    elements.profileOverview.innerHTML = `<div class="empty">No profile analysis yet</div>`;
+    elements.profileDetail.innerHTML = `<div class="empty">Select a profile</div>`;
+    elements.profileMatrixStats.textContent = "0 zones";
+    elements.profileMatrix.innerHTML = `<div class="empty">No profile matrix yet</div>`;
+    elements.profileGraphStats.textContent = "Representative day";
+    elements.profileGraph.innerHTML = `<div class="empty">No profile graph yet</div>`;
+    elements.profileApplyButton.disabled = true;
+  }
   elements.geometryStats.textContent = "0 zones, 0 surfaces, 0 windows";
   elements.geometryCanvasHost.innerHTML = `<div class="empty">No geometry yet</div>`;
   elements.geometryPlan.innerHTML = "";

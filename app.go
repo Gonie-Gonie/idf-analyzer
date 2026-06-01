@@ -81,11 +81,22 @@ type CleanupApplyResult struct {
 	RemovedCount int    `json:"removedCount"`
 }
 
+type ProfileApplyTextResult struct {
+	Text    string                  `json:"text"`
+	Format  string                  `json:"format,omitempty"`
+	Version string                  `json:"version,omitempty"`
+	Model   *epinput.Model          `json:"model,omitempty"`
+	EPJSON  string                  `json:"epjson,omitempty"`
+	Report  *idf.Report             `json:"report"`
+	Preview idf.ProfileApplyPreview `json:"preview"`
+}
+
 type AppSettings struct {
-	Version     int                 `json:"version"`
-	Appearance  AppearanceSettings  `json:"appearance"`
-	Behavior    BehaviorSettings    `json:"behavior"`
-	Interaction InteractionSettings `json:"interaction"`
+	Version     int                         `json:"version"`
+	Appearance  AppearanceSettings          `json:"appearance"`
+	Behavior    BehaviorSettings            `json:"behavior"`
+	Interaction InteractionSettings         `json:"interaction"`
+	Profile     idf.ProfileAnalysisSettings `json:"profile"`
 }
 
 type AppearanceSettings struct {
@@ -209,6 +220,15 @@ func (a *App) AnalyzeInputGeometryText(text string) (*idf.GeometryReport, error)
 	}
 	geometry := idf.AnalyzeGeometry(epinput.ToIDFDocument(model))
 	return &geometry, nil
+}
+
+func (a *App) AnalyzeInputProfileText(text string) (*idf.ProfileReport, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	profile := idf.AnalyzeProfile(epinput.ToIDFDocument(model))
+	return &profile, nil
 }
 
 func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includeEPJSON bool) (*InputAnalysisResult, error) {
@@ -476,6 +496,45 @@ func (a *App) SaveCleanupToFile(path string, text string, ruleIDs []string, excl
 		return nil, err
 	}
 	return &CleanupApplyResult{Path: path, Filename: filepath.Base(path), Text: preview.Text, RemovedCount: preview.RemovedCount}, nil
+}
+
+func (a *App) PreviewProfileApplyText(text string, request idf.ProfileApplyRequest) (*idf.ProfileApplyPreview, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	preview := idf.PreviewApplyProfile(doc, request)
+	return &preview, nil
+}
+
+func (a *App) ApplyProfileText(text string, request idf.ProfileApplyRequest) (*ProfileApplyTextResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	updated, preview := idf.ApplyProfile(doc, request)
+	resultText := writeDocumentInOriginalFormat(updated, model)
+	updatedModel, err := epinput.Parse("", []byte(resultText))
+	if err != nil {
+		return nil, err
+	}
+	updatedDoc := epinput.ToIDFDocument(updatedModel)
+	report := idf.Analyze(updatedDoc)
+	epjsonText, err := epinput.Write(updatedModel, epinput.FormatEPJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &ProfileApplyTextResult{
+		Text:    resultText,
+		Format:  string(updatedModel.Format),
+		Version: updatedModel.Version.Raw,
+		Model:   updatedModel,
+		EPJSON:  epjsonText,
+		Report:  &report,
+		Preview: preview,
+	}, nil
 }
 
 func (a *App) GetSummaryMetricGuides() []idf.SummaryGuide {
@@ -758,6 +817,7 @@ func defaultAppSettings() AppSettings {
 			SyncRawTextPosition: true,
 			GeometrySyncLocate:  true,
 		},
+		Profile: idf.DefaultProfileAnalysisSettings(),
 	}
 }
 
@@ -787,7 +847,82 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 	if settings.Behavior.AutoAnalyzeDelayMS > 5000 {
 		settings.Behavior.AutoAnalyzeDelayMS = 5000
 	}
+	settings.Profile = normalizeProfileSettings(settings.Profile, defaults.Profile)
 	return settings
+}
+
+func normalizeProfileSettings(settings idf.ProfileAnalysisSettings, defaults idf.ProfileAnalysisSettings) idf.ProfileAnalysisSettings {
+	allowedDimensions := map[string]bool{
+		idf.ProfileDimensionOccupancy:    true,
+		idf.ProfileDimensionLighting:     true,
+		idf.ProfileDimensionEquipment:    true,
+		idf.ProfileDimensionInfiltration: true,
+		idf.ProfileDimensionVentilation:  true,
+		idf.ProfileDimensionOutdoorAir:   true,
+	}
+	settings.EnabledDimensions = normalizeProfileChoiceList(settings.EnabledDimensions, defaults.EnabledDimensions, allowedDimensions)
+	if settings.DisplayMetrics == nil {
+		settings.DisplayMetrics = defaults.DisplayMetrics
+	}
+	if settings.GroupingMetrics == nil {
+		settings.GroupingMetrics = defaults.GroupingMetrics
+	}
+	for dimension, metric := range defaults.DisplayMetrics {
+		if strings.TrimSpace(settings.DisplayMetrics[dimension]) == "" {
+			settings.DisplayMetrics[dimension] = metric
+		}
+	}
+	for dimension, metric := range defaults.GroupingMetrics {
+		if strings.TrimSpace(settings.GroupingMetrics[dimension]) == "" {
+			settings.GroupingMetrics[dimension] = metric
+		}
+	}
+	if settings.NumericTolerance <= 0 {
+		settings.NumericTolerance = defaults.NumericTolerance
+	}
+	settings.ScheduleCompareMode = normalizeProfileChoice(settings.ScheduleCompareMode, []string{"none", "name", "resolved"}, defaults.ScheduleCompareMode)
+	settings.GraphMode = normalizeProfileChoice(settings.GraphMode, []string{"multiplier", "actual_value"}, defaults.GraphMode)
+	settings.ScheduleSummaryMode = normalizeProfileChoice(settings.ScheduleSummaryMode, []string{
+		"representative_day",
+		"representative_week",
+		"monthly_average",
+		"hourly_average_by_daytype",
+		"load_duration",
+		"annual_heatmap",
+	}, defaults.ScheduleSummaryMode)
+	settings.ApplyBehavior.DefaultMode = normalizeProfileChoice(settings.ApplyBehavior.DefaultMode, []string{"clone", "shared"}, defaults.ApplyBehavior.DefaultMode)
+	if strings.TrimSpace(settings.ApplyBehavior.NameSuffix) == "" {
+		settings.ApplyBehavior.NameSuffix = defaults.ApplyBehavior.NameSuffix
+	}
+	settings.ApplyBehavior.ReplaceExistingPolicy = normalizeProfileChoice(settings.ApplyBehavior.ReplaceExistingPolicy, []string{"replace", "keep", "duplicate"}, defaults.ApplyBehavior.ReplaceExistingPolicy)
+	return settings
+}
+
+func normalizeProfileChoice(value string, allowed []string, fallback string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	for _, choice := range allowed {
+		if normalized == choice {
+			return normalized
+		}
+	}
+	return fallback
+}
+
+func normalizeProfileChoiceList(values []string, fallback []string, allowed map[string]bool) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, value := range values {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if !allowed[normalized] || seen[normalized] {
+			continue
+		}
+		seen[normalized] = true
+		out = append(out, normalized)
+	}
+	if len(out) == 0 {
+		return append([]string(nil), fallback...)
+	}
+	return out
 }
 
 func normalizeHexColor(value string, fallback string) string {

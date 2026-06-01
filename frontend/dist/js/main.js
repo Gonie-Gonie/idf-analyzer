@@ -1,6 +1,6 @@
 import { defaultSample, loadDefaultSampleIDF } from "./sample.js";
 import { loadAndApplyAppSettings } from "./settings-client.js";
-import { elements, state, updateTextStats } from "./state.js";
+import { elements, setStatus, state, updateTextStats } from "./state.js";
 import {
   analyze,
   exportSummary,
@@ -29,6 +29,7 @@ import {
 } from "./input-views.js";
 import { initializeVerticalSplitters, initializeWorkspaceSplitter } from "./layout.js";
 import { focusInputObject, handleAnalysisActivation, switchResultTab } from "./navigation.js";
+import { initializeProfileControls, renderProfile } from "./profile-views.js";
 
 loadAndApplyAppSettings().then((result) => applyRuntimeSettings(result.settings));
 
@@ -114,9 +115,29 @@ elements.analysisPanel.addEventListener("keydown", (event) => {
 window.addEventListener("idfAnalyzer:settingsChanged", (event) => {
   applyRuntimeSettings(event.detail?.settings);
 });
+window.addEventListener("idfAnalyzer:profileApplied", (event) => {
+  const result = event.detail || {};
+  if (!result.text || !result.report) {
+    return;
+  }
+  elements.idfInput.value = result.text;
+  updateTextStats();
+  state.report = result.report;
+  state.model = result.model || null;
+  state.epjsonText = result.epjson || "";
+  state.lastAnalyzedText = result.text;
+  state.analysisStage = "complete";
+  state.diagnosticsReady = true;
+  state.geometryReady = true;
+  renderReport();
+  updateDocumentActions();
+  const changeCount = result.preview?.changes?.length || 0;
+  setStatus(`Profile applied (${changeCount} changes)`, "ok");
+});
 
 initializeWorkspaceSplitter();
 initializeVerticalSplitters();
+initializeProfileControls();
 renderEmpty();
 updateDocumentActions();
 const restoredDocument = restoreCurrentDocument();
@@ -181,6 +202,12 @@ function applyRuntimeSettings(settings) {
     state.geometrySyncLocate = settings.interaction.geometrySyncLocate;
     if (elements.geometrySyncLocate) {
       elements.geometrySyncLocate.checked = state.geometrySyncLocate;
+    }
+  }
+  if (settings.profile) {
+    state.profileSettings = settings.profile;
+    if (state.report?.profile) {
+      renderProfile(state.report.profile);
     }
   }
   if (state.report?.geometry && state.activeResultTab === "geometry") {

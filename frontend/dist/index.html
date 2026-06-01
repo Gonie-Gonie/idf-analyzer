@@ -78,6 +78,7 @@
         <section class="analysis-panel" aria-label="Analysis results">
           <nav class="tabs" aria-label="Result tabs">
             <button class="tab active" data-result-tab="summary" type="button">Summary</button>
+            <button class="tab" data-result-tab="profile" type="button">Profile</button>
             <button class="tab" data-result-tab="diagnose" type="button">Diagnose</button>
             <button class="tab" data-result-tab="geometry" type="button">Geometry</button>
           </nav>
@@ -96,6 +97,58 @@
             </div>
             <div class="summary-pane">
               <div id="summaryCategories" class="summary-categories"></div>
+            </div>
+          </div>
+
+          <div class="result-pane" id="profilePane">
+            <div class="summary-head profile-head">
+              <div>
+                <h2>Profile</h2>
+                <span id="profileStats">0 profiles</span>
+              </div>
+              <div class="summary-tools">
+                <input id="profileFilter" type="search" placeholder="Filter profiles, zones, schedules" />
+                <button id="profileApplyButton" type="button" disabled>Apply Profile</button>
+              </div>
+            </div>
+            <div class="profile-pane">
+              <div id="profileSettings" class="profile-settings"></div>
+              <div class="profile-layout">
+                <section class="profile-overview" aria-label="Profile overview">
+                  <div id="profileOverview" class="profile-overview-list"></div>
+                </section>
+                <section class="profile-detail" aria-label="Profile detail">
+                  <div id="profileDetail" class="profile-detail-panel"></div>
+                </section>
+              </div>
+              <section class="profile-section">
+                <div class="profile-section-head">
+                  <h3>Profile Matrix</h3>
+                  <span id="profileMatrixStats" class="tool-muted">0 zones</span>
+                </div>
+                <div id="profileMatrix" class="profile-matrix"></div>
+              </section>
+              <section class="profile-section">
+                <div class="profile-section-head">
+                  <h3>Profile Graph</h3>
+                  <span id="profileGraphStats" class="tool-muted">Representative day</span>
+                </div>
+                <div id="profileGraph" class="profile-graph"></div>
+              </section>
+            </div>
+            <div id="profileApplyDialog" class="profile-dialog hidden" role="dialog" aria-modal="true" aria-labelledby="profileApplyTitle">
+              <form id="profileApplyForm" class="profile-dialog-panel">
+                <div class="profile-dialog-head">
+                  <h3 id="profileApplyTitle">Apply Profile</h3>
+                  <button id="profileApplyClose" type="button">Close</button>
+                </div>
+                <div id="profileApplyBody" class="profile-apply-body"></div>
+                <div class="profile-dialog-actions">
+                  <span id="profileApplyStatus" class="settings-save-status">Review changes before applying.</span>
+                  <button id="profilePreviewApply" type="button">Preview</button>
+                  <button id="profileConfirmApply" type="submit" disabled>Apply</button>
+                </div>
+              </form>
             </div>
           </div>
 

@@ -20,6 +20,36 @@ export const defaultAppSettings = {
     syncRawTextPosition: true,
     geometrySyncLocate: true,
   },
+  profile: {
+    enabledDimensions: ["occupancy", "lighting", "equipment", "infiltration", "ventilation", "outdoor_air"],
+    displayMetrics: {
+      occupancy: "people_per_area",
+      lighting: "power_per_area",
+      equipment: "power_per_area",
+      infiltration: "ach",
+      ventilation: "flow_per_person",
+      outdoor_air: "flow_per_person",
+    },
+    groupingMetrics: {
+      occupancy: "people_per_area",
+      lighting: "power_per_area",
+      equipment: "power_per_area",
+      infiltration: "ach",
+      ventilation: "flow_per_person",
+      outdoor_air: "flow_per_person",
+    },
+    numericTolerance: 0.001,
+    scheduleCompareMode: "name",
+    graphMode: "actual_value",
+    scheduleSummaryMode: "representative_day",
+    applyBehavior: {
+      defaultMode: "clone",
+      allowZoneListEdit: false,
+      createMissingZoneList: false,
+      nameSuffix: " Profile Copy",
+      replaceExistingPolicy: "replace",
+    },
+  },
 };
 
 let currentSettings = mergeSettings();
@@ -116,6 +146,9 @@ export function mergeSettings(settingsInput = {}) {
   const geometry = appearance.geometry || {};
   const behavior = settings.behavior || {};
   const interaction = settings.interaction || {};
+  const profile = settings.profile || {};
+  const applyBehavior = profile.applyBehavior || {};
+  const defaultProfile = defaultAppSettings.profile;
   return {
     version: Number(settings.version) || defaultAppSettings.version,
     appearance: {
@@ -147,6 +180,36 @@ export function mergeSettings(settingsInput = {}) {
           ? interaction.geometrySyncLocate
           : defaultAppSettings.interaction.geometrySyncLocate,
     },
+    profile: {
+      enabledDimensions: normalizeEnabledDimensions(profile.enabledDimensions, defaultProfile.enabledDimensions),
+      displayMetrics: normalizeMetricMap(profile.displayMetrics, defaultProfile.displayMetrics),
+      groupingMetrics: normalizeMetricMap(profile.groupingMetrics, defaultProfile.groupingMetrics),
+      numericTolerance: clampFloat(profile.numericTolerance, 0.000001, 1000, defaultProfile.numericTolerance),
+      scheduleCompareMode: normalizeChoice(profile.scheduleCompareMode, ["none", "name", "resolved"], defaultProfile.scheduleCompareMode),
+      graphMode: normalizeChoice(profile.graphMode, ["multiplier", "actual_value"], defaultProfile.graphMode),
+      scheduleSummaryMode: normalizeChoice(
+        profile.scheduleSummaryMode,
+        ["representative_day", "representative_week", "monthly_average", "hourly_average_by_daytype", "load_duration", "annual_heatmap"],
+        defaultProfile.scheduleSummaryMode,
+      ),
+      applyBehavior: {
+        defaultMode: normalizeChoice(applyBehavior.defaultMode, ["clone", "shared"], defaultProfile.applyBehavior.defaultMode),
+        allowZoneListEdit:
+          typeof applyBehavior.allowZoneListEdit === "boolean"
+            ? applyBehavior.allowZoneListEdit
+            : defaultProfile.applyBehavior.allowZoneListEdit,
+        createMissingZoneList:
+          typeof applyBehavior.createMissingZoneList === "boolean"
+            ? applyBehavior.createMissingZoneList
+            : defaultProfile.applyBehavior.createMissingZoneList,
+        nameSuffix: String(applyBehavior.nameSuffix || defaultProfile.applyBehavior.nameSuffix).trim() || defaultProfile.applyBehavior.nameSuffix,
+        replaceExistingPolicy: normalizeChoice(
+          applyBehavior.replaceExistingPolicy,
+          ["replace", "keep", "duplicate"],
+          defaultProfile.applyBehavior.replaceExistingPolicy,
+        ),
+      },
+    },
   };
 }
 
@@ -175,6 +238,30 @@ function clampNumber(value, min, max, fallback) {
     return fallback;
   }
   return Math.min(Math.max(Math.round(number), min), max);
+}
+
+function clampFloat(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return fallback;
+  }
+  return Math.min(Math.max(number, min), max);
+}
+
+function normalizeChoice(value, allowed, fallback) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
+function normalizeEnabledDimensions(value, fallback) {
+  const allowed = new Set(defaultAppSettings.profile.enabledDimensions);
+  const values = Array.isArray(value) ? value.map((item) => String(item || "").trim()).filter((item) => allowed.has(item)) : [];
+  return values.length ? [...new Set(values)] : [...fallback];
+}
+
+function normalizeMetricMap(value, fallback) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(Object.entries(fallback).map(([dimension, metric]) => [dimension, String(source[dimension] || metric).trim() || metric]));
 }
 
 function cacheSettings(settings) {
