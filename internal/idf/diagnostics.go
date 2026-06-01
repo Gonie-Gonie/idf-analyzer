@@ -70,6 +70,7 @@ func AnalyzeDiagnostics(doc Document) []Diagnostic {
 	diagnostics = append(diagnostics, requiredObjectDiagnostics(doc)...)
 	diagnostics = append(diagnostics, duplicateNameDiagnostics(doc)...)
 	diagnostics = append(diagnostics, referenceDiagnostics(doc)...)
+	diagnostics = append(diagnostics, fieldCatalogDiagnostics(doc)...)
 	diagnostics = append(diagnostics, orphanDiagnostics(doc)...)
 	diagnostics = append(diagnostics, geometryDiagnostics(doc)...)
 	diagnostics = append(diagnostics, scheduleDiagnostics(doc)...)

@@ -395,6 +395,15 @@ func (a *App) UpdateFieldText(text string, objectIndex int, fieldIndex int, valu
 	}, nil
 }
 
+func (a *App) SuggestFieldValuesText(text string, objectIndex int, fieldIndex int) ([]idf.FieldValueSuggestion, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	return idf.SuggestFieldValues(doc, objectIndex, fieldIndex), nil
+}
+
 func (a *App) RemoveUnusedObjectsText(text string) (*TextEditResult, error) {
 	model, err := epinput.Parse("", []byte(text))
 	if err != nil {

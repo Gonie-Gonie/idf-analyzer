@@ -423,6 +423,7 @@ function renderFormattedTextField(field, objectIndex, fieldIndex) {
         data-field-index="${escapeHTML(fieldIndex)}"
         data-field-index-kind="idf"
         data-original="${escapeHTML(value)}"
+        list="${escapeHTML(fieldSuggestionListID(objectIndex, fieldIndex))}"
         value="${escapeHTML(value)}" />
     </dd>`;
 }
@@ -433,7 +434,10 @@ function bindFormattedTextControls() {
     head.addEventListener("click", () => syncRawTextToFormattedTarget(head));
   });
   elements.textObjectView.querySelectorAll(".text-field-input").forEach((input) => {
-    input.addEventListener("focus", () => syncRawTextToFormattedTarget(input));
+    input.addEventListener("focus", () => {
+      syncRawTextToFormattedTarget(input);
+      loadFieldSuggestions(input);
+    });
     input.addEventListener("click", () => syncRawTextToFormattedTarget(input));
     input.addEventListener("blur", () => applyTextValue(input));
     input.addEventListener("keydown", (event) => {
@@ -448,6 +452,69 @@ function bindFormattedTextControls() {
       }
     });
   });
+}
+
+function fieldSuggestionListID(objectIndex, fieldIndex) {
+  return `fieldSuggestions-${objectIndex}-${fieldIndex}`;
+}
+
+async function loadFieldSuggestions(input) {
+  if (input.dataset.suggestionsLoaded === "true" || input.dataset.suggestionsLoading === "true") {
+    return;
+  }
+  const objectIndex = Number(input.dataset.objectIndex);
+  const fieldIndex = Number(input.dataset.fieldIndex);
+  if (!Number.isFinite(objectIndex) || !Number.isFinite(fieldIndex)) {
+    return;
+  }
+
+  input.dataset.suggestionsLoading = "true";
+  try {
+    const suggestions = await requestFieldSuggestions(objectIndex, fieldIndex);
+    input.dataset.suggestionsLoaded = "true";
+    attachFieldSuggestionList(input, suggestions);
+  } catch (error) {
+    console.debug("Field suggestions unavailable", error);
+  } finally {
+    delete input.dataset.suggestionsLoading;
+  }
+}
+
+async function requestFieldSuggestions(objectIndex, fieldIndex) {
+  const api = backend();
+  if (api && typeof api.SuggestFieldValuesText === "function") {
+    return api.SuggestFieldValuesText(elements.idfInput.value, objectIndex, fieldIndex);
+  }
+
+  const response = await fetch("/api/field-suggestions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: elements.idfInput.value, objectIndex, fieldIndex }),
+  });
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+  return response.json();
+}
+
+function attachFieldSuggestionList(input, suggestions) {
+  if (!Array.isArray(suggestions) || suggestions.length === 0) {
+    return;
+  }
+  const listID = input.getAttribute("list") || fieldSuggestionListID(input.dataset.objectIndex, input.dataset.fieldIndex);
+  let datalist = document.getElementById(listID);
+  if (!datalist) {
+    datalist = document.createElement("datalist");
+    datalist.id = listID;
+    document.body.appendChild(datalist);
+  }
+  datalist.innerHTML = suggestions
+    .map((suggestion) => {
+      const labelParts = [suggestion.label, suggestion.source].filter(Boolean);
+      const label = labelParts.length ? ` label="${escapeHTML(labelParts.join(" / "))}"` : "";
+      return `<option value="${escapeHTML(suggestion.value || "")}"${label}></option>`;
+    })
+    .join("");
 }
 
 async function applyTextValue(input) {
@@ -1006,7 +1073,10 @@ export function renderFieldTable() {
   `;
 
   elements.fieldTable.querySelectorAll(".field-value-input").forEach((input) => {
-    input.addEventListener("focus", () => syncRawTextToFormattedTarget(input));
+    input.addEventListener("focus", () => {
+      syncRawTextToFormattedTarget(input);
+      loadFieldSuggestions(input);
+    });
     input.addEventListener("click", () => syncRawTextToFormattedTarget(input));
     input.addEventListener("blur", () => applyTableValue(input));
     input.addEventListener("keydown", (event) => {
@@ -1135,6 +1205,7 @@ function renderObjectTypeCell(object, fieldIndex) {
     <td title="${escapeHTML(label)}" data-object-index="${escapeHTML(object.index)}" data-object-type="${escapeHTML(object.type)}">
       <input class="field-value-input" data-object-index="${escapeHTML(object.index)}"
         data-field-index="${escapeHTML(fieldIndex)}" data-field-index-kind="idf" data-original="${escapeHTML(value)}"
+        list="${escapeHTML(fieldSuggestionListID(object.index, fieldIndex))}"
         value="${escapeHTML(value)}" />
     </td>`;
 }
