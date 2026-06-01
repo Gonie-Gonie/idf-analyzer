@@ -44,6 +44,9 @@ export async function renderAppInfo(appInfoInput) {
   document.querySelectorAll("[data-app-title]").forEach((element) => {
     element.textContent = info.title;
   });
+  document.querySelectorAll("[data-app-brand-version]").forEach((element) => {
+    element.textContent = `${info.name.toUpperCase()} V${info.version}`;
+  });
   document.querySelectorAll("[data-app-version]").forEach((element) => {
     element.textContent = `v${info.version}`;
   });

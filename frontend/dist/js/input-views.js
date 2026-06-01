@@ -297,8 +297,8 @@ function focusSelectedJSONObject() {
   container.scrollTo({
     top: Math.max(0, container.scrollTop + targetRect.top - containerRect.top - container.clientHeight * 0.25),
     left: Math.max(0, container.scrollLeft + targetRect.left - containerRect.left - 24),
-    behavior: "smooth",
   });
+  highlightFormattedTextTarget(target);
 }
 
 async function editJSONValueToken(button) {
@@ -501,9 +501,10 @@ function syncRawTextToFormattedTarget(element) {
 export function syncRawTextToObjectField(objectIndex, fieldIndex = null, fieldIndexKind = "idf") {
   const range = findRawTextRangeForTextTarget(objectIndex, fieldIndex, fieldIndexKind);
   if (!range) {
-    return;
+    return false;
   }
   moveRawTextToRange(range);
+  return true;
 }
 
 function findRawTextRangeForTextTarget(objectIndex, fieldIndex = null, fieldIndexKind = "idf") {
@@ -522,8 +523,9 @@ function moveRawTextToRange(range) {
   const style = window.getComputedStyle(elements.idfInput);
   const fontSize = Number.parseFloat(style.fontSize) || 13;
   const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.5;
-  elements.idfInput.scrollTop = Math.max(0, lineIndex * lineHeight - elements.idfInput.clientHeight * 0.25);
   elements.idfInput.setSelectionRange(start, end);
+  elements.idfInput.scrollTop = Math.max(0, lineIndex * lineHeight - elements.idfInput.clientHeight * 0.25);
+  highlightRawTextTarget();
 }
 
 function isLikelyJSONText(text) {
@@ -788,7 +790,6 @@ function scrollActiveInputTargetIntoView(element) {
   container.scrollTo({
     top: Math.max(0, container.scrollTop + elementRect.top - containerRect.top - container.clientHeight * 0.25),
     left: Math.max(0, container.scrollLeft + elementRect.left - containerRect.left - 24),
-    behavior: "smooth",
   });
 }
 
@@ -797,6 +798,17 @@ function highlightFormattedTextTarget(element) {
   void element.offsetWidth;
   element.classList.add("input-jump-highlight");
   window.setTimeout(() => element.classList.remove("input-jump-highlight"), 1200);
+}
+
+function highlightRawTextTarget() {
+  const rawBlock = elements.idfInput.closest(".raw-editor-block");
+  if (!rawBlock) {
+    return;
+  }
+  rawBlock.classList.remove("raw-text-jump-highlight");
+  void rawBlock.offsetWidth;
+  rawBlock.classList.add("raw-text-jump-highlight");
+  window.setTimeout(() => rawBlock.classList.remove("raw-text-jump-highlight"), 900);
 }
 
 function reportObjectByIndex(objectIndex) {

@@ -62,7 +62,6 @@ function scrollInputTargetIntoView(element) {
   container.scrollTo({
     top: Math.max(0, targetTop),
     left: Math.max(0, targetLeft),
-    behavior: "smooth",
   });
 }
 
@@ -95,11 +94,11 @@ export async function focusInputObject(target) {
   }
 
   expandDetailsFor(element);
-  scrollInputTargetIntoView(element);
-  highlightInputTarget(element);
   if (state.syncTextRawPosition && hasObjectIndex) {
     syncRawTextToObjectField(Number(target.objectIndex));
   }
+  scrollInputTargetIntoView(element);
+  highlightInputTarget(element);
   setStatus("Input object located", "ok");
 }
 

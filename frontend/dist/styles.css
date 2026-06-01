@@ -401,6 +401,11 @@ button:disabled:hover {
   flex-direction: column;
 }
 
+.raw-editor-block.raw-text-jump-highlight {
+  outline: 2px solid var(--amber);
+  outline-offset: -2px;
+}
+
 .subhead {
   min-height: 36px;
   border-bottom: 1px solid var(--line);
@@ -1192,6 +1197,13 @@ textarea {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.geometry-control-group {
+  display: inline-flex;
+  align-items: center;
   gap: 7px;
   flex-wrap: wrap;
 }
@@ -1205,7 +1217,7 @@ textarea {
   padding: 0 9px;
 }
 
-.geometry-tools label {
+.geometry-toggle {
   min-height: 30px;
   display: inline-flex;
   align-items: center;
@@ -1213,6 +1225,12 @@ textarea {
   color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
+}
+
+.geometry-sync-toggle,
+.geometry-visibility-controls {
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
 }
 
 .geometry-mode-button {
@@ -2502,6 +2520,20 @@ th.input-jump-highlight {
 
   .geometry-tools {
     justify-content: stretch;
+  }
+
+  .geometry-control-group,
+  .geometry-sync-toggle,
+  .geometry-visibility-controls {
+    flex: 1 1 100%;
+  }
+
+  .geometry-sync-toggle,
+  .geometry-visibility-controls {
+    padding-left: 0;
+    padding-top: 8px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 
   .summary-tools input,
