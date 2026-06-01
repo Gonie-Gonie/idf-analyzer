@@ -3309,28 +3309,57 @@ button.geometry-related-row:hover {
   font-size: 11px;
 }
 
-.construction-stack {
-  min-height: 150px;
-  padding: 10px;
+.construction-stack-frame {
+  padding: 9px 10px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.construction-side-label {
   display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.construction-side-label::before,
+.construction-side-label::after {
+  content: "";
+  height: 1px;
+  flex: 1;
+  background: var(--surface-2);
+}
+
+.construction-stack {
+  min-height: 220px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .construction-layer {
-  flex: var(--layer-flex, 0.4) 0 max(34px, var(--layer-width, 18%));
-  min-width: 34px;
-  min-height: 128px;
+  width: 100%;
+  flex: var(--layer-flex, 0.4) 1 var(--layer-height, 42px);
+  min-width: 0;
+  min-height: 34px;
   border: 1px solid color-mix(in srgb, var(--layer-color), var(--ink) 22%);
   border-radius: 4px;
   padding: 0;
   display: grid;
-  grid-template-rows: minmax(78px, 1fr) auto;
-  align-items: stretch;
-  gap: 0;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
   overflow: hidden;
-  background: var(--surface);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--layer-color), #ffffff 26%), color-mix(in srgb, var(--layer-color), var(--surface) 38%)),
+    var(--layer-color);
   color: var(--ink);
   text-align: left;
 }
@@ -3340,21 +3369,25 @@ button.geometry-related-row:hover {
 }
 
 .construction-layer-bar {
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--layer-color), #ffffff 24%), var(--layer-color)),
-    repeating-linear-gradient(90deg, transparent 0 9px, rgba(255, 255, 255, 0.24) 9px 10px);
-  border-bottom: 1px solid color-mix(in srgb, var(--layer-color), var(--ink) 20%);
+  align-self: stretch;
+  background: var(--layer-color);
+  border-right: 1px solid color-mix(in srgb, var(--layer-color), var(--ink) 24%);
 }
 
 .construction-layer-text {
   min-width: 0;
-  padding: 7px;
+  padding: 7px 0;
   display: grid;
   gap: 3px;
-  background: color-mix(in srgb, var(--surface), var(--layer-color) 12%);
 }
 
-.construction-layer-text strong,
+.construction-layer-text strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .construction-layer-text span {
   min-width: 0;
   overflow: hidden;
@@ -3367,9 +3400,17 @@ button.geometry-related-row:hover {
 }
 
 .construction-layer-text span {
-  color: var(--muted);
+  color: color-mix(in srgb, var(--ink), var(--muted) 55%);
   font-size: 10px;
   line-height: 1.25;
+}
+
+.construction-layer-thickness {
+  padding-right: 8px;
+  color: color-mix(in srgb, var(--ink), var(--muted) 45%);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .tabs {

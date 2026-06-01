@@ -211,8 +211,30 @@ function ensureRenderer() {
     pointer: new THREE.Vector2(),
     dragStart: null,
     dragging: false,
+    resizeFrame: 0,
   };
   installCanvasInteractions();
+  installCanvasResizeObserver();
+}
+
+function installCanvasResizeObserver() {
+  if (!window.ResizeObserver) {
+    return;
+  }
+  rendererState.resizeObserver = new ResizeObserver(() => {
+    if (rendererState.resizeFrame) {
+      return;
+    }
+    rendererState.resizeFrame = window.requestAnimationFrame(() => {
+      rendererState.resizeFrame = 0;
+      if (!rendererState || state.geometryMode !== "3d" || !elements.geometryCanvasHost.contains(rendererState.renderer.domElement)) {
+        return;
+      }
+      resizeRenderer();
+      rendererState.renderer.render(rendererState.scene, rendererState.camera);
+    });
+  });
+  rendererState.resizeObserver.observe(elements.geometryCanvasHost);
 }
 
 function installCanvasInteractions() {
@@ -676,32 +698,36 @@ function renderConstructionGraphic(construction) {
     <div class="construction-card">
       <div class="construction-card-head">
         <strong>${escapeHTML(construction.name)}</strong>
-        <span>${construction.hasThickness ? `${t("geometry.totalThickness", {}, "Total thickness")} ${formatThickness(construction.totalThickness || totalThickness)}` : t("geometry.thicknessUnknown", {}, "Thickness unknown")}</span>
+        <span>${construction.hasThickness ? `${t("geometry.totalThickness", {}, "Total thickness")} ${formatThickness(construction.totalThickness || totalThickness)}` : t("geometry.thicknessUnknown", {}, "Thickness unknown")} / ${t("geometry.outsideToInside", {}, "Outside to inside")}</span>
       </div>
-      <div class="construction-stack" role="img" aria-label="${escapeHTML(construction.name)} construction layers">
-        ${layers.length ? layers.map((layer, index) => renderConstructionLayer(layer, index, totalThickness)).join("") : `<div class="empty">${t("geometry.noConstruction", {}, "No construction layers parsed")}</div>`}
+      <div class="construction-stack-frame">
+        <span class="construction-side-label">${t("geometry.outside", {}, "Outside")}</span>
+        <div class="construction-stack" role="img" aria-label="${escapeHTML(construction.name)} construction layers">
+          ${layers.length ? layers.map((layer, index) => renderConstructionLayer(layer, index, totalThickness)).join("") : `<div class="empty">${t("geometry.noConstruction", {}, "No construction layers parsed")}</div>`}
+        </div>
+        <span class="construction-side-label">${t("geometry.inside", {}, "Inside")}</span>
       </div>
     </div>`;
 }
 
 function renderConstructionLayer(layer, index, totalThickness) {
   const thickness = layer.hasThickness ? Number(layer.thickness) || 0 : 0;
-  const flexGrow = layer.hasThickness && totalThickness > 0 ? Math.max(0.18, thickness / totalThickness) : 0.35;
-  const width = layer.hasThickness && totalThickness > 0 ? Math.max(10, (thickness / totalThickness) * 100) : 18;
+  const flexGrow = layer.hasThickness && totalThickness > 0 ? Math.max(0.16, thickness / totalThickness) : 0.3;
+  const height = layer.hasThickness && totalThickness > 0 ? Math.max(34, (thickness / totalThickness) * 220) : 42;
   const color = constructionLayerColor(layer, index);
   const details = [
     layer.objectType,
-    layer.hasThickness ? formatThickness(layer.thickness) : "",
     layer.thermalResistance ? `R ${formatNumber(layer.thermalResistance)}` : "",
     layer.conductivity ? `k ${formatNumber(layer.conductivity)}` : "",
   ].filter(Boolean);
   return `
-    <button class="construction-layer" type="button" data-object-index="${escapeHTML(layer.objectIndex ?? "")}" style="--layer-color: ${color}; --layer-flex: ${flexGrow}; --layer-width: ${width}%;">
+    <button class="construction-layer" type="button" data-object-index="${escapeHTML(layer.objectIndex ?? "")}" style="--layer-color: ${color}; --layer-flex: ${flexGrow}; --layer-height: ${height}px;">
       <span class="construction-layer-bar"></span>
       <span class="construction-layer-text">
         <strong>${escapeHTML(layer.name)}</strong>
         <span>${escapeHTML(details.join(" / ") || t("common.notAvailable", {}, "N/A"))}</span>
       </span>
+      <span class="construction-layer-thickness">${escapeHTML(layer.hasThickness ? formatThickness(layer.thickness) : t("geometry.thicknessUnknown", {}, "Thickness unknown"))}</span>
     </button>`;
 }
 
@@ -918,6 +944,7 @@ function resizeRenderer() {
   const height = Math.max(1, Math.floor(rect.height));
   rendererState.renderer.setSize(width, height, false);
   rendererState.camera.aspect = width / height;
+  rendererState.camera.updateProjectionMatrix();
 }
 
 function geometryColor(name, fallback) {

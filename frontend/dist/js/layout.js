@@ -100,7 +100,7 @@ export function initializeVerticalSplitters() {
     minTop: 220,
     minBottom: 150,
     resizingClass: "resizing-geometry-details",
-    onResize: null,
+    onResize: resizeGeometry,
     onResizeEnd: resizeGeometry,
   });
 }
