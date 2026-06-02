@@ -209,7 +209,7 @@ export function switchResultTab(tabName, options = {}) {
   if (options.recordHistory !== false && state.activeResultTab !== tabName) {
     recordViewHistory();
   }
-  state.activeResultTab = ["profile", "hvac", "output", "geometry", "diagnose"].includes(tabName) ? tabName : "summary";
+  state.activeResultTab = knownResultTabIDs().includes(tabName) ? tabName : "summary";
   elements.resultTabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.resultTab === state.activeResultTab);
   });
@@ -222,6 +222,11 @@ export function switchResultTab(tabName, options = {}) {
       resizeGeometry();
     }, 0);
   }
+}
+
+function knownResultTabIDs() {
+  const ids = [...elements.resultTabButtons].map((button) => button.dataset.resultTab).filter(Boolean);
+  return ids.length ? ids : ["summary", "profile", "hvac", "output", "simulation", "diagnose", "geometry"];
 }
 
 export async function undoViewNavigation() {
