@@ -41,6 +41,7 @@ import {
   undoViewNavigation,
 } from "./navigation.js";
 import { initializeProfileControls, renderProfile } from "./profile-views.js";
+import { initializeSimulationControls, loadSimulationEnvironment } from "./simulation-views.js";
 import { normalizeAnalyzeTabOrder, t, translatePage } from "./i18n.js";
 import { initializeKeyboardShortcuts } from "./shortcuts.js";
 
@@ -245,6 +246,7 @@ initializeVerticalSplitters();
 initializeProfileControls();
 initializeHVACControls();
 initializeOutputControls();
+initializeSimulationControls();
 initializeKeyboardShortcuts({
   save: saveInputFile,
   open: openInputFile,
@@ -309,6 +311,11 @@ function applyRuntimeSettings(settings) {
     return;
   }
   state.autoAnalyzeDelayMs = settings.behavior?.autoAnalyzeDelayMs || state.autoAnalyzeDelayMs;
+  state.simulationAutoRunOnOpen = settings.simulation?.autoRunOnOpen ?? state.simulationAutoRunOnOpen;
+  if (elements.simulationAutoRunOnOpen) {
+    elements.simulationAutoRunOnOpen.checked = Boolean(state.simulationAutoRunOnOpen);
+  }
+  loadSimulationEnvironment();
   if (typeof settings.interaction?.syncRawTextPosition === "boolean") {
     state.syncTextRawPosition = settings.interaction.syncRawTextPosition;
     if (elements.syncRawTextToggle) {

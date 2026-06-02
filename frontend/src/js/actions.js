@@ -62,6 +62,7 @@ async function runFullAnalysis(api, text, runID, options) {
     return null;
   }
   applyOverviewResult(result, text, { complete: true });
+  window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return result;
 }
@@ -103,6 +104,7 @@ async function runStagedAnalysis(api, text, runID, options) {
   } else {
     renderDeferredGeometry(state.report.geometry);
   }
+  window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return { ...overview, report: state.report };
 }
@@ -186,6 +188,7 @@ export function markDocumentChanged() {
   state.diagnosticsReady = false;
   state.geometryReady = false;
   updateDocumentActions();
+  window.dispatchEvent(new Event("idfAnalyzer:documentChanged"));
 }
 
 export function updateDocumentActions() {

@@ -48,6 +48,7 @@ function shortcutAction(id, actions) {
     tabProfile: () => actions.switchResultTab?.("profile"),
     tabHVAC: () => actions.switchResultTab?.("hvac"),
     tabOutput: () => actions.switchResultTab?.("output"),
+    tabSimulation: () => actions.switchResultTab?.("simulation"),
     tabDiagnose: () => actions.switchResultTab?.("diagnose"),
     tabGeometry: () => actions.switchResultTab?.("geometry"),
   };

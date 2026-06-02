@@ -45,8 +45,9 @@ export const defaultAppSettings = {
       tabProfile: "Ctrl+Alt+2",
       tabHVAC: "Ctrl+Alt+3",
       tabOutput: "Ctrl+Alt+4",
-      tabDiagnose: "Ctrl+Alt+5",
-      tabGeometry: "Ctrl+Alt+6",
+      tabSimulation: "Ctrl+Alt+5",
+      tabDiagnose: "Ctrl+Alt+6",
+      tabGeometry: "Ctrl+Alt+7",
     },
   },
   profile: {
@@ -78,6 +79,14 @@ export const defaultAppSettings = {
       nameSuffix: " Profile Copy",
       replaceExistingPolicy: "replace",
     },
+  },
+  simulation: {
+    energyPlusInstallations: [],
+    extraWeatherDataPaths: [],
+    runDirectory: "",
+    workerFraction: 0.5,
+    maxWorkers: 0,
+    autoRunOnOpen: true,
   },
 };
 
@@ -183,6 +192,8 @@ export function mergeSettings(settingsInput = {}) {
   const profile = settings.profile || {};
   const applyBehavior = profile.applyBehavior || {};
   const defaultProfile = defaultAppSettings.profile;
+  const simulation = settings.simulation || {};
+  const defaultSimulation = defaultAppSettings.simulation;
   return {
     version: Number(settings.version) || defaultAppSettings.version,
     appearance: {
@@ -247,7 +258,54 @@ export function mergeSettings(settingsInput = {}) {
         ),
       },
     },
+    simulation: {
+      energyPlusInstallations: Array.isArray(simulation.energyPlusInstallations)
+        ? simulation.energyPlusInstallations.map(normalizeEnergyPlusInstallation).filter(Boolean)
+        : [...defaultSimulation.energyPlusInstallations],
+      extraWeatherDataPaths: normalizeStringList(simulation.extraWeatherDataPaths, defaultSimulation.extraWeatherDataPaths),
+      runDirectory: String(simulation.runDirectory || defaultSimulation.runDirectory || "").trim(),
+      workerFraction: clampFloat(simulation.workerFraction, 0.1, 1, defaultSimulation.workerFraction),
+      maxWorkers: Math.max(0, clampNumber(simulation.maxWorkers, 0, 512, defaultSimulation.maxWorkers)),
+      autoRunOnOpen:
+        typeof simulation.autoRunOnOpen === "boolean" ? simulation.autoRunOnOpen : defaultSimulation.autoRunOnOpen,
+    },
   };
+}
+
+function normalizeEnergyPlusInstallation(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const executablePath = String(value.executablePath || "").trim();
+  const rootPath = String(value.rootPath || "").trim();
+  if (!executablePath && !rootPath) {
+    return null;
+  }
+  return {
+    id: String(value.id || "").trim(),
+    version: String(value.version || "").trim(),
+    name: String(value.name || "").trim(),
+    executablePath,
+    rootPath,
+    weatherDataPath: String(value.weatherDataPath || "").trim(),
+    autoDetected: Boolean(value.autoDetected),
+  };
+}
+
+function normalizeStringList(values, fallback = []) {
+  const source = Array.isArray(values) ? values : fallback;
+  const seen = new Set();
+  const out = [];
+  for (const item of source) {
+    const value = String(item || "").trim();
+    const key = value.toLowerCase();
+    if (!value || seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    out.push(value);
+  }
+  return out;
 }
 
 export function normalizeHexColor(value, fallback) {

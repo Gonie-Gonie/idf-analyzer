@@ -4,6 +4,7 @@ import { renderHVAC } from "./hvac-views.js";
 import { renderInputViews } from "./input-views.js";
 import { renderOutput } from "./output-views.js";
 import { renderProfile } from "./profile-views.js";
+import { renderSimulation } from "./simulation-views.js";
 import { t } from "./i18n.js";
 
 export function renderReport() {
@@ -17,6 +18,7 @@ export function renderReport() {
   renderProfile(report.profile);
   renderHVAC(report.hvac);
   renderOutput(report.output);
+  renderSimulation();
   renderDiagnostics(report.diagnostics);
   if (state.activeResultTab === "geometry") {
     renderGeometry(report.geometry);
@@ -57,6 +59,9 @@ export function renderEmpty() {
     elements.outputRecommendations.innerHTML = `<div class="empty">${t("output.noRecommendations")}</div>`;
     elements.outputWarningStats.textContent = t("count.warnings", { count: 0 });
     elements.outputWarnings.innerHTML = `<div class="empty">${t("output.noWarnings")}</div>`;
+  }
+  if (elements.simulationStats) {
+    renderSimulation();
   }
   elements.geometryStats.textContent = t("geometry.stats", { zones: 0, surfaces: 0, windows: 0 });
   elements.geometryCanvasHost.innerHTML = `<div class="empty">${t("geometry.noGeometry")}</div>`;

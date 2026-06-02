@@ -5623,3 +5623,204 @@ th.input-jump-highlight {
     grid-template-columns: 1fr;
   }
 }
+
+.simulation-pane {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+  padding: 12px;
+}
+
+.simulation-controls {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.2fr) minmax(260px, 1.6fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+.simulation-controls label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-controls select {
+  min-width: 0;
+}
+
+.simulation-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  color: var(--text) !important;
+  white-space: nowrap;
+}
+
+.simulation-progress-card,
+.simulation-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.simulation-progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.simulation-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.simulation-kpis > div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--surface);
+}
+
+.simulation-kpis span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.simulation-kpis strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.simulation-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 7px;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.simulation-badge.succeeded {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
+}
+
+.simulation-badge.failed,
+.simulation-badge.missing_energyplus {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+  color: var(--red);
+}
+
+.simulation-badge.stale {
+  background: color-mix(in srgb, var(--amber) 20%, transparent);
+  color: var(--amber);
+}
+
+.simulation-error {
+  border-left: 3px solid var(--red);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+}
+
+.simulation-tables {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(260px, 1fr);
+  gap: 12px;
+}
+
+.simulation-tables h4 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.simulation-severity {
+  text-transform: capitalize;
+}
+
+.simulation-severity.warning {
+  color: var(--amber);
+}
+
+.simulation-severity.severe,
+.simulation-severity.fatal {
+  color: var(--red);
+}
+
+.simulation-chart {
+  min-height: 280px;
+  overflow-x: auto;
+}
+
+.simulation-svg {
+  width: 100%;
+  min-width: 680px;
+  height: 280px;
+}
+
+.simulation-grid {
+  stroke: color-mix(in srgb, var(--line) 80%, transparent);
+  stroke-width: 1;
+}
+
+.simulation-axis-line {
+  stroke: var(--muted);
+  stroke-width: 1.2;
+}
+
+.simulation-axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.simulation-title {
+  fill: var(--text);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.simulation-line {
+  fill: none;
+  stroke: var(--teal);
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.simulation-files {
+  min-height: 80px;
+}
+
+@media (max-width: 980px) {
+  .simulation-controls,
+  .simulation-kpis,
+  .simulation-tables {
+    grid-template-columns: 1fr;
+  }
+
+  .simulation-checkbox {
+    white-space: normal;
+  }
+}

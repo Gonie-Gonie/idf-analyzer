@@ -81,6 +81,7 @@
             <button class="tab" data-result-tab="profile" type="button" data-i18n="tab.profile">Profile</button>
             <button class="tab" data-result-tab="hvac" type="button" data-i18n="tab.hvac">HVAC</button>
             <button class="tab" data-result-tab="output" type="button" data-i18n="tab.output">Output</button>
+            <button class="tab" data-result-tab="simulation" type="button" data-i18n="tab.simulation">Simulation</button>
             <button class="tab" data-result-tab="diagnose" type="button" data-i18n="tab.diagnose">Diagnose</button>
             <button class="tab" data-result-tab="geometry" type="button" data-i18n="tab.geometry">Geometry</button>
           </nav>
@@ -254,6 +255,64 @@
                   <button id="outputConfirmApply" type="submit" disabled data-i18n="action.apply">Apply</button>
                 </div>
               </form>
+            </div>
+          </div>
+
+          <div class="result-pane" id="simulationPane">
+            <div class="summary-head simulation-head">
+              <div>
+                <h2 data-i18n="tab.simulation">Simulation</h2>
+                <span id="simulationStats">No run yet</span>
+              </div>
+              <div class="summary-tools">
+                <button id="simulationRefreshEnv" type="button" data-i18n="action.refresh">Refresh</button>
+                <button id="simulationRunButton" type="button" data-i18n="action.runSimulation">Run Simulation</button>
+              </div>
+            </div>
+            <div class="simulation-pane">
+              <section class="simulation-controls" aria-label="Simulation controls">
+                <label>
+                  <span data-i18n="simulation.energyPlus">EnergyPlus</span>
+                  <select id="simulationEnergyPlusSelect"></select>
+                </label>
+                <label>
+                  <span data-i18n="simulation.weather">Weather</span>
+                  <select id="simulationWeatherSelect"></select>
+                </label>
+                <label class="simulation-checkbox">
+                  <input id="simulationAutoRunOnOpen" type="checkbox" checked />
+                  <span data-i18n="simulation.autoRunOnOpen">Auto-run quietly after opening an input</span>
+                </label>
+              </section>
+              <section class="simulation-progress-card" aria-label="Simulation progress">
+                <div class="simulation-progress-meta">
+                  <span id="simulationStatus" data-i18n="simulation.idle">Ready</span>
+                  <span id="simulationPercent">0%</span>
+                </div>
+                <div class="tool-progress-track">
+                  <div id="simulationProgressBar" class="tool-progress-bar"></div>
+                </div>
+              </section>
+              <section class="simulation-section">
+                <div class="profile-section-head">
+                  <h3 data-i18n="simulation.results">Results</h3>
+                  <span id="simulationResultMeta" class="tool-muted">ERR / CSV / output files</span>
+                </div>
+                <div id="simulationResultSummary" class="simulation-summary"></div>
+              </section>
+              <section class="simulation-section">
+                <div class="profile-section-head">
+                  <h3 data-i18n="simulation.graph">CSV Graph</h3>
+                  <select id="simulationSeriesSelect" aria-label="CSV series"></select>
+                </div>
+                <div id="simulationChart" class="simulation-chart"></div>
+              </section>
+              <section class="simulation-section">
+                <div class="profile-section-head">
+                  <h3 data-i18n="simulation.files">Output files</h3>
+                </div>
+                <div id="simulationFiles" class="simulation-files"></div>
+              </section>
             </div>
           </div>
 
