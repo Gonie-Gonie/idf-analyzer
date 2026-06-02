@@ -342,12 +342,7 @@ func mergeEnergyPlusInstallations(configured []EnergyPlusInstallSetting, detecte
 		seen[key] = true
 		out = append(out, install)
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].AutoDetected != out[j].AutoDetected {
-			return !out[i].AutoDetected
-		}
-		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
-	})
+	sortEnergyPlusInstallations(out)
 	return out
 }
 
@@ -387,6 +382,77 @@ func AutoDetectEnergyPlusInstallations() []EnergyPlusInstallSetting {
 		seen[key] = true
 		out = append(out, EnergyPlusInstallFromExecutable(candidate, true))
 	}
+	sortEnergyPlusInstallations(out)
+	return out
+}
+
+func sortEnergyPlusInstallations(installations []EnergyPlusInstallSetting) {
+	sort.SliceStable(installations, func(i, j int) bool {
+		if cmp := compareEnergyPlusVersions(installations[i].Version, installations[j].Version); cmp != 0 {
+			return cmp > 0
+		}
+		if installations[i].AutoDetected != installations[j].AutoDetected {
+			return !installations[i].AutoDetected
+		}
+		return strings.ToLower(installations[i].Name) < strings.ToLower(installations[j].Name)
+	})
+}
+
+func compareEnergyPlusVersions(a string, b string) int {
+	left := versionNumbers(a)
+	right := versionNumbers(b)
+	if len(left) == 0 && len(right) == 0 {
+		return 0
+	}
+	if len(left) == 0 {
+		return -1
+	}
+	if len(right) == 0 {
+		return 1
+	}
+	maxLen := len(left)
+	if len(right) > maxLen {
+		maxLen = len(right)
+	}
+	for i := 0; i < maxLen; i++ {
+		lv, rv := 0, 0
+		if i < len(left) {
+			lv = left[i]
+		}
+		if i < len(right) {
+			rv = right[i]
+		}
+		if lv > rv {
+			return 1
+		}
+		if lv < rv {
+			return -1
+		}
+	}
+	return 0
+}
+
+func versionNumbers(value string) []int {
+	out := []int{}
+	current := strings.Builder{}
+	flush := func() {
+		if current.Len() == 0 {
+			return
+		}
+		number, err := strconv.Atoi(current.String())
+		if err == nil {
+			out = append(out, number)
+		}
+		current.Reset()
+	}
+	for _, r := range value {
+		if r >= '0' && r <= '9' {
+			current.WriteRune(r)
+			continue
+		}
+		flush()
+	}
+	flush()
 	return out
 }
 

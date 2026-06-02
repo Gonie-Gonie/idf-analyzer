@@ -86,6 +86,7 @@ function renderSimulationEmpty() {
   updateSimulationControls();
   const installCount = state.simulationEnvironment?.installations?.length || 0;
   const hasText = Boolean((elements.idfInput?.value || "").trim());
+  const versionIssue = simulationVersionIssue();
   if (state.simulationRunning) {
     elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
     elements.simulationResultMeta.textContent = t("simulation.backgroundRun", {}, "EnergyPlus is running in the background");
@@ -95,15 +96,16 @@ function renderSimulationEmpty() {
     elements.simulationFiles.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.writingOutputs", {}, "EnergyPlus is writing output files"))}</div>`;
     return;
   }
+  const idleMessage = versionIssue
+    ? versionIssue.message
+    : hasText
+      ? t("simulation.idle", {}, "Ready")
+      : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation");
   elements.simulationStats.textContent = installCount
-    ? hasText
-      ? t("simulation.ready", {}, "Ready")
-      : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
+    ? idleMessage
     : t("simulation.noEnergyPlus", {}, "No EnergyPlus installation");
   elements.simulationStatus.textContent = installCount
-    ? hasText
-      ? t("simulation.idle", {}, "Ready")
-      : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
+    ? idleMessage
     : t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings");
   elements.simulationStatus.classList.remove("status-loading");
   elements.simulationPercent.textContent = "0%";
@@ -130,8 +132,9 @@ function renderSimulationEnvironment() {
         })
         .join("")
     : `<option value="">${escapeHTML(t("simulation.noEnergyPlus", {}, "No EnergyPlus installation"))}</option>`;
-  if (currentInstall && [...elements.simulationEnergyPlusSelect.options].some((option) => option.value === currentInstall)) {
-    elements.simulationEnergyPlusSelect.value = currentInstall;
+  const recommendedInstallPath = recommendedEnergyPlusInstallPath(installs, currentInstall);
+  if (recommendedInstallPath && [...elements.simulationEnergyPlusSelect.options].some((option) => option.value === recommendedInstallPath)) {
+    elements.simulationEnergyPlusSelect.value = recommendedInstallPath;
   }
 
   const folders = state.simulationEnvironment?.weatherFolders || [];
@@ -150,6 +153,24 @@ function renderSimulationEnvironment() {
   }
 }
 
+function recommendedEnergyPlusInstallPath(installs, currentPath) {
+  if (!installs.length) {
+    return "";
+  }
+  const requiredVersion = currentInputEnergyPlusVersion();
+  const currentInstall = installs.find((install) => install.executablePath === currentPath);
+  if (requiredVersion) {
+    const exact = installs.find((install) => normalizedVersionKey(install.version) === requiredVersion);
+    if (exact) {
+      return exact.executablePath;
+    }
+    if (!currentInstall || compareVersions(currentInstall.version, installs[0].version) < 0) {
+      return installs[0].executablePath;
+    }
+  }
+  return currentInstall?.executablePath || installs[0].executablePath;
+}
+
 function renderSimulationProgress() {
   const progress = state.simulationProgress;
   if (!progress || !elements.simulationProgressBar) {
@@ -166,17 +187,21 @@ function renderSimulationProgress() {
 function updateSimulationControls() {
   const hasText = Boolean((elements.idfInput?.value || "").trim());
   const hasInstall = Boolean(elements.simulationEnergyPlusSelect?.value || state.simulationEnvironment?.installations?.[0]?.executablePath);
+  const versionIssue = simulationVersionIssue();
   if (elements.simulationRunButton) {
-    elements.simulationRunButton.disabled = state.simulationRunning || !hasText || !hasInstall;
-    elements.simulationRunButton.textContent = state.simulationRunning ? t("simulation.runningShort", {}, "Running") : t("action.runSimulation", {}, "Run Simulation");
-    elements.simulationRunButton.classList.toggle("status-loading", state.simulationRunning);
-    elements.simulationRunButton.title = state.simulationRunning
-      ? t("simulation.backgroundRun", {}, "EnergyPlus is running in the background")
+    const disabledReason = versionIssue
+      ? versionIssue.message
       : !hasInstall
         ? t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings")
         : !hasText
           ? t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
           : "";
+    elements.simulationRunButton.disabled = state.simulationRunning || !hasText || !hasInstall || Boolean(versionIssue);
+    elements.simulationRunButton.textContent = state.simulationRunning ? t("simulation.runningShort", {}, "Running") : t("action.runSimulation", {}, "Run Simulation");
+    elements.simulationRunButton.classList.toggle("status-loading", state.simulationRunning);
+    elements.simulationRunButton.title = state.simulationRunning
+      ? t("simulation.backgroundRun", {}, "EnergyPlus is running in the background")
+      : disabledReason;
   }
   if (elements.simulationEnergyPlusSelect) {
     elements.simulationEnergyPlusSelect.disabled = state.simulationRunning;
@@ -184,6 +209,85 @@ function updateSimulationControls() {
   if (elements.simulationWeatherSelect) {
     elements.simulationWeatherSelect.disabled = state.simulationRunning;
   }
+}
+
+function simulationVersionIssue() {
+  const requiredVersion = currentInputEnergyPlusVersion();
+  if (!requiredVersion) {
+    return null;
+  }
+  const selectedInstall = selectedEnergyPlusInstall();
+  if (!selectedInstall?.version) {
+    return null;
+  }
+  const selectedVersion = normalizedVersionKey(selectedInstall.version);
+  if (selectedVersion === requiredVersion) {
+    return null;
+  }
+  return {
+    requiredVersion,
+    selectedVersion: selectedInstall.version,
+    message: t(
+      "simulation.versionMismatch",
+      { idf: requiredVersion, ep: selectedInstall.version },
+      `IDF Version ${requiredVersion} needs matching EnergyPlus. Selected: ${selectedInstall.version}.`,
+    ),
+  };
+}
+
+function selectedEnergyPlusInstall() {
+  const path = elements.simulationEnergyPlusSelect?.value || "";
+  return (state.simulationEnvironment?.installations || []).find((install) => install.executablePath === path) || null;
+}
+
+function currentInputEnergyPlusVersion() {
+  return extractInputEnergyPlusVersion(elements.idfInput?.value || "");
+}
+
+function extractInputEnergyPlusVersion(text) {
+  const match = String(text || "").match(/(?:^|\n)\s*Version\s*,\s*([^;!\n]+)/i);
+  if (!match) {
+    return "";
+  }
+  return normalizedVersionKey(match[1]);
+}
+
+function normalizedVersionKey(value) {
+  const numbers = versionNumbers(value);
+  if (numbers.length < 2) {
+    return "";
+  }
+  return `${numbers[0]}.${numbers[1]}`;
+}
+
+function compareVersions(a, b) {
+  const left = versionNumbers(a);
+  const right = versionNumbers(b);
+  if (!left.length && !right.length) {
+    return 0;
+  }
+  if (!left.length) {
+    return -1;
+  }
+  if (!right.length) {
+    return 1;
+  }
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const lValue = left[index] || 0;
+    const rValue = right[index] || 0;
+    if (lValue !== rValue) {
+      return lValue > rValue ? 1 : -1;
+    }
+  }
+  return 0;
+}
+
+function versionNumbers(value) {
+  return String(value || "")
+    .match(/\d+/g)
+    ?.map((item) => Number(item))
+    .filter((item) => Number.isFinite(item)) || [];
 }
 
 function updateSimulationProgressClasses(running) {
@@ -359,10 +463,19 @@ async function runCurrentSimulation({ silent = false, auto = false } = {}) {
     return null;
   }
   const env = state.simulationEnvironment || (await loadSimulationEnvironment());
+  renderSimulationEnvironment();
   const installPath = elements.simulationEnergyPlusSelect?.value || env?.installations?.[0]?.executablePath || "";
   if (!installPath) {
     if (!silent) {
       setStatus(t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings"), "warn");
+    }
+    renderSimulation();
+    return null;
+  }
+  const versionIssue = simulationVersionIssue();
+  if (versionIssue) {
+    if (!silent) {
+      setStatus(versionIssue.message, "warn");
     }
     renderSimulation();
     return null;
@@ -422,6 +535,11 @@ async function maybeAutoRunSimulation() {
   }
   const env = state.simulationEnvironment || (await loadSimulationEnvironment());
   if (!env?.installations?.length) {
+    return;
+  }
+  renderSimulationEnvironment();
+  if (simulationVersionIssue()) {
+    renderSimulation();
     return;
   }
   const key = `${state.currentFilePath || state.currentFilename || "current"}:${hashString(text)}`;

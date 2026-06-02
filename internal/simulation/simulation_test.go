@@ -94,3 +94,22 @@ func TestDefaultSimulationWorkerCountUsesFractionAndMax(t *testing.T) {
 		t.Fatalf("workers = %d, want 1", workers)
 	}
 }
+
+func TestEnergyPlusInstallationsSortNewestFirst(t *testing.T) {
+	installations := []EnergyPlusInstallSetting{
+		{Name: "EnergyPlus 23.2", Version: "23.2", AutoDetected: true},
+		{Name: "EnergyPlus 9.6", Version: "9.6", AutoDetected: true},
+		{Name: "EnergyPlus 25.1", Version: "25.1", AutoDetected: true},
+		{Name: "EnergyPlus 24.2", Version: "24.2", AutoDetected: true},
+	}
+
+	sortEnergyPlusInstallations(installations)
+
+	got := []string{installations[0].Version, installations[1].Version, installations[2].Version, installations[3].Version}
+	want := []string{"25.1", "24.2", "23.2", "9.6"}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("versions = %v, want %v", got, want)
+		}
+	}
+}

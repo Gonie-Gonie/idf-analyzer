@@ -613,6 +613,7 @@ const dictionaries = {
     "simulation.weather": "Weather",
     "simulation.weatherDataPath": "WeatherData path",
     "simulation.weatherDetected": "{folders} folders, {files} weather files detected",
+    "simulation.versionMismatch": "IDF Version {idf} needs matching EnergyPlus. Selected: {ep}.",
     "simulation.waitingForCSV": "Waiting for CSV output",
     "simulation.writingOutputs": "EnergyPlus is writing output files",
     "simulation.weatherFolders": "Weather folders",
