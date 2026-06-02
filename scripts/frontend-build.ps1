@@ -35,6 +35,7 @@ $modules = @(
     "app-info.js",
     "geometry-loader.js",
     "geometry-view.js",
+    "hvac-views.js",
     "input-views.js",
     "layout.js",
     "main.js",
@@ -44,6 +45,7 @@ $modules = @(
     "sample.js",
     "settings-client.js",
     "shortcuts.js",
+    "simulation-views.js",
     "state.js",
     "tools.js",
     "view-history.js"
@@ -53,6 +55,29 @@ foreach ($module in $modules) {
     $path = Join-Path $moduleDir $module
     if (-not (Test-Path $path)) {
         throw "Missing frontend/src/js/$module"
+    }
+}
+
+$nestedModules = @(
+    "tools/multi-simulation.js"
+)
+
+foreach ($module in $nestedModules) {
+    $path = Join-Path $moduleDir $module
+    if (-not (Test-Path $path)) {
+        throw "Missing frontend/src/js/$module"
+    }
+}
+
+$styles = @(
+    "styles.css",
+    "styles/simulation.css"
+)
+
+foreach ($style in $styles) {
+    $path = Join-Path $assetRoot $style
+    if (-not (Test-Path $path)) {
+        throw "Missing frontend/src/$style"
     }
 }
 

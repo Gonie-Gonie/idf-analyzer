@@ -1,4 +1,4 @@
-package main
+package simulation
 
 import (
 	"os"
@@ -89,7 +89,7 @@ func TestCollectWeatherFoldersGroupsEPWFiles(t *testing.T) {
 }
 
 func TestDefaultSimulationWorkerCountUsesFractionAndMax(t *testing.T) {
-	workers := defaultSimulationWorkerCount(SimulationSettings{WorkerFraction: 0.5, MaxWorkers: 1})
+	workers := DefaultWorkerCount(SimulationSettings{WorkerFraction: 0.5, MaxWorkers: 1})
 	if workers != 1 {
 		t.Fatalf("workers = %d, want 1", workers)
 	}

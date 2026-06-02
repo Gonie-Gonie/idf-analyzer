@@ -1,4 +1,4 @@
-package main
+package simulation
 
 import (
 	"os"
@@ -14,7 +14,7 @@ func TestExternalEnergyPlusSmoke(t *testing.T) {
 
 	executable := strings.TrimSpace(os.Getenv("IDF_ANALYZER_ENERGYPLUS_EXE"))
 	if executable == "" {
-		for _, install := range autoDetectEnergyPlusInstallations() {
+		for _, install := range AutoDetectEnergyPlusInstallations() {
 			if install.ExecutablePath != "" {
 				executable = install.ExecutablePath
 				break
@@ -33,7 +33,7 @@ func TestExternalEnergyPlusSmoke(t *testing.T) {
 		}
 	}
 
-	result, err := runSimulation(SimulationRunRequest{
+	result, err := RunSimulation(SimulationRunRequest{
 		RunID:                    "external-smoke",
 		InputPath:                example,
 		Filename:                 filepath.Base(example),
@@ -41,7 +41,7 @@ func TestExternalEnergyPlusSmoke(t *testing.T) {
 		WeatherPath:              weather,
 		OutputDirectory:          t.TempDir(),
 		Silent:                   true,
-	}, nil)
+	}, nil, DefaultSettings())
 	if err != nil {
 		t.Fatal(err)
 	}

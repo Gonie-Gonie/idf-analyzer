@@ -1,4 +1,4 @@
-package main
+package simulation
 
 import (
 	"bufio"
@@ -17,8 +17,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -51,6 +49,25 @@ type WeatherFile struct {
 	Path   string `json:"path"`
 	Folder string `json:"folder"`
 	Source string `json:"source"`
+}
+
+type SimulationSettings struct {
+	EnergyPlusInstallations []EnergyPlusInstallSetting `json:"energyPlusInstallations"`
+	ExtraWeatherDataPaths   []string                   `json:"extraWeatherDataPaths"`
+	RunDirectory            string                     `json:"runDirectory"`
+	WorkerFraction          float64                    `json:"workerFraction"`
+	MaxWorkers              int                        `json:"maxWorkers"`
+	AutoRunOnOpen           bool                       `json:"autoRunOnOpen"`
+}
+
+type EnergyPlusInstallSetting struct {
+	ID              string `json:"id"`
+	Version         string `json:"version"`
+	Name            string `json:"name"`
+	ExecutablePath  string `json:"executablePath"`
+	RootPath        string `json:"rootPath"`
+	WeatherDataPath string `json:"weatherDataPath"`
+	AutoDetected    bool   `json:"autoDetected"`
 }
 
 type SimulationRunRequest struct {
@@ -191,7 +208,7 @@ type columnAccumulator struct {
 	last         float64
 }
 
-func defaultSimulationSettings() SimulationSettings {
+func DefaultSettings() SimulationSettings {
 	return SimulationSettings{
 		RunDirectory:   defaultSimulationRunDirectory(),
 		WorkerFraction: defaultSimulationWorkerFraction,
@@ -200,7 +217,7 @@ func defaultSimulationSettings() SimulationSettings {
 	}
 }
 
-func normalizeSimulationSettings(settings SimulationSettings, defaults SimulationSettings) SimulationSettings {
+func NormalizeSettings(settings SimulationSettings, defaults SimulationSettings) SimulationSettings {
 	settings.RunDirectory = strings.TrimSpace(settings.RunDirectory)
 	if settings.RunDirectory == "" {
 		settings.RunDirectory = defaults.RunDirectory
@@ -287,127 +304,10 @@ func normalizePathList(values []string) []string {
 	return out
 }
 
-func (a *App) GetSimulationEnvironment() (*SimulationEnvironment, error) {
-	_, settings, err := loadAppSettings()
-	if err != nil {
-		return nil, err
-	}
-	return buildSimulationEnvironment(settings.Simulation), nil
-}
-
-func (a *App) SelectEnergyPlusExecutable() (*EnergyPlusInstallSetting, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("desktop runtime is not ready")
-	}
-	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: "Select EnergyPlus executable",
-		Filters: []wailsruntime.FileFilter{
-			{DisplayName: "EnergyPlus executable", Pattern: "*.exe"},
-			{DisplayName: "All files", Pattern: "*.*"},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if path == "" {
-		return &EnergyPlusInstallSetting{}, nil
-	}
-	install := energyPlusInstallFromExecutable(path, false)
-	return &install, nil
-}
-
-func (a *App) SelectWeatherFile() (*WeatherFile, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("desktop runtime is not ready")
-	}
-	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title: "Select EnergyPlus weather file",
-		Filters: []wailsruntime.FileFilter{
-			{DisplayName: "EnergyPlus weather", Pattern: "*.epw"},
-			{DisplayName: "All files", Pattern: "*.*"},
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	if path == "" {
-		return &WeatherFile{}, nil
-	}
-	file := weatherFileFromPath(path, "User selected")
-	return &file, nil
-}
-
-func (a *App) SelectWeatherDirectory() (string, error) {
-	if a.ctx == nil {
-		return "", fmt.Errorf("desktop runtime is not ready")
-	}
-	return wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:                "Select extra weather data directory",
-		CanCreateDirectories: false,
-	})
-}
-
-func (a *App) SelectSimulationInputFiles() (*SimulationFileSelectionResult, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("desktop runtime is not ready")
-	}
-	paths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:   "Select EnergyPlus inputs",
-		Filters: inputFileFilters(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if len(paths) == 0 {
-		return &SimulationFileSelectionResult{Canceled: true}, nil
-	}
-	sort.Strings(paths)
-	return &SimulationFileSelectionResult{Paths: paths}, nil
-}
-
-func (a *App) SelectSimulationInputFolder(recursive bool) (*SimulationFileSelectionResult, error) {
-	if a.ctx == nil {
-		return nil, fmt.Errorf("desktop runtime is not ready")
-	}
-	root, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:                "Select folder containing EnergyPlus inputs",
-		CanCreateDirectories: false,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if root == "" {
-		return &SimulationFileSelectionResult{Canceled: true}, nil
-	}
-	paths, err := findInputFiles(root, recursive)
-	if err != nil {
-		return nil, err
-	}
-	return &SimulationFileSelectionResult{Paths: paths, RootDirectory: root}, nil
-}
-
-func (a *App) RunSimulationText(request SimulationRunRequest) (*SimulationRunResult, error) {
-	progress := func(item SimulationProgress) {
-		if a.ctx != nil {
-			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:simulationProgress", item)
-		}
-	}
-	return runSimulation(request, progress)
-}
-
-func (a *App) RunMultipleSimulations(request MultiSimulationRequest) (*MultiSimulationResult, error) {
-	progress := func(item SimulationProgress) {
-		if a.ctx != nil {
-			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:multiSimulationProgress", item)
-		}
-	}
-	return runMultipleSimulations(request, progress)
-}
-
-func buildSimulationEnvironment(settings SimulationSettings) *SimulationEnvironment {
-	settings = normalizeSimulationSettings(settings, defaultSimulationSettings())
+func BuildEnvironment(settings SimulationSettings) *SimulationEnvironment {
+	settings = NormalizeSettings(settings, DefaultSettings())
 	warnings := []string{}
-	installations := mergeEnergyPlusInstallations(settings.EnergyPlusInstallations, autoDetectEnergyPlusInstallations())
+	installations := mergeEnergyPlusInstallations(settings.EnergyPlusInstallations, AutoDetectEnergyPlusInstallations())
 	if len(installations) == 0 {
 		warnings = append(warnings, "No EnergyPlus installation was found. Register energyplus.exe in Settings.")
 	}
@@ -417,7 +317,7 @@ func buildSimulationEnvironment(settings SimulationSettings) *SimulationEnvironm
 		Installations:       installations,
 		WeatherFolders:      weatherFolders,
 		DefaultRunDirectory: settings.RunDirectory,
-		DefaultWorkerCount:  defaultSimulationWorkerCount(settings),
+		DefaultWorkerCount:  DefaultWorkerCount(settings),
 		CPUCount:            goruntime.NumCPU(),
 		Warnings:            warnings,
 	}
@@ -451,7 +351,7 @@ func mergeEnergyPlusInstallations(configured []EnergyPlusInstallSetting, detecte
 	return out
 }
 
-func autoDetectEnergyPlusInstallations() []EnergyPlusInstallSetting {
+func AutoDetectEnergyPlusInstallations() []EnergyPlusInstallSetting {
 	candidates := []string{}
 	if exe := strings.TrimSpace(os.Getenv("ENERGYPLUS_EXE")); exe != "" {
 		candidates = append(candidates, exe)
@@ -485,7 +385,7 @@ func autoDetectEnergyPlusInstallations() []EnergyPlusInstallSetting {
 			continue
 		}
 		seen[key] = true
-		out = append(out, energyPlusInstallFromExecutable(candidate, true))
+		out = append(out, EnergyPlusInstallFromExecutable(candidate, true))
 	}
 	return out
 }
@@ -501,7 +401,7 @@ func defaultEnergyPlusRootPatterns() []string {
 	return patterns
 }
 
-func energyPlusInstallFromExecutable(executable string, autoDetected bool) EnergyPlusInstallSetting {
+func EnergyPlusInstallFromExecutable(executable string, autoDetected bool) EnergyPlusInstallSetting {
 	executable = filepath.Clean(strings.TrimSpace(executable))
 	root := filepath.Dir(executable)
 	version := detectEnergyPlusVersion(executable, root)
@@ -629,14 +529,14 @@ func findWeatherFiles(root string, source string) []WeatherFile {
 			return nil
 		}
 		if strings.EqualFold(filepath.Ext(path), ".epw") {
-			files = append(files, weatherFileFromPath(path, source))
+			files = append(files, WeatherFileFromPath(path, source))
 		}
 		return nil
 	})
 	return files
 }
 
-func weatherFileFromPath(path string, source string) WeatherFile {
+func WeatherFileFromPath(path string, source string) WeatherFile {
 	path = filepath.Clean(strings.TrimSpace(path))
 	return WeatherFile{
 		Name:   filepath.Base(path),
@@ -646,7 +546,8 @@ func weatherFileFromPath(path string, source string) WeatherFile {
 	}
 }
 
-func runSimulation(request SimulationRunRequest, progress func(SimulationProgress)) (*SimulationRunResult, error) {
+func RunSimulation(request SimulationRunRequest, progress func(SimulationProgress), settings SimulationSettings) (*SimulationRunResult, error) {
+	settings = NormalizeSettings(settings, DefaultSettings())
 	request.RunID = defaultRunID(request.RunID)
 	started := time.Now()
 	result := &SimulationRunResult{
@@ -662,7 +563,7 @@ func runSimulation(request SimulationRunRequest, progress func(SimulationProgres
 	emitSimulationProgress(progress, request.RunID, "prepare", "running", "Preparing EnergyPlus run", 0, 4, result.InputPath)
 
 	if result.EnergyPlusExecutablePath == "" {
-		installations := autoDetectEnergyPlusInstallations()
+		installations := AutoDetectEnergyPlusInstallations()
 		if len(installations) > 0 {
 			result.EnergyPlusExecutablePath = installations[0].ExecutablePath
 		}
@@ -682,7 +583,7 @@ func runSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		return result, nil
 	}
 
-	outputDir, err := simulationOutputDirectory(request.OutputDirectory, request.RunID, result.Filename, result.InputPath)
+	outputDir, err := simulationOutputDirectory(request.OutputDirectory, request.RunID, result.Filename, result.InputPath, settings.RunDirectory)
 	if err != nil {
 		return nil, err
 	}
@@ -737,11 +638,12 @@ func runSimulation(request SimulationRunRequest, progress func(SimulationProgres
 	return result, nil
 }
 
-func runMultipleSimulations(request MultiSimulationRequest, progress func(SimulationProgress)) (*MultiSimulationResult, error) {
+func RunMultipleSimulations(request MultiSimulationRequest, progress func(SimulationProgress), settings SimulationSettings) (*MultiSimulationResult, error) {
+	settings = NormalizeSettings(settings, DefaultSettings())
 	request.RunID = defaultRunID(request.RunID)
 	paths := normalizePathList(request.InputPaths)
 	if len(paths) == 0 && strings.TrimSpace(request.RootDirectory) != "" {
-		found, err := findInputFiles(request.RootDirectory, request.Recursive)
+		found, err := FindInputFiles(request.RootDirectory, request.Recursive)
 		if err != nil {
 			return nil, err
 		}
@@ -750,14 +652,9 @@ func runMultipleSimulations(request MultiSimulationRequest, progress func(Simula
 	if len(paths) == 0 {
 		return &MultiSimulationResult{Canceled: true, RunID: request.RunID}, nil
 	}
-	settings := defaultSimulationSettings()
-	_, loadedSettings, err := loadAppSettings()
-	if err == nil {
-		settings = loadedSettings.Simulation
-	}
 	workers := request.WorkerCount
 	if workers <= 0 {
-		workers = defaultSimulationWorkerCount(settings)
+		workers = DefaultWorkerCount(settings)
 	}
 	if workers > len(paths) {
 		workers = len(paths)
@@ -779,14 +676,14 @@ func runMultipleSimulations(request MultiSimulationRequest, progress func(Simula
 			defer wg.Done()
 			for path := range jobs {
 				weatherPath := resolveBatchWeather(path, request)
-				runResult, err := runSimulation(SimulationRunRequest{
+				runResult, err := RunSimulation(SimulationRunRequest{
 					RunID:                    request.RunID + "-" + shortPathHash(path),
 					InputPath:                path,
 					Filename:                 filepath.Base(path),
 					EnergyPlusExecutablePath: request.EnergyPlusExecutablePath,
 					WeatherPath:              weatherPath,
 					Silent:                   true,
-				}, nil)
+				}, nil, settings)
 				if err != nil {
 					runResult = &SimulationRunResult{
 						RunID:     request.RunID + "-" + shortPathHash(path),
@@ -1135,15 +1032,11 @@ func downsamplePoints(points []SimulationPoint, limit int) []SimulationPoint {
 	return out
 }
 
-func simulationOutputDirectory(requested string, runID string, filename string, inputPath string) (string, error) {
+func simulationOutputDirectory(requested string, runID string, filename string, inputPath string, defaultRunDirectory string) (string, error) {
 	if strings.TrimSpace(requested) != "" {
 		return filepath.Clean(requested), nil
 	}
-	settings := defaultSimulationSettings()
-	if _, loaded, err := loadAppSettings(); err == nil {
-		settings = loaded.Simulation
-	}
-	root := strings.TrimSpace(settings.RunDirectory)
+	root := strings.TrimSpace(defaultRunDirectory)
 	if root == "" {
 		root = defaultSimulationRunDirectory()
 	}
@@ -1170,7 +1063,7 @@ func defaultSimulationRunDirectory() string {
 	return filepath.Join(root, "IDF Analyzer", "simulations")
 }
 
-func defaultSimulationWorkerCount(settings SimulationSettings) int {
+func DefaultWorkerCount(settings SimulationSettings) int {
 	cpus := goruntime.NumCPU()
 	if cpus < 1 {
 		cpus = 1
@@ -1185,7 +1078,7 @@ func defaultSimulationWorkerCount(settings SimulationSettings) int {
 	return workers
 }
 
-func findInputFiles(root string, recursive bool) ([]string, error) {
+func FindInputFiles(root string, recursive bool) ([]string, error) {
 	root = filepath.Clean(strings.TrimSpace(root))
 	if root == "" {
 		return nil, nil

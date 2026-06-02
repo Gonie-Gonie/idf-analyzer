@@ -12,6 +12,7 @@ import (
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
+	"github.com/Gonie-Gonie/idf-analyzer/internal/simulation"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -140,24 +141,8 @@ type BehaviorSettings struct {
 	AutoAnalyzeDelayMS int `json:"autoAnalyzeDelayMs"`
 }
 
-type SimulationSettings struct {
-	EnergyPlusInstallations []EnergyPlusInstallSetting `json:"energyPlusInstallations"`
-	ExtraWeatherDataPaths   []string                   `json:"extraWeatherDataPaths"`
-	RunDirectory            string                     `json:"runDirectory"`
-	WorkerFraction          float64                    `json:"workerFraction"`
-	MaxWorkers              int                        `json:"maxWorkers"`
-	AutoRunOnOpen           bool                       `json:"autoRunOnOpen"`
-}
-
-type EnergyPlusInstallSetting struct {
-	ID              string `json:"id"`
-	Version         string `json:"version"`
-	Name            string `json:"name"`
-	ExecutablePath  string `json:"executablePath"`
-	RootPath        string `json:"rootPath"`
-	WeatherDataPath string `json:"weatherDataPath"`
-	AutoDetected    bool   `json:"autoDetected"`
-}
+type SimulationSettings = simulation.SimulationSettings
+type EnergyPlusInstallSetting = simulation.EnergyPlusInstallSetting
 
 type InteractionSettings struct {
 	SyncRawTextPosition bool              `json:"syncRawTextPosition"`
@@ -992,7 +977,7 @@ func defaultAppSettings() AppSettings {
 			},
 		},
 		Profile:    idf.DefaultProfileAnalysisSettings(),
-		Simulation: defaultSimulationSettings(),
+		Simulation: simulation.DefaultSettings(),
 	}
 }
 
@@ -1026,7 +1011,7 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 	}
 	settings.Interaction.Shortcuts = normalizeShortcutSettings(settings.Interaction.Shortcuts, defaults.Interaction.Shortcuts)
 	settings.Profile = normalizeProfileSettings(settings.Profile, defaults.Profile)
-	settings.Simulation = normalizeSimulationSettings(settings.Simulation, defaults.Simulation)
+	settings.Simulation = simulation.NormalizeSettings(settings.Simulation, defaults.Simulation)
 	return settings
 }
 
