@@ -19,8 +19,9 @@ export function initializeSimulationControls() {
   window.addEventListener("idfAnalyzer:documentChanged", () => {
     if (state.simulationResult && state.simulationRunText !== elements.idfInput.value) {
       state.simulationStale = true;
-      renderSimulation();
     }
+    updateSimulationControls();
+    renderSimulation();
   });
   window.addEventListener("idfAnalyzer:analysisComplete", () => maybeAutoRunSimulation());
   window.addEventListener("idfAnalyzer:settingsChanged", (event) => {
@@ -54,6 +55,7 @@ export async function loadSimulationEnvironment() {
 export function renderSimulation() {
   renderSimulationEnvironment();
   renderSimulationProgress();
+  updateSimulationControls();
   if (!state.simulationResult) {
     renderSimulationEmpty();
     return;
@@ -67,8 +69,11 @@ export function renderSimulation() {
   elements.simulationStats.textContent = stale
     ? t("simulation.staleStats", { status: statusLabel }, `${statusLabel}, stale`)
     : t("simulation.stats", { status: statusLabel, warnings: err.warnings || 0, severe: err.severe || 0 }, `${statusLabel}, ${err.warnings || 0} warnings`);
-  elements.simulationResultMeta.textContent = `${result.filename || "current input"} · ${formatDuration(result.durationMs || 0)} · ${csvCount} CSV · ${issueCount} ERR issues`;
-  elements.simulationResultSummary.innerHTML = renderSimulationSummary(result, stale);
+  if (state.simulationRunning) {
+    elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
+  }
+  elements.simulationResultMeta.textContent = `${result.filename || "current input"} - ${formatDuration(result.durationMs || 0)} - ${csvCount} CSV - ${issueCount} ERR issues`;
+  elements.simulationResultSummary.innerHTML = `${state.simulationRunning ? renderRunningNotice() : ""}${renderSimulationSummary(result, stale)}`;
   renderSimulationSeriesSelect(result);
   renderSimulationChart();
   renderSimulationFiles(result);
@@ -78,17 +83,31 @@ function renderSimulationEmpty() {
   if (!elements.simulationStats) {
     return;
   }
-  if (!state.simulationRunning) {
-    const installCount = state.simulationEnvironment?.installations?.length || 0;
-    elements.simulationStats.textContent = installCount
-      ? t("simulation.ready", {}, "Ready")
-      : t("simulation.noEnergyPlus", {}, "No EnergyPlus installation");
-    elements.simulationStatus.textContent = installCount
-      ? t("simulation.idle", {}, "Ready")
-      : t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings");
-    elements.simulationPercent.textContent = "0%";
-    elements.simulationProgressBar.style.width = "0%";
+  updateSimulationControls();
+  const installCount = state.simulationEnvironment?.installations?.length || 0;
+  const hasText = Boolean((elements.idfInput?.value || "").trim());
+  if (state.simulationRunning) {
+    elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
+    elements.simulationResultMeta.textContent = t("simulation.backgroundRun", {}, "EnergyPlus is running in the background");
+    elements.simulationResultSummary.innerHTML = renderRunningNotice();
+    elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.waitingForCSV", {}, "Waiting for CSV output"))}</option>`;
+    elements.simulationChart.innerHTML = `<div class="simulation-running-empty">${renderMiniProgressSVG()}<span>${escapeHTML(t("simulation.graphAfterRun", {}, "The CSV graph will appear when the run finishes."))}</span></div>`;
+    elements.simulationFiles.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.writingOutputs", {}, "EnergyPlus is writing output files"))}</div>`;
+    return;
   }
+  elements.simulationStats.textContent = installCount
+    ? hasText
+      ? t("simulation.ready", {}, "Ready")
+      : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
+    : t("simulation.noEnergyPlus", {}, "No EnergyPlus installation");
+  elements.simulationStatus.textContent = installCount
+    ? hasText
+      ? t("simulation.idle", {}, "Ready")
+      : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
+    : t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings");
+  elements.simulationStatus.classList.remove("status-loading");
+  elements.simulationPercent.textContent = "0%";
+  elements.simulationProgressBar.style.width = "0%";
   elements.simulationResultMeta.textContent = "ERR / CSV / output files";
   elements.simulationResultSummary.innerHTML = `<div class="empty">${t("simulation.noResult", {}, "Run a simulation to inspect ERR and CSV outputs.")}</div>`;
   elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.noSeries", {}, "No CSV series"))}</option>`;
@@ -106,7 +125,7 @@ function renderSimulationEnvironment() {
   elements.simulationEnergyPlusSelect.innerHTML = installs.length
     ? installs
         .map((install) => {
-          const label = `${install.name || "EnergyPlus"}${install.autoDetected ? " · auto" : ""}`;
+          const label = `${install.name || "EnergyPlus"}${install.autoDetected ? " - auto" : ""}`;
           return `<option value="${escapeHTML(install.executablePath)}" title="${escapeHTML(install.executablePath)}">${escapeHTML(label)}</option>`;
         })
         .join("")
@@ -118,7 +137,7 @@ function renderSimulationEnvironment() {
   const folders = state.simulationEnvironment?.weatherFolders || [];
   const weatherHTML = [`<option value="">${escapeHTML(t("simulation.noWeather", {}, "No weather / design-day only"))}</option>`];
   for (const folder of folders) {
-    const label = `${folder.source || "Weather"} · ${folder.label || folder.path || "Folder"}`;
+    const label = `${folder.source || "Weather"} - ${folder.label || folder.path || "Folder"}`;
     weatherHTML.push(`<optgroup label="${escapeHTML(label)}">`);
     for (const file of folder.files || []) {
       weatherHTML.push(`<option value="${escapeHTML(file.path)}" title="${escapeHTML(file.path)}">${escapeHTML(file.name)}</option>`);
@@ -134,12 +153,70 @@ function renderSimulationEnvironment() {
 function renderSimulationProgress() {
   const progress = state.simulationProgress;
   if (!progress || !elements.simulationProgressBar) {
+    updateSimulationProgressClasses(false);
     return;
   }
   const percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
   elements.simulationProgressBar.style.width = `${percent}%`;
   elements.simulationPercent.textContent = `${Math.round(percent)}%`;
   elements.simulationStatus.textContent = progress.message || statusText(progress.status);
+  updateSimulationProgressClasses(state.simulationRunning || progress.status === "running");
+}
+
+function updateSimulationControls() {
+  const hasText = Boolean((elements.idfInput?.value || "").trim());
+  const hasInstall = Boolean(elements.simulationEnergyPlusSelect?.value || state.simulationEnvironment?.installations?.[0]?.executablePath);
+  if (elements.simulationRunButton) {
+    elements.simulationRunButton.disabled = state.simulationRunning || !hasText || !hasInstall;
+    elements.simulationRunButton.textContent = state.simulationRunning ? t("simulation.runningShort", {}, "Running") : t("action.runSimulation", {}, "Run Simulation");
+    elements.simulationRunButton.classList.toggle("status-loading", state.simulationRunning);
+    elements.simulationRunButton.title = state.simulationRunning
+      ? t("simulation.backgroundRun", {}, "EnergyPlus is running in the background")
+      : !hasInstall
+        ? t("simulation.registerEnergyPlus", {}, "Register EnergyPlus in Settings")
+        : !hasText
+          ? t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
+          : "";
+  }
+  if (elements.simulationEnergyPlusSelect) {
+    elements.simulationEnergyPlusSelect.disabled = state.simulationRunning;
+  }
+  if (elements.simulationWeatherSelect) {
+    elements.simulationWeatherSelect.disabled = state.simulationRunning;
+  }
+}
+
+function updateSimulationProgressClasses(running) {
+  elements.simulationStatus?.classList.toggle("status-loading", running);
+  elements.simulationProgressBar?.closest(".simulation-progress-card")?.classList.toggle("running", running);
+}
+
+function renderRunningNotice() {
+  const progress = state.simulationProgress || {};
+  const percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+  return `
+    <div class="simulation-running-notice">
+      <div>
+        <strong>${escapeHTML(t("simulation.backgroundRun", {}, "EnergyPlus is running in the background"))}</strong>
+        <span>${escapeHTML(progress.message || t("simulation.running", {}, "EnergyPlus simulation is running"))}</span>
+      </div>
+      <span>${Math.round(percent)}%</span>
+    </div>`;
+}
+
+function renderMiniProgressSVG() {
+  const progress = state.simulationProgress || {};
+  const percent = Math.max(0, Math.min(100, Number(progress.percent || 0)));
+  const width = 220;
+  const x = 18 + (width - 36) * (percent / 100);
+  return `
+    <svg class="simulation-mini-progress" viewBox="0 0 ${width} 72" role="img" aria-label="${escapeHTML(t("simulation.runningShort", {}, "Running"))}">
+      <line x1="18" y1="38" x2="${width - 18}" y2="38" class="simulation-mini-track" />
+      <line x1="18" y1="38" x2="${x}" y2="38" class="simulation-mini-line" />
+      <circle cx="18" cy="38" r="5" class="simulation-mini-node active" />
+      <circle cx="${width / 2}" cy="38" r="5" class="simulation-mini-node ${percent >= 50 ? "active" : ""}" />
+      <circle cx="${width - 18}" cy="38" r="5" class="simulation-mini-node ${percent >= 100 ? "active" : ""}" />
+    </svg>`;
 }
 
 function renderSimulationSummary(result, stale) {
@@ -211,7 +288,7 @@ function renderSimulationSeriesSelect(result) {
   elements.simulationSeriesSelect.innerHTML = series
     .map((item) => {
       const id = seriesID(item);
-      return `<option value="${escapeHTML(id)}" ${id === state.simulationSelectedSeries ? "selected" : ""}>${escapeHTML(item.file)} · ${escapeHTML(item.column)}</option>`;
+      return `<option value="${escapeHTML(id)}" ${id === state.simulationSelectedSeries ? "selected" : ""}>${escapeHTML(item.file)} - ${escapeHTML(item.column)}</option>`;
     })
     .join("");
 }
@@ -361,7 +438,7 @@ function handleSimulationProgress(payload) {
     return;
   }
   state.simulationProgress = progress;
-  renderSimulationProgress();
+  renderSimulation();
 }
 
 async function callSimulationAPI(methodName, endpoint, payload) {

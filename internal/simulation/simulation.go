@@ -434,6 +434,7 @@ func detectEnergyPlusVersion(executable string, root string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	command := exec.CommandContext(ctx, executable, "--version")
+	configureBackgroundCommand(command)
 	output, err := command.Output()
 	if err != nil {
 		return ""
@@ -765,6 +766,7 @@ func simulationCompletionMessage(result *SimulationRunResult) string {
 }
 
 func runCommandCaptured(command *exec.Cmd) (string, string, int, error) {
+	configureBackgroundCommand(command)
 	stdoutPipe, err := command.StdoutPipe()
 	if err != nil {
 		return "", "", -1, err
