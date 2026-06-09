@@ -1,0 +1,18 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  zones:
+    - name: Office
+      geometry:
+        surfaces:
+          - name: Office Wall
+            class: BuildingSurface:Detailed
+            boundary:
+              condition: Outdoors
+              object: null
+            exposure:
+              sun: SunExposed
+              wind: WindExposed
+            vertices: [[0, 0, 3], [4, 0, 3], [4, 0, 0], [0, 0, 0]]
+            computed:
+              area: 12 m2
+

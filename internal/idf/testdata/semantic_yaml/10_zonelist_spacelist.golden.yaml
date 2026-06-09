@@ -1,0 +1,18 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  zone_groups:
+    - name: Offices
+      class: ZoneList
+      members:
+        - name: Office 1
+        - name: Office 2
+  zones:
+    - name: Office 1
+      loads:
+        lights:
+          - name: Shared Lights
+            zone: Offices
+            duplicated_as:
+              group: obj-3
+              role_here: zone_group_expanded_load
+

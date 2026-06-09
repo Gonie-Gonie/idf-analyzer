@@ -388,7 +388,7 @@ func outputCategory(objectType string) string {
 		return "meters"
 	case "output:variabledictionary":
 		return "dictionary"
-	case "output:sqlite":
+	case "output:sqlite", "output:json", "outputcontrol:files":
 		return "files"
 	case "output:table:summaryreports", "outputcontrol:table:style":
 		return "tabular"

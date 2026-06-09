@@ -1,0 +1,18 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  hvac:
+    air_loops:
+      - name: Main Air Loop
+        class: AirLoopHVAC
+        supply_side:
+          inlet_node: Air Supply Inlet
+          outlet_node: Air Supply Outlet
+          branches:
+            - name: Main Air Branch
+              components:
+                - name: Supply Fan
+                  class: Fan:ConstantVolume
+                  duplicated_as:
+                    group: obj-3
+                    role_here: loop_component
+

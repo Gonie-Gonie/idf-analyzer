@@ -1,0 +1,11 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  source_name_conflicts:
+    - group: duplicate-zone-office
+      object_type: Zone
+      name: Office
+      object_indexes:
+        - 0
+        - 1
+      suggested_action: rename_later_duplicates
+

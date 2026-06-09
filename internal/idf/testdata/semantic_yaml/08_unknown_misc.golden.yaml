@@ -1,0 +1,9 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  miscellaneous:
+    other:
+      - class: Parametric:SetValueForRun
+        name: Some Value
+        reason: unmapped_object_type
+        export_policy: preserve_exactly
+

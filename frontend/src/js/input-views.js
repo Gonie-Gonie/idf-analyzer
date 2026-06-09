@@ -124,6 +124,7 @@ function renderSemanticView() {
   const keyWidths = semanticKeyWidths(visibleLines);
   setInputFilterStats(visibleObjectIndexes.size || (state.report?.objects?.length || 0), state.report?.objects?.length || 0);
 
+  const sourceNameConflicts = projection.sourceNameConflicts || [];
   elements.semanticEditor.innerHTML = `
     <div class="semantic-toolbar">
       <div class="json-meta">
@@ -133,8 +134,8 @@ function renderSemanticView() {
       </div>
       <div class="semantic-actions">
         <button id="semanticFocusObjectButton" type="button">${escapeHTML(t("input.focusObject"))}</button>
-        <button id="semanticFixDuplicatesButton" type="button" ${projection.duplicateGroups?.length ? "" : "disabled"}>
-          ${escapeHTML(t("semantic.fixDuplicates", { count: projection.duplicateGroups?.length || 0 }, `Fix duplicates (${projection.duplicateGroups?.length || 0})`))}
+        <button id="semanticFixDuplicatesButton" type="button" ${sourceNameConflicts.length ? "" : "disabled"}>
+          ${escapeHTML(t("semantic.fixSourceNameConflicts", { count: sourceNameConflicts.length }, `Fix source name conflicts (${sourceNameConflicts.length})`))}
         </button>
       </div>
     </div>
@@ -187,13 +188,13 @@ function semanticVisibleLines(lines, terms) {
 }
 
 function renderSemanticWarnings(projection) {
-  const groups = projection.duplicateGroups || [];
+  const groups = projection.sourceNameConflicts || [];
   if (!groups.length) {
-    return `<div class="semantic-health ok">${escapeHTML(t("semantic.noDuplicates", {}, "No duplicate object names in the current registry."))}</div>`;
+    return `<div class="semantic-health ok">${escapeHTML(t("semantic.noSourceNameConflicts", {}, "No source name conflicts in the current registry."))}</div>`;
   }
   return `
     <div class="semantic-health warn">
-      <strong>${escapeHTML(t("semantic.duplicates", { count: groups.length }, `${groups.length} duplicate name groups`))}</strong>
+      <strong>${escapeHTML(t("semantic.sourceNameConflicts", { count: groups.length }, `${groups.length} source name conflict groups`))}</strong>
       ${groups
         .map(
           (group) => `
@@ -255,14 +256,16 @@ function renderSemanticLineContent(line) {
   }
   const indent = "  ".repeat(Number(line.indent || 0));
   const key = semanticDisplayKey(line);
+  const displayValue = line.displayValue ?? line.value ?? "";
+  const patchValue = line.patchValue ?? line.sourceValue ?? displayValue;
   const value = line.editable
-    ? `<button class="semantic-value-token" type="button" data-object-index="${escapeHTML(line.objectIndex ?? "")}" data-field-index="${escapeHTML(line.fieldIndex ?? "")}" data-field-index-kind="idf" data-original="${escapeHTML(line.value ?? "")}">${escapeHTML(semanticDisplayScalar(line.value))}</button>`
-    : `<span class="semantic-value">${escapeHTML(semanticDisplayScalar(line.value))}</span>`;
+    ? `<button class="semantic-value-token" type="button" data-object-index="${escapeHTML(line.objectIndex ?? "")}" data-field-index="${escapeHTML(line.fieldIndex ?? "")}" data-field-index-kind="idf" data-original="${escapeHTML(patchValue)}" data-display="${escapeHTML(displayValue)}" data-edit-kind="${escapeHTML(line.editKind || "raw_field")}">${escapeHTML(semanticDisplayScalar(displayValue))}</button>`
+    : `<span class="semantic-value" data-source-kind="${escapeHTML(line.sourceKind || "")}">${escapeHTML(semanticDisplayScalar(displayValue))}</span>`;
   return `<code class="semantic-code-kv"><span class="semantic-indent">${escapeHTML(indent)}</span><span class="semantic-key">${escapeHTML(key)}</span><span class="semantic-colon">:</span> ${value}</code>`;
 }
 
 function semanticLineHasValue(line) {
-  return Boolean(line?.key) && (line.editable || line.value !== undefined || line.role === "metadata" || line.role === "object" || line.role === "field");
+  return Boolean(line?.key) && (line.editable || line.displayValue !== undefined || line.value !== undefined || line.role === "metadata" || line.role === "object" || line.role === "field");
 }
 
 function semanticDisplayKey(line) {

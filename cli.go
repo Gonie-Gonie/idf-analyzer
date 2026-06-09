@@ -308,7 +308,7 @@ func cliClean(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 
 func cliConvert(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	fs := cliFlagSet("convert", stderr)
-	target := fs.String("to", "", "Target format: idf, json, yaml/semantic-yaml view export, table, xlsx.")
+	target := fs.String("to", "", "Target format: idf, json, semantic-yaml projection (yaml alias), table, xlsx.")
 	output := fs.String("o", "", "Output path. Required for table/xlsx unless -o - is used.")
 	if err := fs.Parse(args); err != nil {
 		return err

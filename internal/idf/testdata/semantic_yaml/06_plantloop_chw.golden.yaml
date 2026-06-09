@@ -1,0 +1,14 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  hvac:
+    plant_loops:
+      - name: Chilled Water Loop
+        class: PlantLoop
+        supply_side:
+          inlet_node: Plant Supply Inlet
+          outlet_node: Plant Supply Outlet
+          branches:
+            - name: Plant Supply Branch
+              inlet_node: Plant Supply Inlet
+              outlet_node: Plant Supply Outlet
+

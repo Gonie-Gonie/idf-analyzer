@@ -1,0 +1,12 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  zones:
+    - name: Office
+      loads:
+        people:
+          - name: Office People
+            schedule: AlwaysOn
+            level: 3 persons
+            outputs:
+              - "[Hourly] People Occupant Count"
+

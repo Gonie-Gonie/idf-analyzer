@@ -1,0 +1,19 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  outputs:
+    files:
+      csv:
+        enabled: true
+        source: OutputControl:Files
+      sqlite:
+        enabled: true
+        source: Output:SQLite
+      json:
+        enabled: false
+        source: Output:JSON
+    variables:
+      - "[Hourly] Office :: Zone Mean Air Temperature"
+    wildcard:
+      - request: "[Hourly] * :: Zone Mean Air Temperature"
+        scope: wildcard
+

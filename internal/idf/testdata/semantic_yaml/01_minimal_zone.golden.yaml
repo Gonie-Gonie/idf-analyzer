@@ -1,0 +1,8 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  zones:
+    - name: Office
+      class: Zone
+      source:
+        object_index: 0
+

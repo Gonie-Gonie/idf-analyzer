@@ -1,0 +1,17 @@
+semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  schedules:
+    - name: Office Occupancy
+      class: Schedule:Compact
+      type_limits: Fraction
+      used_by:
+        - zones/Office/loads/people/Office People
+      rules:
+        - through: 12/31
+          for: Weekdays
+          until:
+            - time: "08:00"
+              value: 0
+            - time: "18:00"
+              value: 1
+
