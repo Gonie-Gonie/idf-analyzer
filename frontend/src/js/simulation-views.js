@@ -579,6 +579,7 @@ function renderSimulationHeatFlow() {
   }
 
   elements.simulationHeatFlow.innerHTML = `
+    ${renderHeatFlowGuide()}
     <div class="heatflow-layout">
       <div class="heatflow-floor-grid">
         ${(geometry.stories || []).map((story) => renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex)).join("")}
@@ -589,6 +590,15 @@ function renderSimulationHeatFlow() {
     </div>
     <div class="heatflow-tooltip hidden" role="tooltip"></div>`;
   bindHeatFlowInteractions(dataset, geometry, zoneMap);
+}
+
+function renderHeatFlowGuide() {
+  return `
+    <div class="heatflow-reading-guide">
+      <span><i class="heatflow-guide-fill"></i>${escapeHTML(t("simulation.heatFlowGuideFill", {}, "Zone fill shows the selected overlay: net heat flow or temperature."))}</span>
+      <span><i class="heatflow-guide-stack"></i>${escapeHTML(t("simulation.heatFlowGuideStack", {}, "Stack bars show each heat-flow category; up is heat entering, down is heat leaving."))}</span>
+      <span><i class="heatflow-guide-ring"></i>${escapeHTML(t("simulation.heatFlowGuideRing", {}, "The +/- ring marks the zone's net direction and relative magnitude. Click a zone for the ledger."))}</span>
+    </div>`;
 }
 
 function renderSimulationHeatFlowEmpty(message) {
@@ -684,12 +694,16 @@ function renderHeatFlowZoneStack(zoneSeries, dataset, frameIndex, center, netVal
     }
     return `<rect x="${-barWidth / 2}" y="${roundSVG(y)}" width="${barWidth}" height="${roundSVG(height)}" fill="${escapeHTML(category.color || "#94a3b8")}"></rect>`;
   });
-  const radius = Math.max(5, Math.min(20, Math.abs(netValue) / maxAbs * 22));
+  const radius = Math.max(6, Math.min(18, Math.abs(netValue) / maxAbs * 22));
+  const absNet = Math.abs(Number(netValue) || 0);
+  const netClass = absNet <= 1e-9 ? "neutral" : netValue >= 0 ? "gain" : "loss";
+  const netLabel = absNet <= 1e-9 ? "0" : netValue >= 0 ? "+" : "-";
   return `
     <g class="heatflow-mini-stack" transform="translate(${roundSVG(center.x)} ${roundSVG(center.y)})">
       <line x1="-9" x2="9" y1="0" y2="0"></line>
       ${rects.join("")}
-      <circle r="${roundSVG(radius)}"></circle>
+      <circle class="heatflow-net-ring ${netClass}" r="${roundSVG(radius)}"></circle>
+      <text y="3">${netLabel}</text>
     </g>`;
 }
 
@@ -719,6 +733,7 @@ function renderHeatFlowInspector(dataset, zoneSeries, zoneName, frameIndex) {
       <span><em>${escapeHTML(t("common.temperature", {}, "Temperature"))}</em><strong>${escapeHTML(formatTemperature(temp))}</strong></span>
       <span><em>${escapeHTML(t("common.net", {}, "Net"))}</em><strong>${escapeHTML(formatWatts(net))}</strong></span>
     </div>
+    <div class="heatflow-flow-note">${escapeHTML(t("simulation.heatFlowSignNote", {}, "Positive values mean heat entering the zone; negative values mean heat leaving it."))}</div>
     <div class="heatflow-ledger-list">
       ${rows}
       <div class="heatflow-ledger-row net"><span>${escapeHTML(t("common.net", {}, "Net"))}</span><strong>${escapeHTML(formatWatts(net))}</strong></div>

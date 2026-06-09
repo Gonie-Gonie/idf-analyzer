@@ -120,6 +120,7 @@ function renderSemanticView() {
   const visibleObjectIndexes = new Set(
     visibleLines.filter((line) => line.objectIndex !== undefined && line.objectIndex !== null).map((line) => String(line.objectIndex)),
   );
+  const keyWidths = semanticKeyWidths(visibleLines);
   setInputFilterStats(visibleObjectIndexes.size || (state.report?.objects?.length || 0), state.report?.objects?.length || 0);
 
   elements.semanticEditor.innerHTML = `
@@ -138,10 +139,23 @@ function renderSemanticView() {
     </div>
     ${renderSemanticWarnings(projection)}
     <div class="semantic-yaml" role="tree" aria-label="Semantic YAML projection">
-      ${visibleLines.map(renderSemanticLine).join("")}
+      ${visibleLines.map((line, index) => renderSemanticLine(line, index, keyWidths)).join("")}
     </div>
   `;
   bindSemanticControls();
+}
+
+function semanticKeyWidths(lines) {
+  const widths = new Map();
+  for (const line of lines) {
+    if (!semanticLineHasValue(line)) {
+      continue;
+    }
+    const indent = Number(line.indent || 0);
+    const width = Math.min(34, Math.max(8, semanticDisplayKey(line).length));
+    widths.set(indent, Math.max(widths.get(indent) || 0, width));
+  }
+  return widths;
 }
 
 function semanticVisibleLines(lines, terms) {
@@ -189,10 +203,13 @@ function renderSemanticWarnings(projection) {
     </div>`;
 }
 
-function renderSemanticLine(line, lineIndex) {
+function renderSemanticLine(line, lineIndex, keyWidths = new Map()) {
   const objectIndex = line.objectIndex ?? "";
   const fieldIndex = line.fieldIndex ?? "";
   const selected = objectIndex !== "" && String(objectIndex) === String(state.semanticSelectedObjectIndex);
+  const indent = Number(line.indent || 0);
+  const style = semanticLineHasValue(line) ? `style="--semantic-key-width:${keyWidths.get(indent) || 12}ch"` : "";
+  const classes = semanticLineClassNames(line, selected);
   const attrs = [
     `data-semantic-line="${lineIndex}"`,
     `data-object-index="${escapeHTML(objectIndex)}"`,
@@ -200,24 +217,51 @@ function renderSemanticLine(line, lineIndex) {
     `data-field-index="${escapeHTML(fieldIndex)}"`,
     `data-field-index-kind="idf"`,
   ].join(" ");
-  return `
-    <div class="semantic-line ${selected ? "selected" : ""} ${line.editable ? "editable" : ""}" ${attrs}>
-      ${renderSemanticLineContent(line)}
-    </div>`;
+  return `<div class="${classes}" ${style} ${attrs}>${renderSemanticLineContent(line)}</div>`;
+}
+
+function semanticLineClassNames(line, selected) {
+  const classes = ["semantic-line"];
+  if (selected) {
+    classes.push("selected");
+  }
+  if (line.editable) {
+    classes.push("editable");
+  }
+  if (line.text === "semantic_energyplus_model:") {
+    classes.push("semantic-root-line");
+  }
+  if (line.role === "syntax" && Number(line.indent || 0) <= 1 && line.text !== "semantic_energyplus_model:") {
+    classes.push("semantic-section-line");
+  }
+  if (String(line.key || "") === "class") {
+    classes.push("semantic-object-line");
+  }
+  return classes.join(" ");
 }
 
 function renderSemanticLineContent(line) {
-  if (!line.editable) {
+  if (!semanticLineHasValue(line)) {
     return `<code>${escapeHTML(line.text || "")}</code>`;
   }
   const indent = "  ".repeat(Number(line.indent || 0));
-  const prefix = `${indent}${line.key || "field"}: `;
-  return `
-    <code><span class="semantic-prefix">${escapeHTML(prefix)}</span><button class="semantic-value-token" type="button"
-      data-object-index="${escapeHTML(line.objectIndex ?? "")}"
-      data-field-index="${escapeHTML(line.fieldIndex ?? "")}"
-      data-field-index-kind="idf"
-      data-original="${escapeHTML(line.value ?? "")}">${escapeHTML(semanticDisplayScalar(line.value))}</button></code>`;
+  const key = semanticDisplayKey(line);
+  const value = line.editable
+    ? `<button class="semantic-value-token" type="button" data-object-index="${escapeHTML(line.objectIndex ?? "")}" data-field-index="${escapeHTML(line.fieldIndex ?? "")}" data-field-index-kind="idf" data-original="${escapeHTML(line.value ?? "")}">${escapeHTML(semanticDisplayScalar(line.value))}</button>`
+    : `<span class="semantic-value">${escapeHTML(semanticDisplayScalar(line.value))}</span>`;
+  return `<code class="semantic-code-kv"><span class="semantic-indent">${escapeHTML(indent)}</span><span class="semantic-key">${escapeHTML(key)}</span><span class="semantic-colon">:</span> ${value}</code>`;
+}
+
+function semanticLineHasValue(line) {
+  return Boolean(line?.key) && (line.editable || line.value !== undefined || line.role === "metadata" || line.role === "object" || line.role === "field");
+}
+
+function semanticDisplayKey(line) {
+  const key = String(line?.key || "field");
+  if (String(line?.text || "").trimStart().startsWith("- ")) {
+    return `- ${key}`;
+  }
+  return key;
 }
 
 function bindSemanticControls() {

@@ -356,6 +356,82 @@
   min-height: 300px;
 }
 
+.heatflow-reading-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.heatflow-reading-guide span {
+  display: inline-flex;
+  min-width: min(260px, 100%);
+  align-items: center;
+  gap: 6px;
+}
+
+.heatflow-reading-guide i {
+  flex: 0 0 auto;
+}
+
+.heatflow-guide-fill {
+  width: 16px;
+  height: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 2px;
+  background: linear-gradient(90deg, #2563eb, #22c55e, #ef4444);
+}
+
+.heatflow-guide-stack {
+  position: relative;
+  width: 18px;
+  height: 16px;
+}
+
+.heatflow-guide-stack::before,
+.heatflow-guide-stack::after {
+  position: absolute;
+  left: 7px;
+  width: 5px;
+  content: "";
+}
+
+.heatflow-guide-stack::before {
+  top: 1px;
+  height: 6px;
+  background: #f59e0b;
+}
+
+.heatflow-guide-stack::after {
+  bottom: 1px;
+  height: 7px;
+  background: #3b82f6;
+}
+
+.heatflow-guide-ring {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 2px solid #f59e0b;
+  border-radius: 999px;
+  color: var(--text);
+}
+
+.heatflow-guide-ring::before {
+  content: "+";
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+}
+
 .heatflow-layout {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.42fr);
@@ -435,9 +511,28 @@
 }
 
 .heatflow-mini-stack circle {
-  fill: rgba(255, 255, 255, 0.12);
-  stroke: rgba(255, 255, 255, 0.68);
-  stroke-width: 1;
+  fill: rgba(15, 23, 42, 0.56);
+  stroke-width: 2;
+}
+
+.heatflow-mini-stack .gain {
+  stroke: #f59e0b;
+}
+
+.heatflow-mini-stack .loss {
+  stroke: #38bdf8;
+}
+
+.heatflow-mini-stack .neutral {
+  stroke: rgba(255, 255, 255, 0.72);
+}
+
+.heatflow-mini-stack text {
+  fill: #f8fafc;
+  font-size: 9px;
+  font-weight: 800;
+  pointer-events: none;
+  text-anchor: middle;
 }
 
 .heatflow-inspector {
@@ -492,6 +587,16 @@
 .heatflow-current-kpis strong {
   color: var(--text);
   font-size: 14px;
+}
+
+.heatflow-flow-note {
+  border: 1px solid color-mix(in srgb, var(--line) 72%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  padding: 6px 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .heatflow-ledger-list {

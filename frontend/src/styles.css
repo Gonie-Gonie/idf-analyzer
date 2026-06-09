@@ -538,17 +538,37 @@ button:disabled:hover {
   border-radius: var(--radius);
   background: var(--code-bg);
   color: var(--code-ink);
-  padding: 10px 0;
+  padding: 5px 0;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.08;
 }
 
 .semantic-line {
-  min-height: 22px;
-  padding: 0 12px;
+  min-height: 0;
+  padding: 0 10px;
   border-left: 3px solid transparent;
   white-space: pre;
+}
+
+.semantic-yaml .semantic-line:first-child {
+  margin-top: 0;
+}
+
+.semantic-root-line {
+  margin-bottom: 2px;
+  color: #f8fafc;
+  font-weight: 700;
+}
+
+.semantic-section-line {
+  margin-top: 5px;
+  color: #dbeafe;
+  font-weight: 650;
+}
+
+.semantic-object-line {
+  margin-top: 2px;
 }
 
 .semantic-line[data-object-index]:not([data-object-index=""]) {
@@ -567,20 +587,49 @@ button:disabled:hover {
 
 .semantic-line code {
   font: inherit;
+  line-height: inherit;
 }
 
 .semantic-prefix {
   color: #93c5fd;
 }
 
+.semantic-code-kv {
+  display: inline-block;
+}
+
+.semantic-indent {
+  white-space: pre;
+}
+
+.semantic-key {
+  display: inline-block;
+  min-width: var(--semantic-key-width, 12ch);
+  color: #93c5fd;
+}
+
+.semantic-colon {
+  color: #cbd5e1;
+}
+
+.semantic-value {
+  color: #fef3c7;
+}
+
 .semantic-value-token {
+  appearance: none;
+  display: inline;
+  height: auto;
   min-height: 0;
+  margin: 0;
   border: 0;
   border-radius: 4px;
   background: rgba(52, 183, 197, 0.16);
   color: #fef3c7;
-  padding: 0 3px;
+  padding: 0 1px;
   font: inherit;
+  line-height: inherit;
+  vertical-align: baseline;
   white-space: pre;
 }
 
@@ -592,14 +641,15 @@ button:disabled:hover {
 }
 
 .semantic-value-editor {
-  min-height: 22px;
+  min-height: 14px;
   max-width: 100%;
   border: 1px solid var(--amber);
   border-radius: 4px;
   background: var(--control);
   color: var(--ink);
-  padding: 0 5px;
+  padding: 0 4px;
   font: inherit;
+  line-height: 1.1;
 }
 
 .formatted-object-view {
