@@ -115,10 +115,14 @@ Output:Variable,
 		t.Fatalf("expected standard electricity recommendation in %#v", report.Recommendations)
 	}
 	foundStandardMeter := false
+	foundHeatFlow := false
 	foundOldHumidity := false
 	for _, obj := range report.Existing {
 		if obj.ObjectType == "Output:Meter" && obj.KeyValue == "Electricity:Facility" && obj.ReportingFrequency == "Monthly" {
 			foundStandardMeter = true
+		}
+		if obj.ObjectType == "Output:Variable" && obj.VariableName == "Zone Air Heat Balance Surface Convection Rate" && obj.ReportingFrequency == "Hourly" {
+			foundHeatFlow = true
 		}
 		if obj.ObjectType == "Output:Variable" && obj.VariableName == "Zone Air Relative Humidity" {
 			foundOldHumidity = true
@@ -126,6 +130,9 @@ Output:Variable,
 	}
 	if !foundStandardMeter {
 		t.Fatalf("standard monthly facility meter was not present: %#v", report.Existing)
+	}
+	if !foundHeatFlow {
+		t.Fatalf("standard hourly heat-flow output was not present: %#v", report.Existing)
 	}
 	if foundOldHumidity {
 		t.Fatalf("replace preset should remove non-standard humidity output: %#v", report.Existing)

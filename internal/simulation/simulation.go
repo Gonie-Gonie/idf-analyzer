@@ -131,6 +131,7 @@ type SimulationRunResult struct {
 	ERR                      ERRSummary           `json:"err"`
 	CSVs                     []CSVSummary         `json:"csvs,omitempty"`
 	Series                   []SimulationSeries   `json:"series,omitempty"`
+	HeatFlow                 HeatFlowDataset      `json:"heatFlow,omitempty"`
 }
 
 type MultiSimulationResult struct {
@@ -918,6 +919,24 @@ func readSimulationOutputs(result *SimulationRunResult) {
 		}
 		result.CSVs = append(result.CSVs, summary)
 		result.Series = append(result.Series, series...)
+		if len(result.HeatFlow.Zones) == 0 {
+			heatFlow, err := parseSimulationHeatFlowCSV(file.Path)
+			if err == nil && len(heatFlow.Zones) > 0 {
+				result.HeatFlow = heatFlow
+			}
+		}
+	}
+	if len(result.HeatFlow.Zones) == 0 {
+		for _, file := range result.Files {
+			if file.Kind != "eso" {
+				continue
+			}
+			heatFlow, err := parseSimulationHeatFlowESO(file.Path)
+			if err == nil && len(heatFlow.Zones) > 0 {
+				result.HeatFlow = heatFlow
+				break
+			}
+		}
 	}
 }
 

@@ -497,6 +497,8 @@ function outputDestination(item) {
       return "End-use monthly meter";
     case "zone_energy":
       return "Zone monthly variable";
+    case "zone_heat_flow":
+      return "Zone hourly heat-flow variable";
     default:
       return item.objectType || "-";
   }

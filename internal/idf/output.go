@@ -236,6 +236,15 @@ func outputRecommendations(doc Document, existing []OutputObjectSummary) []Outpu
 			outputFields("Report 1 Name", "AllSummary"), "tabular"),
 		standardOutputRecommendation("standard-table-style-html", "Standard: HTML table style", "standard_controls", "Writes tabular reports in HTML with kWh-style energy units.", "OutputControl:Table:Style",
 			outputFields("Column Separator", "HTML", "Unit Conversion", "JtoKWH"), "tabular"),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-mean-air-temperature", "Standard: zone mean air temperature", "*", "Zone Mean Air Temperature", standardHeatFlowFrequency, "zone_conditions", "Hourly zone air temperature for thermal camera and heat-flow overlays."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-internal-convective", "Standard: heat-flow internal gains", "*", "Zone Air Heat Balance Internal Convective Heat Gain Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly internal convective heat gains for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-surface-convection", "Standard: heat-flow surface convection", "*", "Zone Air Heat Balance Surface Convection Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly surface convection heat transfer for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-interzone-air", "Standard: heat-flow interzone air", "*", "Zone Air Heat Balance Interzone Air Transfer Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly interzone air transfer for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-outdoor-air", "Standard: heat-flow outdoor air", "*", "Zone Air Heat Balance Outdoor Air Transfer Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly outdoor-air and infiltration transfer for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-system-air", "Standard: heat-flow HVAC air", "*", "Zone Air Heat Balance System Air Transfer Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly HVAC system air transfer for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-system-convective", "Standard: heat-flow system convective", "*", "Zone Air Heat Balance System Convective Heat Gain Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly non-air-system convective heat gains for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-air-storage", "Standard: heat-flow air storage", "*", "Zone Air Heat Balance Air Energy Storage Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly air energy storage term for zone heat-flow ledger."),
+		standardOutputVariableRecommendationWithFrequency("standard-zone-air-hb-deviation", "Standard: heat-flow deviation", "*", "Zone Air Heat Balance Deviation Rate", standardHeatFlowFrequency, "zone_heat_flow", "Hourly off-balance residual for zone heat-flow ledger."),
 		standardOutputMeterRecommendation("standard-meter-electricity-facility", "Standard: facility electricity", "Electricity:Facility", "facility_energy", "Monthly whole-facility electricity use."),
 		standardOutputMeterRecommendation("standard-meter-naturalgas-facility", "Standard: facility natural gas", "NaturalGas:Facility", "facility_energy", "Monthly whole-facility natural gas use."),
 		standardOutputMeterRecommendation("standard-meter-district-cooling-facility", "Standard: facility district cooling", "DistrictCooling:Facility", "facility_energy", "Monthly whole-facility district cooling use."),
@@ -313,11 +322,15 @@ func standardOutputRecommendation(id, label, category, description, objectType s
 }
 
 func standardOutputVariableRecommendation(id, label, keyValue, variableName, category, description string) OutputRecommendation {
+	return standardOutputVariableRecommendationWithFrequency(id, label, keyValue, variableName, standardOutputFrequency, category, description)
+}
+
+func standardOutputVariableRecommendationWithFrequency(id, label, keyValue, variableName, frequency, category, description string) OutputRecommendation {
 	return standardOutputRecommendation(id, label, category, description, "Output:Variable",
 		[]OutputFieldValue{
 			{Name: "Key Value", Value: keyValue},
 			{Name: "Variable Name", Value: variableName},
-			{Name: "Reporting Frequency", Value: standardOutputFrequency},
+			{Name: "Reporting Frequency", Value: frequency},
 		}, "time-series")
 }
 

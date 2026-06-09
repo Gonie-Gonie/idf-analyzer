@@ -283,7 +283,7 @@
                   <span data-i18n="simulation.runOptions">Run options</span>
                   <label class="simulation-checkbox">
                     <input id="simulationStandardOutput" type="checkbox" />
-                    <span data-i18n="simulation.standardOutputRun">Use standard monthly outputs for this run</span>
+                    <span data-i18n="simulation.standardOutputRun">Use standard outputs for this run</span>
                   </label>
                   <label class="simulation-checkbox">
                     <input id="simulationAutoRunOnOpen" type="checkbox" />
@@ -307,6 +307,35 @@
                   <span id="simulationResultMeta" class="tool-muted">ERR / CSV / output files</span>
                 </div>
                 <div id="simulationResultSummary" class="simulation-summary"></div>
+              </section>
+              <section class="simulation-section simulation-heatflow-section">
+                <div class="profile-section-head simulation-heatflow-head">
+                  <h3 data-i18n="simulation.heatFlow">Heat-Flow Ledger</h3>
+                  <span id="simulationHeatFlowStats" class="tool-muted">No heat-flow output</span>
+                </div>
+                <div class="simulation-heatflow-controls" aria-label="Heat-flow controls">
+                  <button id="simulationHeatFlowPlay" type="button" title="Play heat-flow frames">Play</button>
+                  <input id="simulationHeatFlowSlider" type="range" min="0" max="0" value="0" aria-label="Heat-flow frame" />
+                  <output id="simulationHeatFlowFrame">No frame</output>
+                  <label>
+                    <span data-i18n="simulation.speed">Speed</span>
+                    <select id="simulationHeatFlowSpeed" aria-label="Heat-flow playback speed">
+                      <option value="900">Slow</option>
+                      <option value="420" selected>Normal</option>
+                      <option value="160">Fast</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span data-i18n="simulation.overlay">Overlay</span>
+                    <select id="simulationHeatFlowOverlay" aria-label="Heat-flow overlay">
+                      <option value="net" selected>Net heat flow</option>
+                      <option value="temperature">Temperature</option>
+                    </select>
+                  </label>
+                </div>
+                <div id="simulationHeatFlow" class="simulation-heatflow">
+                  <div class="empty">Heat-flow output will appear after a run with standard outputs.</div>
+                </div>
               </section>
               <section class="simulation-section">
                 <div class="profile-section-head">

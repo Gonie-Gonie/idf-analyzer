@@ -62,6 +62,115 @@ func TestParseSimulationCSVBuildsSummariesAndSeries(t *testing.T) {
 	}
 }
 
+func TestParseSimulationHeatFlowCSVBuildsDataset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.csv")
+	content := `Date/Time,ZONE ONE:Zone Mean Air Temperature [C](Hourly),ZONE ONE:Zone Air Heat Balance Internal Convective Heat Gain Rate [W](Hourly),ZONE ONE:Zone Air Heat Balance Surface Convection Rate [W](Hourly),ZONE TWO:Zone Air Heat Balance Outdoor Air Transfer Rate [W](Hourly)
+ 01/01  01:00:00,20.0,100,-30,-12
+ 01/01  02:00:00,21.5,150,-45,-18
+ 01/01  03:00:00,19.5,125,-20,-8
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dataset, err := parseSimulationHeatFlowCSV(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dataset.FrameCount != 3 || dataset.OriginalFrameCount != 3 {
+		t.Fatalf("frame counts = %d/%d, want 3/3", dataset.FrameCount, dataset.OriginalFrameCount)
+	}
+	if len(dataset.Categories) != 3 {
+		t.Fatalf("category count = %d, want 3: %#v", len(dataset.Categories), dataset.Categories)
+	}
+	if len(dataset.Zones) != 2 {
+		t.Fatalf("zone count = %d, want 2: %#v", len(dataset.Zones), dataset.Zones)
+	}
+	if dataset.Zones[0].Name != "ZONE ONE" || dataset.Zones[0].Temperature[1] != 21.5 {
+		t.Fatalf("first zone = %#v", dataset.Zones[0])
+	}
+	if dataset.MaxAbs != 150 {
+		t.Fatalf("max abs = %v, want 150", dataset.MaxAbs)
+	}
+}
+
+func TestParseSimulationHeatFlowESOBuildsDataset(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.eso")
+	content := `Program Version,EnergyPlus
+1,5,Environment Title[],Latitude[deg],Longitude[deg],Time Zone[],Elevation[m]
+2,8,Day of Simulation[],Month[],Day of Month[],DST Indicator[1=yes 0=no],Hour[],StartMinute[],EndMinute[],DayType
+10,1,ZONE ONE,Zone Mean Air Temperature [C] !Hourly
+11,1,ZONE ONE,Zone Air Heat Balance Internal Convective Heat Gain Rate [W] !Hourly
+12,1,ZONE ONE,Zone Air Heat Balance Surface Convection Rate [W] !Hourly
+13,1,ZONE TWO,Zone Air Heat Balance Outdoor Air Transfer Rate [W] !Hourly
+End of Data Dictionary
+1,RUN PERIOD,  0.00, 0.00,   0.00,  0.00
+2,1, 1, 1, 0, 1, 0.00,60.00,Monday
+10,20.0
+11,100.0
+12,-30.0
+13,-12.0
+2,1, 1, 1, 0, 2, 0.00,60.00,Monday
+10,21.5
+11,150.0
+12,-45.0
+13,-18.0
+`
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	dataset, err := parseSimulationHeatFlowESO(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dataset.FrameCount != 2 || dataset.OriginalFrameCount != 2 {
+		t.Fatalf("frame counts = %d/%d, want 2/2", dataset.FrameCount, dataset.OriginalFrameCount)
+	}
+	if len(dataset.Categories) != 3 {
+		t.Fatalf("category count = %d, want 3: %#v", len(dataset.Categories), dataset.Categories)
+	}
+	if len(dataset.Zones) != 2 {
+		t.Fatalf("zone count = %d, want 2: %#v", len(dataset.Zones), dataset.Zones)
+	}
+	if dataset.Zones[0].Name != "ZONE ONE" || dataset.Zones[0].Temperature[1] != 21.5 {
+		t.Fatalf("first zone = %#v", dataset.Zones[0])
+	}
+	if dataset.Labels[1] != "01-01 02:00" {
+		t.Fatalf("labels = %#v", dataset.Labels)
+	}
+}
+
+func TestReadSimulationOutputsUsesESOHeatFlowFallback(t *testing.T) {
+	dir := t.TempDir()
+	content := `Program Version,EnergyPlus
+2,8,Day of Simulation[],Month[],Day of Month[],DST Indicator[1=yes 0=no],Hour[],StartMinute[],EndMinute[],DayType
+10,1,ZONE ONE,Zone Mean Air Temperature [C] !Hourly
+11,1,ZONE ONE,Zone Air Heat Balance Internal Convective Heat Gain Rate [W] !Hourly
+End of Data Dictionary
+2,1, 1, 1, 0, 1, 0.00,60.00,Monday
+10,20.0
+11,100.0
+`
+	if err := os.WriteFile(filepath.Join(dir, "eplusout.eso"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "eplusout.err"), []byte("EnergyPlus Completed Successfully"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := &SimulationRunResult{OutputDirectory: dir}
+	readSimulationOutputs(result)
+	if len(result.HeatFlow.Zones) != 1 {
+		t.Fatalf("heat-flow fallback zones = %d, want 1; files = %#v", len(result.HeatFlow.Zones), result.Files)
+	}
+	if result.HeatFlow.SourceFile != "eplusout.eso" {
+		t.Fatalf("source file = %q, want eplusout.eso", result.HeatFlow.SourceFile)
+	}
+}
+
 func TestCollectWeatherFoldersGroupsEPWFiles(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "USA")

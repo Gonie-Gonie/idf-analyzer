@@ -3,6 +3,7 @@ import { t } from "./i18n.js";
 import { openStandardOutputApplyDialog } from "./output-views.js";
 
 let progressListenerRegistered = false;
+let heatFlowPlayTimer = 0;
 
 export function initializeSimulationControls() {
   elements.simulationApplyStandardOutput?.addEventListener("click", () => openStandardOutputApplyDialog());
@@ -17,6 +18,20 @@ export function initializeSimulationControls() {
   elements.simulationSeriesSelect?.addEventListener("change", () => {
     state.simulationSelectedSeries = elements.simulationSeriesSelect.value || "";
     renderSimulationChart();
+  });
+  elements.simulationHeatFlowSlider?.addEventListener("input", () => {
+    state.simulationHeatFlowFrameIndex = Number(elements.simulationHeatFlowSlider.value) || 0;
+    renderSimulationHeatFlow();
+  });
+  elements.simulationHeatFlowPlay?.addEventListener("click", toggleHeatFlowPlayback);
+  elements.simulationHeatFlowSpeed?.addEventListener("change", () => {
+    if (state.simulationHeatFlowPlaying) {
+      startHeatFlowPlayback();
+    }
+  });
+  elements.simulationHeatFlowOverlay?.addEventListener("change", () => {
+    state.simulationHeatFlowOverlay = elements.simulationHeatFlowOverlay.value || "net";
+    renderSimulationHeatFlow();
   });
   elements.simulationAutoRunOnOpen?.addEventListener("change", () => {
     state.simulationAutoRunOnOpen = elements.simulationAutoRunOnOpen.checked;
@@ -80,6 +95,7 @@ export function renderSimulation() {
   }
   elements.simulationResultMeta.textContent = `${result.filename || "current input"} - ${formatDuration(result.durationMs || 0)} - ${csvCount} CSV - ${issueCount} ERR issues`;
   elements.simulationResultSummary.innerHTML = `${state.simulationRunning ? renderRunningNotice() : ""}${renderSimulationSummary(result, stale)}`;
+  renderSimulationHeatFlow();
   renderSimulationSeriesSelect(result);
   renderSimulationChart();
   renderSimulationFiles(result);
@@ -97,6 +113,7 @@ function renderSimulationEmpty() {
     elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
     elements.simulationResultMeta.textContent = t("simulation.backgroundRun", {}, "EnergyPlus is running in the background");
     elements.simulationResultSummary.innerHTML = renderRunningNotice();
+    renderSimulationHeatFlowEmpty(t("simulation.heatFlowAfterRun", {}, "The heat-flow ledger will appear when standard heat-balance CSV output is available."));
     elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.waitingForCSV", {}, "Waiting for CSV output"))}</option>`;
     elements.simulationChart.innerHTML = `<div class="simulation-running-empty">${renderMiniProgressSVG()}<span>${escapeHTML(t("simulation.graphAfterRun", {}, "The CSV graph will appear when the run finishes."))}</span></div>`;
     elements.simulationFiles.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.writingOutputs", {}, "EnergyPlus is writing output files"))}</div>`;
@@ -110,6 +127,7 @@ function renderSimulationEmpty() {
     elements.simulationProgressBar.style.width = "0%";
     elements.simulationResultMeta.textContent = t("simulation.blockedMeta", {}, "Run requirements need attention");
     elements.simulationResultSummary.innerHTML = renderSimulationBlocker(blockingIssue);
+    renderSimulationHeatFlowEmpty(t("simulation.blockedGraph", {}, "Graph output is unavailable until the run can start."));
     elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.noSeries", {}, "No CSV series"))}</option>`;
     elements.simulationChart.innerHTML = `<div class="simulation-blocked-empty">${escapeHTML(t("simulation.blockedGraph", {}, "Graph output is unavailable until the run can start."))}</div>`;
     elements.simulationFiles.innerHTML = `<div class="simulation-blocked-empty">${escapeHTML(t("simulation.blockedFiles", {}, "No output files will be created while simulation is blocked."))}</div>`;
@@ -129,6 +147,7 @@ function renderSimulationEmpty() {
   elements.simulationProgressBar.style.width = "0%";
   elements.simulationResultMeta.textContent = "ERR / CSV / output files";
   elements.simulationResultSummary.innerHTML = `<div class="empty">${t("simulation.noResult", {}, "Run a simulation to inspect ERR and CSV outputs.")}</div>`;
+  renderSimulationHeatFlowEmpty(t("simulation.noHeatFlow", {}, "Run with standard outputs to inspect zone heat-flow ledger."));
   elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.noSeries", {}, "No CSV series"))}</option>`;
   elements.simulationChart.innerHTML = `<div class="empty">${t("simulation.noGraph", {}, "CSV graph will appear after a run with numeric output.")}</div>`;
   elements.simulationFiles.innerHTML = `<div class="empty">${t("simulation.noFiles", {}, "No output files yet")}</div>`;
@@ -223,7 +242,7 @@ function updateSimulationControls() {
   if (elements.simulationApplyStandardOutput) {
     elements.simulationApplyStandardOutput.disabled = state.simulationRunning || !hasText;
     elements.simulationApplyStandardOutput.title = hasText
-      ? t("output.standardOutputSummary", {}, "Adds the monthly meters and zone energy variables used by standard simulation graphs.")
+      ? t("output.standardOutputSummary", {}, "Adds standard meters, zone energy, and hourly heat-balance outputs used by simulation graphs.")
       : t("simulation.noInputText", {}, "Open or paste an IDF before running simulation");
   }
   if (elements.simulationEnergyPlusSelect) {
@@ -509,6 +528,532 @@ function renderSimulationChart() {
       <text x="${width - pad.right}" y="${height - 12}" text-anchor="end" class="simulation-axis">${escapeHTML(lastLabel)}</text>
       <text x="${pad.left}" y="16" class="simulation-title">${escapeHTML(series.column)}</text>
     </svg>`;
+}
+
+function renderSimulationHeatFlow() {
+  if (!elements.simulationHeatFlow) {
+    return;
+  }
+  const dataset = state.simulationResult?.heatFlow;
+  if (!dataset?.zones?.length || !dataset?.categories?.length || !(dataset.frameCount > 0)) {
+    renderSimulationHeatFlowEmpty(t("simulation.noHeatFlow", {}, "Run with standard outputs to inspect zone heat-flow ledger."));
+    return;
+  }
+  const geometry = state.report?.geometry;
+  if (!geometry?.zones?.length || !geometry?.stories?.length) {
+    renderSimulationHeatFlowEmpty(t("simulation.noHeatFlowGeometry", {}, "Heat-flow data was parsed, but floor-plan geometry is not available yet."));
+    return;
+  }
+
+  const frameCount = Math.max(0, Number(dataset.frameCount) || dataset.labels?.length || 0);
+  state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, 0, Math.max(frameCount - 1, 0));
+  state.simulationHeatFlowOverlay = elements.simulationHeatFlowOverlay?.value || state.simulationHeatFlowOverlay || "net";
+  const frameIndex = state.simulationHeatFlowFrameIndex;
+  const zoneMap = heatFlowZoneMap(dataset);
+  const selectedZone = ensureHeatFlowSelectedZone(dataset, geometry, zoneMap);
+  const stats = [
+    t("count.zones", { count: dataset.zones.length }, `${dataset.zones.length} zones`),
+    `${geometry.stories.length} floors`,
+    dataset.originalFrameCount > dataset.frameCount
+      ? `${dataset.frameCount}/${dataset.originalFrameCount} frames`
+      : `${dataset.frameCount} frames`,
+    dataset.sourceFile || "",
+  ].filter(Boolean);
+
+  elements.simulationHeatFlowStats.textContent = stats.join(" - ");
+  if (elements.simulationHeatFlowSlider) {
+    elements.simulationHeatFlowSlider.disabled = false;
+    elements.simulationHeatFlowSlider.max = String(Math.max(frameCount - 1, 0));
+    elements.simulationHeatFlowSlider.value = String(frameIndex);
+  }
+  if (elements.simulationHeatFlowFrame) {
+    elements.simulationHeatFlowFrame.textContent = heatFlowFrameLabel(dataset, frameIndex);
+  }
+  if (elements.simulationHeatFlowPlay) {
+    elements.simulationHeatFlowPlay.disabled = frameCount <= 1;
+    elements.simulationHeatFlowPlay.textContent = state.simulationHeatFlowPlaying ? t("common.pause", {}, "Pause") : t("common.play", {}, "Play");
+  }
+  if (elements.simulationHeatFlowOverlay) {
+    elements.simulationHeatFlowOverlay.disabled = false;
+    elements.simulationHeatFlowOverlay.value = state.simulationHeatFlowOverlay;
+  }
+
+  elements.simulationHeatFlow.innerHTML = `
+    <div class="heatflow-layout">
+      <div class="heatflow-floor-grid">
+        ${(geometry.stories || []).map((story) => renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex)).join("")}
+      </div>
+      <aside class="heatflow-inspector">
+        ${renderHeatFlowInspector(dataset, zoneMap.get(normalizeHeatFlowName(selectedZone)), selectedZone, frameIndex)}
+      </aside>
+    </div>
+    <div class="heatflow-tooltip hidden" role="tooltip"></div>`;
+  bindHeatFlowInteractions(dataset, geometry, zoneMap);
+}
+
+function renderSimulationHeatFlowEmpty(message) {
+  stopHeatFlowPlayback();
+  if (elements.simulationHeatFlowStats) {
+    elements.simulationHeatFlowStats.textContent = t("simulation.noHeatFlowShort", {}, "No heat-flow output");
+  }
+  if (elements.simulationHeatFlowSlider) {
+    elements.simulationHeatFlowSlider.disabled = true;
+    elements.simulationHeatFlowSlider.max = "0";
+    elements.simulationHeatFlowSlider.value = "0";
+  }
+  if (elements.simulationHeatFlowFrame) {
+    elements.simulationHeatFlowFrame.textContent = t("simulation.noFrame", {}, "No frame");
+  }
+  if (elements.simulationHeatFlowPlay) {
+    elements.simulationHeatFlowPlay.disabled = true;
+    elements.simulationHeatFlowPlay.textContent = t("common.play", {}, "Play");
+  }
+  if (elements.simulationHeatFlowOverlay) {
+    elements.simulationHeatFlowOverlay.disabled = true;
+  }
+  if (elements.simulationHeatFlow) {
+    elements.simulationHeatFlow.innerHTML = `<div class="empty">${escapeHTML(message)}</div>`;
+  }
+}
+
+function renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex) {
+  const surfaces = (geometry.surfaces || []).filter((surface) => surface.storyIndex === story.index && surface.surfaceType?.toLowerCase() === "floor");
+  const bounds = heatFlowStoryBounds(surfaces);
+  if (!bounds.ok || !surfaces.length) {
+    return `
+      <article class="heatflow-floor-card">
+        <h4>${escapeHTML(story.name || `Level ${story.index + 1}`)}</h4>
+        <div class="heatflow-floor-empty">${escapeHTML(t("geometry.noFloorPlan", {}, "No floor plan geometry"))}</div>
+      </article>`;
+  }
+
+  const pad = 14;
+  const width = 460;
+  const modelWidth = Math.max(bounds.maxX - bounds.minX, 1);
+  const modelHeight = Math.max(bounds.maxY - bounds.minY, 1);
+  const height = Math.max(210, Math.round((modelHeight / modelWidth) * width));
+  const scale = Math.min((width - pad * 2) / modelWidth, (height - pad * 2) / modelHeight);
+  const projectPoint = (point) => ({
+    x: pad + (point.x - bounds.minX) * scale,
+    y: height - pad - (point.y - bounds.minY) * scale,
+  });
+  const shapes = surfaces.map((surface) => {
+    const zoneName = surface.zoneName || "";
+    const zoneSeries = zoneMap.get(normalizeHeatFlowName(zoneName));
+    const points = (surface.vertices || []).map(projectPoint);
+    const pointText = points.map((point) => `${roundSVG(point.x)},${roundSVG(point.y)}`).join(" ");
+    const center = polygonCentroid(points);
+    const value = heatFlowZoneNet(zoneSeries, dataset, frameIndex);
+    const fill = heatFlowZoneFill(zoneSeries, dataset, frameIndex);
+    const selected = normalizeHeatFlowName(zoneName) === normalizeHeatFlowName(state.simulationHeatFlowSelectedZone);
+    return `
+      <g class="heatflow-zone ${selected ? "selected" : ""} ${zoneSeries ? "" : "missing"}" data-heat-zone="${escapeHTML(zoneName)}">
+        <polygon points="${pointText}" style="--heatflow-fill: ${fill};"></polygon>
+        ${zoneSeries ? renderHeatFlowZoneStack(zoneSeries, dataset, frameIndex, center, value) : ""}
+        <title>${escapeHTML(heatFlowZoneTitle(zoneName, zoneSeries, dataset, frameIndex))}</title>
+      </g>`;
+  });
+
+  return `
+    <article class="heatflow-floor-card">
+      <h4>${escapeHTML(story.name || `Level ${story.index + 1}`)}</h4>
+      <svg class="heatflow-floor-plan" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(story.name || "Floor")} heat-flow plan">
+        ${shapes.join("")}
+      </svg>
+    </article>`;
+}
+
+function renderHeatFlowZoneStack(zoneSeries, dataset, frameIndex, center, netValue) {
+  const maxAbs = Math.max(Number(dataset.maxAbs) || 1, 1);
+  const axisY = 0;
+  const barWidth = 8;
+  const maxHeight = 28;
+  let positiveOffset = 0;
+  let negativeOffset = 0;
+  const rects = (dataset.categories || []).map((category, index) => {
+    const value = heatFlowCategoryValue(zoneSeries, index, frameIndex);
+    if (!Number.isFinite(value) || Math.abs(value) <= 1e-9) {
+      return "";
+    }
+    const height = Math.max(1.2, Math.min(maxHeight, Math.abs(value) / maxAbs * maxHeight));
+    const y = value >= 0 ? axisY - positiveOffset - height : axisY + negativeOffset;
+    if (value >= 0) {
+      positiveOffset += height;
+    } else {
+      negativeOffset += height;
+    }
+    return `<rect x="${-barWidth / 2}" y="${roundSVG(y)}" width="${barWidth}" height="${roundSVG(height)}" fill="${escapeHTML(category.color || "#94a3b8")}"></rect>`;
+  });
+  const radius = Math.max(5, Math.min(20, Math.abs(netValue) / maxAbs * 22));
+  return `
+    <g class="heatflow-mini-stack" transform="translate(${roundSVG(center.x)} ${roundSVG(center.y)})">
+      <line x1="-9" x2="9" y1="0" y2="0"></line>
+      ${rects.join("")}
+      <circle r="${roundSVG(radius)}"></circle>
+    </g>`;
+}
+
+function renderHeatFlowInspector(dataset, zoneSeries, zoneName, frameIndex) {
+  if (!zoneSeries) {
+    return `<div class="empty">${escapeHTML(t("simulation.selectHeatFlowZone", {}, "Select a zone in the floor plan."))}</div>`;
+  }
+  const frameLabel = heatFlowFrameLabel(dataset, frameIndex);
+  const net = heatFlowZoneNet(zoneSeries, dataset, frameIndex);
+  const temp = heatFlowZoneTemperature(zoneSeries, frameIndex);
+  const rows = (dataset.categories || [])
+    .map((category, index) => {
+      const value = heatFlowCategoryValue(zoneSeries, index, frameIndex);
+      return `
+        <div class="heatflow-ledger-row">
+          <span><i style="--legend-color: ${escapeHTML(category.color || "#94a3b8")}"></i>${escapeHTML(category.label)}</span>
+          <strong>${escapeHTML(formatWatts(value))}</strong>
+        </div>`;
+    })
+    .join("");
+  return `
+    <div class="heatflow-inspector-head">
+      <strong title="${escapeHTML(zoneName)}">${escapeHTML(zoneName)}</strong>
+      <span>${escapeHTML(frameLabel)}</span>
+    </div>
+    <div class="heatflow-current-kpis">
+      <span><em>${escapeHTML(t("common.temperature", {}, "Temperature"))}</em><strong>${escapeHTML(formatTemperature(temp))}</strong></span>
+      <span><em>${escapeHTML(t("common.net", {}, "Net"))}</em><strong>${escapeHTML(formatWatts(net))}</strong></span>
+    </div>
+    <div class="heatflow-ledger-list">
+      ${rows}
+      <div class="heatflow-ledger-row net"><span>${escapeHTML(t("common.net", {}, "Net"))}</span><strong>${escapeHTML(formatWatts(net))}</strong></div>
+    </div>
+    ${renderHeatFlowStackChart(dataset, zoneSeries, frameIndex)}`;
+}
+
+function renderHeatFlowStackChart(dataset, zoneSeries, frameIndex) {
+  const frameCount = Math.max(dataset.frameCount || 0, dataset.labels?.length || 0);
+  if (!frameCount) {
+    return `<div class="empty">${escapeHTML(t("simulation.noFrame", {}, "No frame"))}</div>`;
+  }
+  const width = 760;
+  const height = 260;
+  const pad = { left: 70, right: 16, top: 18, bottom: 34 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const stacks = heatFlowFrameStackExtents(dataset, zoneSeries);
+  const maxAbs = Math.max(Math.abs(stacks.positive), Math.abs(stacks.negative), 1);
+  const yZero = pad.top + plotHeight / 2;
+  const yScale = (plotHeight / 2 - 6) / maxAbs;
+  const barWidth = Math.max(1, plotWidth / frameCount);
+  const bars = [];
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    const x = pad.left + frame * barWidth;
+    let posY = yZero;
+    let negY = yZero;
+    for (let catIndex = 0; catIndex < (dataset.categories || []).length; catIndex += 1) {
+      const category = dataset.categories[catIndex];
+      const value = heatFlowCategoryValue(zoneSeries, catIndex, frame);
+      if (!Number.isFinite(value) || Math.abs(value) <= 1e-9) {
+        continue;
+      }
+      const h = Math.max(0.5, Math.abs(value) * yScale);
+      if (value >= 0) {
+        posY -= h;
+        bars.push(`<rect x="${roundSVG(x)}" y="${roundSVG(posY)}" width="${roundSVG(barWidth + 0.2)}" height="${roundSVG(h)}" fill="${escapeHTML(category.color || "#94a3b8")}"></rect>`);
+      } else {
+        bars.push(`<rect x="${roundSVG(x)}" y="${roundSVG(negY)}" width="${roundSVG(barWidth + 0.2)}" height="${roundSVG(h)}" fill="${escapeHTML(category.color || "#94a3b8")}"></rect>`);
+        negY += h;
+      }
+    }
+  }
+  const cursorX = pad.left + frameIndex * barWidth + barWidth / 2;
+  const firstLabel = dataset.labels?.[0] || "start";
+  const lastLabel = dataset.labels?.[frameCount - 1] || "end";
+  return `
+    <svg class="heatflow-stack-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(zoneSeries.name)} heat-flow stack">
+      <line x1="${pad.left}" x2="${width - pad.right}" y1="${yZero}" y2="${yZero}" class="simulation-axis-line" />
+      <line x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${height - pad.bottom}" class="simulation-axis-line" />
+      <text x="8" y="${pad.top + 10}" class="simulation-axis">${escapeHTML(formatWatts(maxAbs))}</text>
+      <text x="8" y="${yZero + 4}" class="simulation-axis">0</text>
+      <text x="8" y="${height - pad.bottom}" class="simulation-axis">${escapeHTML(formatWatts(-maxAbs))}</text>
+      ${bars.join("")}
+      <line x1="${roundSVG(cursorX)}" x2="${roundSVG(cursorX)}" y1="${pad.top}" y2="${height - pad.bottom}" class="heatflow-cursor" />
+      <rect class="heatflow-chart-hit" x="${pad.left}" y="${pad.top}" width="${plotWidth}" height="${plotHeight}" data-heatflow-chart="1"></rect>
+      <text x="${pad.left}" y="${height - 10}" class="simulation-axis">${escapeHTML(firstLabel)}</text>
+      <text x="${width - pad.right}" y="${height - 10}" text-anchor="end" class="simulation-axis">${escapeHTML(lastLabel)}</text>
+    </svg>`;
+}
+
+function bindHeatFlowInteractions(dataset, geometry, zoneMap) {
+  const host = elements.simulationHeatFlow;
+  const tooltip = host.querySelector(".heatflow-tooltip");
+  host.querySelectorAll("[data-heat-zone]").forEach((shape) => {
+    shape.addEventListener("pointerenter", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
+    shape.addEventListener("pointermove", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
+    shape.addEventListener("pointerleave", () => hideHeatFlowTooltip(tooltip));
+    shape.addEventListener("click", () => {
+      state.simulationHeatFlowSelectedZone = shape.dataset.heatZone || "";
+      renderSimulationHeatFlow();
+    });
+  });
+  host.querySelector("[data-heatflow-chart]")?.addEventListener("pointermove", (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const frameCount = Number(dataset.frameCount) || 1;
+    const ratio = clampNumber((event.clientX - rect.left) / rect.width, 0, 1);
+    const nextFrame = clampNumber(Math.round(ratio * (frameCount - 1)), 0, frameCount - 1);
+    if (nextFrame === state.simulationHeatFlowFrameIndex) {
+      return;
+    }
+    state.simulationHeatFlowFrameIndex = nextFrame;
+    renderSimulationHeatFlow();
+  });
+  host.querySelector("[data-heatflow-chart]")?.addEventListener("pointerleave", () => hideHeatFlowTooltip(tooltip));
+  void geometry;
+}
+
+function showHeatFlowTooltip(event, zoneName, dataset, zoneMap, tooltip) {
+  const zoneSeries = zoneMap.get(normalizeHeatFlowName(zoneName));
+  if (!tooltip || !zoneSeries) {
+    return;
+  }
+  const frameIndex = state.simulationHeatFlowFrameIndex;
+  const rows = (dataset.categories || [])
+    .map((category, index) => {
+      const value = heatFlowCategoryValue(zoneSeries, index, frameIndex);
+      return `<span><i style="--legend-color: ${escapeHTML(category.color || "#94a3b8")}"></i>${escapeHTML(category.label)}: ${escapeHTML(formatWatts(value))}</span>`;
+    })
+    .join("");
+  tooltip.innerHTML = `
+    <strong>${escapeHTML(zoneName)}</strong>
+    <span>${escapeHTML(heatFlowFrameLabel(dataset, frameIndex))}</span>
+    <span>${escapeHTML(formatTemperature(heatFlowZoneTemperature(zoneSeries, frameIndex)))}</span>
+    ${rows}
+    <b>${escapeHTML(t("common.net", {}, "Net"))}: ${escapeHTML(formatWatts(heatFlowZoneNet(zoneSeries, dataset, frameIndex)))}</b>`;
+  const rect = elements.simulationHeatFlow.getBoundingClientRect();
+  tooltip.style.left = `${Math.min(rect.width - 220, Math.max(8, event.clientX - rect.left + 14))}px`;
+  tooltip.style.top = `${Math.max(8, event.clientY - rect.top + 14)}px`;
+  tooltip.classList.remove("hidden");
+}
+
+function hideHeatFlowTooltip(tooltip) {
+  tooltip?.classList.add("hidden");
+}
+
+function toggleHeatFlowPlayback() {
+  if (state.simulationHeatFlowPlaying) {
+    stopHeatFlowPlayback();
+    renderSimulationHeatFlow();
+    return;
+  }
+  startHeatFlowPlayback();
+}
+
+function startHeatFlowPlayback() {
+  stopHeatFlowPlayback(false);
+  const dataset = state.simulationResult?.heatFlow;
+  const frameCount = Number(dataset?.frameCount) || 0;
+  if (frameCount <= 1) {
+    return;
+  }
+  state.simulationHeatFlowPlaying = true;
+  const delay = Math.max(80, Number(elements.simulationHeatFlowSpeed?.value) || 420);
+  heatFlowPlayTimer = window.setInterval(() => {
+    const next = (Number(state.simulationHeatFlowFrameIndex) + 1) % frameCount;
+    state.simulationHeatFlowFrameIndex = next;
+    renderSimulationHeatFlow();
+  }, delay);
+  renderSimulationHeatFlow();
+}
+
+function stopHeatFlowPlayback(render = true) {
+  if (heatFlowPlayTimer) {
+    window.clearInterval(heatFlowPlayTimer);
+    heatFlowPlayTimer = 0;
+  }
+  state.simulationHeatFlowPlaying = false;
+  if (render && elements.simulationHeatFlowPlay) {
+    elements.simulationHeatFlowPlay.textContent = t("common.play", {}, "Play");
+  }
+}
+
+function heatFlowZoneMap(dataset) {
+  const map = new Map();
+  (dataset?.zones || []).forEach((zone) => {
+    map.set(normalizeHeatFlowName(zone.name), zone);
+  });
+  return map;
+}
+
+function ensureHeatFlowSelectedZone(dataset, geometry, zoneMap) {
+  if (state.simulationHeatFlowSelectedZone && zoneMap.has(normalizeHeatFlowName(state.simulationHeatFlowSelectedZone))) {
+    return state.simulationHeatFlowSelectedZone;
+  }
+  const geometryMatch = (geometry.zones || []).find((zone) => zoneMap.has(normalizeHeatFlowName(zone.name)));
+  state.simulationHeatFlowSelectedZone = geometryMatch?.name || dataset.zones?.[0]?.name || "";
+  return state.simulationHeatFlowSelectedZone;
+}
+
+function heatFlowZoneFill(zoneSeries, dataset, frameIndex) {
+  if (!zoneSeries) {
+    return "#1f2933";
+  }
+  if (state.simulationHeatFlowOverlay === "temperature") {
+    return heatFlowTemperatureColor(heatFlowZoneTemperature(zoneSeries, frameIndex), dataset.minTemperature, dataset.maxTemperature);
+  }
+  return heatFlowNetColor(heatFlowZoneNet(zoneSeries, dataset, frameIndex), dataset.maxAbs);
+}
+
+function heatFlowZoneTitle(zoneName, zoneSeries, dataset, frameIndex) {
+  if (!zoneSeries) {
+    return `${zoneName} / no heat-flow CSV data`;
+  }
+  return `${zoneName} / ${formatTemperature(heatFlowZoneTemperature(zoneSeries, frameIndex))} / net ${formatWatts(heatFlowZoneNet(zoneSeries, dataset, frameIndex))}`;
+}
+
+function heatFlowCategoryValue(zoneSeries, categoryIndex, frameIndex) {
+  const value = zoneSeries?.values?.[categoryIndex]?.[frameIndex];
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function heatFlowZoneNet(zoneSeries, dataset, frameIndex) {
+  if (!zoneSeries) {
+    return 0;
+  }
+  return (dataset.categories || []).reduce((sum, _category, index) => sum + heatFlowCategoryValue(zoneSeries, index, frameIndex), 0);
+}
+
+function heatFlowZoneTemperature(zoneSeries, frameIndex) {
+  const value = zoneSeries?.temperature?.[frameIndex];
+  const number = Number(value);
+  return Number.isFinite(number) ? number : NaN;
+}
+
+function heatFlowFrameStackExtents(dataset, zoneSeries) {
+  let positive = 0;
+  let negative = 0;
+  const frameCount = Number(dataset.frameCount) || 0;
+  for (let frame = 0; frame < frameCount; frame += 1) {
+    let pos = 0;
+    let neg = 0;
+    for (let index = 0; index < (dataset.categories || []).length; index += 1) {
+      const value = heatFlowCategoryValue(zoneSeries, index, frame);
+      if (value >= 0) {
+        pos += value;
+      } else {
+        neg += value;
+      }
+    }
+    positive = Math.max(positive, pos);
+    negative = Math.min(negative, neg);
+  }
+  return { positive, negative };
+}
+
+function heatFlowStoryBounds(surfaces) {
+  const bounds = { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity, ok: false };
+  surfaces.forEach((surface) => {
+    (surface.vertices || []).forEach((point) => {
+      bounds.ok = true;
+      bounds.minX = Math.min(bounds.minX, Number(point.x) || 0);
+      bounds.maxX = Math.max(bounds.maxX, Number(point.x) || 0);
+      bounds.minY = Math.min(bounds.minY, Number(point.y) || 0);
+      bounds.maxY = Math.max(bounds.maxY, Number(point.y) || 0);
+    });
+  });
+  return bounds;
+}
+
+function polygonCentroid(points) {
+  if (!points?.length) {
+    return { x: 0, y: 0 };
+  }
+  let x = 0;
+  let y = 0;
+  points.forEach((point) => {
+    x += point.x;
+    y += point.y;
+  });
+  return { x: x / points.length, y: y / points.length };
+}
+
+function heatFlowFrameLabel(dataset, frameIndex) {
+  const label = dataset?.labels?.[frameIndex] || "";
+  return label ? `${label}` : `Frame ${frameIndex + 1}`;
+}
+
+function heatFlowNetColor(value, maxAbs) {
+  const scale = Math.min(1, Math.abs(Number(value) || 0) / Math.max(Number(maxAbs) || 1, 1));
+  if (scale < 0.035) {
+    return mixHexColor("#24303a", "#50d878", 0.72);
+  }
+  return value >= 0
+    ? mixHexColor("#23313a", "#ef4444", 0.2 + scale * 0.72)
+    : mixHexColor("#23313a", "#3b82f6", 0.2 + scale * 0.72);
+}
+
+function heatFlowTemperatureColor(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "#24303a";
+  }
+  const ratio = clampNumber((number - Number(min || 0)) / Math.max(Number(max || 0) - Number(min || 0), 0.001), 0, 1);
+  if (ratio < 0.33) {
+    return mixHexColor("#2563eb", "#22c55e", ratio / 0.33);
+  }
+  if (ratio < 0.68) {
+    return mixHexColor("#22c55e", "#facc15", (ratio - 0.33) / 0.35);
+  }
+  return mixHexColor("#facc15", "#ef4444", (ratio - 0.68) / 0.32);
+}
+
+function mixHexColor(left, right, amount) {
+  const a = hexToRGB(left);
+  const b = hexToRGB(right);
+  const tValue = clampNumber(amount, 0, 1);
+  const mixed = a.map((channel, index) => Math.round(channel + (b[index] - channel) * tValue));
+  return `rgb(${mixed[0]}, ${mixed[1]}, ${mixed[2]})`;
+}
+
+function hexToRGB(value) {
+  const hex = String(value || "#000000").replace("#", "");
+  const full = hex.length === 3 ? hex.split("").map((char) => `${char}${char}`).join("") : hex.padEnd(6, "0").slice(0, 6);
+  return [0, 2, 4].map((offset) => Number.parseInt(full.slice(offset, offset + 2), 16) || 0);
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return min;
+  }
+  return Math.max(min, Math.min(max, number));
+}
+
+function roundSVG(value) {
+  return Number(value || 0).toFixed(2);
+}
+
+function normalizeHeatFlowName(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function formatWatts(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "N/A";
+  }
+  const sign = number > 0 ? "+" : "";
+  if (Math.abs(number) >= 1000000) {
+    return `${sign}${(number / 1000000).toLocaleString(undefined, { maximumFractionDigits: 2 })} MW`;
+  }
+  if (Math.abs(number) >= 1000) {
+    return `${sign}${(number / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })} kW`;
+  }
+  return `${sign}${number.toLocaleString(undefined, { maximumFractionDigits: 0 })} W`;
+}
+
+function formatTemperature(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return "N/A";
+  }
+  return `${number.toLocaleString(undefined, { maximumFractionDigits: 1 })} degC`;
 }
 
 function renderSimulationFiles(result) {

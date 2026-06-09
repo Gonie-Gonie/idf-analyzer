@@ -3,11 +3,12 @@ package idf
 import "strings"
 
 const (
-	outputPresetStandard    = "standard"
-	outputPresetModeMerge   = "merge"
-	outputPresetModeReplace = "replace"
-	standardOutputTag       = "standard"
-	standardOutputFrequency = "Monthly"
+	outputPresetStandard      = "standard"
+	outputPresetModeMerge     = "merge"
+	outputPresetModeReplace   = "replace"
+	standardOutputTag         = "standard"
+	standardOutputFrequency   = "Monthly"
+	standardHeatFlowFrequency = "Hourly"
 )
 
 type standardOutputFeatures struct {
