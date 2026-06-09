@@ -89,6 +89,54 @@ Output:Variable,
 	}
 }
 
+func TestSemanticYAMLShowsCompactScheduleAsRules(t *testing.T) {
+	doc, err := Parse(`
+Schedule:Compact,
+  OfficeSched,
+  Fraction,
+  Through: 12/31,
+  For: Weekdays,
+  Until: 08:00,
+  0,
+  Until: 18:00,
+  1,
+  Until: 24:00,
+  0;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{
+		"schedules:",
+		"- name: OfficeSched",
+		"class: \"Schedule:Compact\"",
+		"type_limits: Fraction",
+		"rules:",
+		"- through: 12/31",
+		"for: Weekdays",
+		"- time: \"08:00\"",
+		"value: 0",
+		"- time: \"18:00\"",
+		"value: 1",
+	} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic YAML missing %q:\n%s", expected, projection.Text)
+		}
+	}
+
+	foundEditableUntil := false
+	for _, line := range projection.Lines {
+		if line.Editable && line.ObjectIndex != nil && *line.ObjectIndex == 0 && line.FieldIndex != nil && *line.FieldIndex == 6 && line.Value == "18:00" {
+			foundEditableUntil = true
+		}
+	}
+	if !foundEditableUntil {
+		t.Fatalf("editable compact schedule time line not found in %#v", projection.Lines)
+	}
+}
+
 func TestSemanticYAMLShowsSurfaceVerticesAsZoneGeometry(t *testing.T) {
 	doc, err := Parse(`
 Zone,

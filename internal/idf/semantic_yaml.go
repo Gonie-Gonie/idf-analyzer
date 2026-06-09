@@ -78,7 +78,7 @@ func BuildSemanticYAMLProjection(doc Document, metadata SemanticYAMLMetadata) Se
 	writeSemanticObjectLibrary(builder, ctx, "simulation", []string{"Version", "SimulationControl", "Timestep"})
 	writeSemanticObjectLibrary(builder, ctx, "site", []string{"Site:Location", "SizingPeriod:DesignDay", "SizingPeriod:WeatherFileDays", "SizingPeriod:WeatherFileConditionType", "RunPeriod"})
 	writeSemanticObjectLibrary(builder, ctx, "building", []string{"Building", "GlobalGeometryRules"})
-	writeSemanticObjectLibrary(builder, ctx, "schedules", semanticObjectTypesWithPrefix(doc, "Schedule:"))
+	writeSemanticSchedules(builder, ctx)
 	writeSemanticConstructions(builder, ctx)
 	writeSemanticZones(builder, ctx)
 	writeSemanticHVAC(builder, ctx)
@@ -178,6 +178,174 @@ func writeSemanticObjectLibrary(builder *semanticYAMLBuilder, ctx *semanticConte
 	for _, obj := range objects {
 		ctx.mark(obj.Index)
 		writeSemanticReferenceObject(builder, 2, obj)
+	}
+}
+
+type semanticCompactScheduleInterval struct {
+	Time            string
+	TimeFieldIndex  int
+	Value           string
+	ValueFieldIndex int
+}
+
+type semanticCompactScheduleRule struct {
+	Through           string
+	ThroughFieldIndex int
+	DaySelector       string
+	DayFieldIndex     int
+	Intervals         []semanticCompactScheduleInterval
+}
+
+func writeSemanticSchedules(builder *semanticYAMLBuilder, ctx *semanticContext) {
+	objects := semanticObjectsForTypes(ctx.doc, semanticObjectTypesWithPrefix(ctx.doc, "Schedule:"))
+	if len(objects) == 0 {
+		builder.raw(1, "schedules: {}")
+		return
+	}
+	builder.raw(1, "schedules:")
+	for _, obj := range objects {
+		ctx.mark(obj.Index)
+		switch {
+		case strings.EqualFold(obj.Type, "Schedule:Constant"):
+			writeSemanticConstantSchedule(builder, 2, obj)
+		case strings.EqualFold(obj.Type, "Schedule:Compact"):
+			if rules, ok := semanticCompactScheduleRules(obj); ok {
+				writeSemanticCompactSchedule(builder, 2, obj, rules)
+			} else {
+				writeSemanticReferenceObject(builder, 2, obj)
+			}
+		default:
+			writeSemanticReferenceObject(builder, 2, obj)
+		}
+	}
+}
+
+func writeSemanticScheduleHeader(builder *semanticYAMLBuilder, indent int, obj Object) string {
+	name := objectName(obj)
+	if name != "" {
+		builder.fieldKV(indent, "- name", name, obj.Index, obj.Type, name, 0)
+		builder.kvForObject(indent+1, "class", obj.Type, obj.Index, obj.Type, name)
+	} else {
+		builder.objectKV(indent, "- class", obj.Type, obj.Index, obj.Type, name)
+	}
+	builder.kvForObject(indent+1, "source_object_index", fmt.Sprintf("%d", obj.Index), obj.Index, obj.Type, name)
+	if value, fieldIndex, ok := semanticScheduleField(obj, 1, "Schedule Type Limits Name", "Schedule Type Limits"); ok {
+		builder.fieldKV(indent+1, "type_limits", value, obj.Index, obj.Type, name, fieldIndex)
+	}
+	if hours, ok := annualScheduleHours(obj); ok {
+		builder.kvForObject(indent+1, "active_hours_per_year", semanticNumber(hours), obj.Index, obj.Type, name)
+	}
+	return name
+}
+
+func writeSemanticConstantSchedule(builder *semanticYAMLBuilder, indent int, obj Object) {
+	name := writeSemanticScheduleHeader(builder, indent, obj)
+	if value, fieldIndex, ok := semanticScheduleField(obj, 2, "Hourly Value"); ok {
+		builder.fieldKV(indent+1, "default", value, obj.Index, obj.Type, name, fieldIndex)
+	}
+}
+
+func writeSemanticCompactSchedule(builder *semanticYAMLBuilder, indent int, obj Object, rules []semanticCompactScheduleRule) {
+	name := writeSemanticScheduleHeader(builder, indent, obj)
+	builder.rawForObject(indent+1, "rules:", obj.Index, obj.Type, name)
+	for _, rule := range rules {
+		if rule.Through != "" && rule.ThroughFieldIndex >= 0 {
+			builder.fieldKV(indent+2, "- through", rule.Through, obj.Index, obj.Type, name, rule.ThroughFieldIndex)
+		} else {
+			builder.objectKV(indent+2, "- through", "unspecified", obj.Index, obj.Type, name)
+		}
+		if rule.DaySelector != "" && rule.DayFieldIndex >= 0 {
+			builder.fieldKV(indent+3, "for", rule.DaySelector, obj.Index, obj.Type, name, rule.DayFieldIndex)
+		}
+		if len(rule.Intervals) == 0 {
+			continue
+		}
+		builder.rawForObject(indent+3, "until:", obj.Index, obj.Type, name)
+		for _, interval := range rule.Intervals {
+			builder.fieldKV(indent+4, "- time", interval.Time, obj.Index, obj.Type, name, interval.TimeFieldIndex)
+			builder.fieldKV(indent+5, "value", interval.Value, obj.Index, obj.Type, name, interval.ValueFieldIndex)
+		}
+	}
+}
+
+func semanticScheduleField(obj Object, fallbackIndex int, names ...string) (string, int, bool) {
+	if value, fieldIndex, ok := semanticFieldValue(obj, names...); ok {
+		return value, fieldIndex, true
+	}
+	if fallbackIndex >= 0 && fallbackIndex < len(obj.Fields) {
+		value := strings.TrimSpace(obj.Fields[fallbackIndex].Value)
+		if value != "" {
+			return value, fallbackIndex, true
+		}
+	}
+	return "", -1, false
+}
+
+func semanticCompactScheduleRules(obj Object) ([]semanticCompactScheduleRule, bool) {
+	if len(obj.Fields) <= 2 {
+		return nil, false
+	}
+	var rules []semanticCompactScheduleRule
+	through := ""
+	throughFieldIndex := -1
+	for fieldIndex := 2; fieldIndex < len(obj.Fields); {
+		directive, value, ok := semanticCompactScheduleDirective(obj.Fields[fieldIndex].Value)
+		if !ok {
+			fieldIndex++
+			continue
+		}
+		switch directive {
+		case "through":
+			through = value
+			throughFieldIndex = fieldIndex
+			fieldIndex++
+		case "for":
+			rule := semanticCompactScheduleRule{
+				Through:           through,
+				ThroughFieldIndex: throughFieldIndex,
+				DaySelector:       value,
+				DayFieldIndex:     fieldIndex,
+			}
+			fieldIndex++
+			for fieldIndex < len(obj.Fields) {
+				nextDirective, nextValue, nextOK := semanticCompactScheduleDirective(obj.Fields[fieldIndex].Value)
+				if nextOK && (nextDirective == "through" || nextDirective == "for") {
+					break
+				}
+				if !nextOK || nextDirective != "until" {
+					fieldIndex++
+					continue
+				}
+				if fieldIndex+1 >= len(obj.Fields) {
+					return nil, false
+				}
+				rule.Intervals = append(rule.Intervals, semanticCompactScheduleInterval{
+					Time:            nextValue,
+					TimeFieldIndex:  fieldIndex,
+					Value:           strings.TrimSpace(obj.Fields[fieldIndex+1].Value),
+					ValueFieldIndex: fieldIndex + 1,
+				})
+				fieldIndex += 2
+			}
+			rules = append(rules, rule)
+		default:
+			fieldIndex++
+		}
+	}
+	return rules, len(rules) > 0
+}
+
+func semanticCompactScheduleDirective(value string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(value), ":", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	directive := strings.ToLower(strings.TrimSpace(parts[0]))
+	switch directive {
+	case "through", "for", "until":
+		return directive, strings.TrimSpace(parts[1]), true
+	default:
+		return "", "", false
 	}
 }
 

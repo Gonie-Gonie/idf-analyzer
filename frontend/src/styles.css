@@ -489,7 +489,7 @@ button:disabled:hover {
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: 12px;
+  padding: 10px 12px 12px;
   background: var(--surface-3);
 }
 
@@ -498,7 +498,7 @@ button:disabled:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .semantic-actions {
@@ -514,10 +514,10 @@ button:disabled:hover {
 }
 
 .semantic-health {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 7px 10px;
   display: grid;
   gap: 5px;
 }
@@ -532,21 +532,50 @@ button:disabled:hover {
   color: var(--amber);
 }
 
+.semantic-sticky-path {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 640px;
+  margin-bottom: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: rgba(12, 17, 23, 0.96);
+  color: var(--muted);
+  padding: 5px 10px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 13px;
+  line-height: 1.25;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(4px);
+}
+
+.semantic-sticky-path span:last-child {
+  color: var(--ink);
+}
+
+.semantic-path-separator {
+  color: var(--muted-2);
+}
+
 .semantic-yaml {
   min-width: 640px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--code-bg);
   color: var(--code-ink);
-  padding: 5px 0;
+  padding: 6px 0;
   font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-  font-size: 11px;
-  line-height: 1.08;
+  font-size: 13px;
+  line-height: 1.26;
 }
 
 .semantic-line {
   min-height: 0;
-  padding: 0 10px;
+  padding: 1px 10px;
   border-left: 3px solid transparent;
   white-space: pre;
 }
@@ -556,19 +585,29 @@ button:disabled:hover {
 }
 
 .semantic-root-line {
-  margin-bottom: 2px;
+  margin-bottom: 3px;
   color: #f8fafc;
   font-weight: 700;
 }
 
 .semantic-section-line {
-  margin-top: 5px;
+  margin-top: 8px;
+  padding-top: 3px;
   color: #dbeafe;
   font-weight: 650;
 }
 
+.semantic-branch-line {
+  margin-top: 3px;
+  color: #bfdbfe;
+}
+
+.semantic-section-line.semantic-branch-line {
+  margin-top: 8px;
+}
+
 .semantic-object-line {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .semantic-line[data-object-index]:not([data-object-index=""]) {
@@ -626,7 +665,7 @@ button:disabled:hover {
   border-radius: 4px;
   background: rgba(52, 183, 197, 0.16);
   color: #fef3c7;
-  padding: 0 1px;
+  padding: 0 2px;
   font: inherit;
   line-height: inherit;
   vertical-align: baseline;
@@ -641,7 +680,7 @@ button:disabled:hover {
 }
 
 .semantic-value-editor {
-  min-height: 14px;
+  min-height: 18px;
   max-width: 100%;
   border: 1px solid var(--amber);
   border-radius: 4px;
@@ -649,7 +688,7 @@ button:disabled:hover {
   color: var(--ink);
   padding: 0 4px;
   font: inherit;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .formatted-object-view {

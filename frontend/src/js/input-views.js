@@ -108,6 +108,7 @@ function pendingViewMessage(viewName) {
 }
 
 function renderSemanticView() {
+  clearSemanticStickyPathBinding();
   const projection = state.semanticProjection;
   if (!projection || !Array.isArray(projection.lines) || !hasCurrentAnalysis()) {
     elements.semanticEditor.innerHTML = `<div class="empty">${escapeHTML(pendingViewMessage("semantic YAML"))}</div>`;
@@ -138,6 +139,7 @@ function renderSemanticView() {
       </div>
     </div>
     ${renderSemanticWarnings(projection)}
+    <div class="semantic-sticky-path" aria-live="polite"></div>
     <div class="semantic-yaml" role="tree" aria-label="Semantic YAML projection">
       ${visibleLines.map((line, index) => renderSemanticLine(line, index, keyWidths)).join("")}
     </div>
@@ -216,6 +218,10 @@ function renderSemanticLine(line, lineIndex, keyWidths = new Map()) {
     `data-object-type="${escapeHTML(line.objectType || "")}"`,
     `data-field-index="${escapeHTML(fieldIndex)}"`,
     `data-field-index-kind="idf"`,
+    `data-semantic-indent="${escapeHTML(indent)}"`,
+    `data-semantic-key="${escapeHTML(line.key || "")}"`,
+    `data-semantic-role="${escapeHTML(line.role || "")}"`,
+    `data-semantic-text="${escapeHTML(line.text || "")}"`,
   ].join(" ");
   return `<div class="${classes}" ${style} ${attrs}>${renderSemanticLineContent(line)}</div>`;
 }
@@ -234,7 +240,10 @@ function semanticLineClassNames(line, selected) {
   if (line.role === "syntax" && Number(line.indent || 0) <= 1 && line.text !== "semantic_energyplus_model:") {
     classes.push("semantic-section-line");
   }
-  if (String(line.key || "") === "class") {
+  if (semanticLineIsBranch(line)) {
+    classes.push("semantic-branch-line");
+  }
+  if (String(line.key || "") === "class" || String(line.text || "").trimStart().startsWith("- name:")) {
     classes.push("semantic-object-line");
   }
   return classes.join(" ");
@@ -281,6 +290,100 @@ function bindSemanticControls() {
       editSemanticValue(button);
     });
   });
+  bindSemanticStickyPath();
+}
+
+function semanticLineIsBranch(line) {
+  const text = String(line?.text || "").trim();
+  if (!text || text === "semantic_energyplus_model:") {
+    return false;
+  }
+  if (String(line?.text || "").trimStart().startsWith("- name:")) {
+    return true;
+  }
+  return String(line?.role || "") === "syntax" && text.endsWith(":");
+}
+
+function bindSemanticStickyPath() {
+  const sticky = elements.semanticEditor.querySelector(".semantic-sticky-path");
+  const yaml = elements.semanticEditor.querySelector(".semantic-yaml");
+  if (!sticky || !yaml) {
+    return;
+  }
+  const lines = Array.from(yaml.querySelectorAll(".semantic-line"));
+  const update = () => {
+    const editorRect = elements.semanticEditor.getBoundingClientRect();
+    const threshold = editorRect.top + sticky.offsetHeight + 6;
+    let activeLine = lines[0] || null;
+    for (const line of lines) {
+      if (line.getBoundingClientRect().top > threshold) {
+        break;
+      }
+      activeLine = line;
+    }
+    const path = semanticPathForLine(lines, activeLine);
+    sticky.innerHTML = path.length
+      ? path.map((label) => `<span>${escapeHTML(label)}</span>`).join(`<span class="semantic-path-separator">/</span>`)
+      : `<span>${escapeHTML("semantic_energyplus_model")}</span>`;
+  };
+  const onScroll = () => requestAnimationFrame(update);
+  elements.semanticEditor._semanticStickyScrollHandler = onScroll;
+  elements.semanticEditor.addEventListener("scroll", onScroll, { passive: true });
+  requestAnimationFrame(update);
+}
+
+function clearSemanticStickyPathBinding() {
+  const handler = elements.semanticEditor?._semanticStickyScrollHandler;
+  if (!handler) {
+    return;
+  }
+  elements.semanticEditor.removeEventListener("scroll", handler);
+  delete elements.semanticEditor._semanticStickyScrollHandler;
+}
+
+function semanticPathForLine(lines, activeLine) {
+  if (!activeLine) {
+    return [];
+  }
+  const activeIndex = Number(activeLine.dataset.semanticLine || 0);
+  const stack = [];
+  for (const line of lines) {
+    const lineIndex = Number(line.dataset.semanticLine || 0);
+    if (lineIndex > activeIndex) {
+      break;
+    }
+    const label = semanticPathLabel(line);
+    if (!label) {
+      continue;
+    }
+    const indent = Number(line.dataset.semanticIndent || 0);
+    while (stack.length && stack[stack.length - 1].indent >= indent) {
+      stack.pop();
+    }
+    stack.push({ indent, label });
+  }
+  return stack.map((entry) => entry.label).slice(-6);
+}
+
+function semanticPathLabel(line) {
+  const raw = String(line?.dataset?.semanticText || "").trim();
+  if (!raw) {
+    return "";
+  }
+  if (raw === "semantic_energyplus_model:") {
+    return "semantic_energyplus_model";
+  }
+  const text = raw.startsWith("- ") ? raw.slice(2).trim() : raw;
+  if (text.startsWith("name:")) {
+    return text.slice("name:".length).trim().replace(/^"(.*)"$/, "$1");
+  }
+  if (text.endsWith(":")) {
+    return text.slice(0, -1).trim();
+  }
+  if (text.endsWith(": {}") || text.endsWith(": []")) {
+    return text.split(":")[0].trim();
+  }
+  return "";
 }
 
 function selectSemanticLine(line) {
