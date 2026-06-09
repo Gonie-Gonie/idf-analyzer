@@ -46,7 +46,7 @@ func TestCLIConvertYAML(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("runCLI convert yaml exit = %d, stderr = %s", code, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "semantic_energyplus_model:") || !strings.Contains(stdout.String(), "duplicate_groups:") {
+	if !strings.Contains(stdout.String(), "semantic_energyplus_model:") || !strings.Contains(stdout.String(), "source_name_conflicts:") {
 		t.Fatalf("semantic YAML output missing expected content:\n%s", stdout.String())
 	}
 }

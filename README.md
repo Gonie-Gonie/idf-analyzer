@@ -89,6 +89,7 @@ The packaged executable opens the desktop app when run without arguments. It als
 .\build\bin\idf-analyzer-v0.2.0.exe cli convert -to table -o .\model.tables.xlsx .\model.idf
 ```
 
+`convert -to yaml` writes a semantic YAML view export for inspection and token editing; YAML-to-IDF reverse conversion is planned separately.
 The table conversion writes one XLSX worksheet with `[ObjectType]` section markers. Column headers are bold with a fill
 color and table cells carry borders so the export is easier to scan and filter in Excel. Use `-` as an input path to
 read stdin and `-o -` to write command output to stdout.

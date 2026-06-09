@@ -95,7 +95,7 @@ Commands:
   diagnostics    Export Diagnose issues as text, JSON, or CSV.
   analyze        Export the full analysis report as JSON or compact text.
   clean          Apply cleanup rules and optional semantic duplicate-name fixes.
-  convert        Convert IDF/epJSON to IDF, JSON, semantic YAML, or XLSX tables.
+  convert        Convert IDF/epJSON to IDF, JSON, semantic YAML view export, or XLSX tables.
 
 Use "-" as input to read from stdin. Use "-o -" to write an output file stream to stdout.
 Run "idf-analyzer cli <command> --help" for command-specific options.
@@ -308,7 +308,7 @@ func cliClean(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 
 func cliConvert(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	fs := cliFlagSet("convert", stderr)
-	target := fs.String("to", "", "Target format: idf, json, yaml, table, xlsx.")
+	target := fs.String("to", "", "Target format: idf, json, yaml/semantic-yaml view export, table, xlsx.")
 	output := fs.String("o", "", "Output path. Required for table/xlsx unless -o - is used.")
 	if err := fs.Parse(args); err != nil {
 		return err

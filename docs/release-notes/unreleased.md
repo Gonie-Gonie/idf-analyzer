@@ -24,6 +24,7 @@ The release script infers bump size from these sections:
 
 - Moved canonical frontend assets from `frontend/dist` to `frontend/src` and reserved `frontend/dist` for future generated build output.
 - Refined the Output analysis UI into request-map and preset-library tables so it manages output relationships instead of mirroring the raw object list.
+- Reworked semantic YAML output as a zone/HVAC/output-centered view export with source name conflicts separated from semantic duplicate appearances.
 
 ## Fixed
 

@@ -182,7 +182,7 @@ const dictionaries = {
     "guide.cli.body": "The packaged executable can also run non-interactive commands. Running without arguments opens the desktop app; running `idf-analyzer cli ...` or a recognized top-level command runs the CLI. Use `-` as the input path to read from stdin and `-o -` to write command output to stdout.",
     "guide.cli.cleanBody": "Preview cleanup candidates, apply default or explicit rules, compact formatting, and optionally rename duplicate semantic object names.",
     "guide.cli.cleanTitle": "Clean",
-    "guide.cli.convertBody": "Convert IDF and epJSON inputs to IDF, epJSON, semantic YAML, or a styled one-sheet Excel table export grouped by `[ObjectType]` markers.",
+    "guide.cli.convertBody": "Convert IDF and epJSON inputs to IDF, epJSON, semantic YAML view export, or a styled one-sheet Excel table export grouped by `[ObjectType]` markers.",
     "guide.cli.convertTitle": "Convert",
     "guide.cli.multiBody": "Compare Summary metrics across several models as CSV, JSON, text, or a styled single-sheet XLSX workbook.",
     "guide.cli.multiTitle": "Multi-file summary",
