@@ -41,6 +41,7 @@ function shortcutAction(id, actions) {
     redoView: actions.redoView,
     jumpDefinition: actions.jumpDefinition,
     jumpReferences: actions.jumpReferences,
+    inputSemantic: () => actions.switchInputView?.("semantic"),
     inputText: () => actions.switchInputView?.("text"),
     inputJson: () => actions.switchInputView?.("json"),
     inputTable: () => actions.switchInputView?.("table"),

@@ -12,6 +12,9 @@ export function configureInputViews(callbacks) {
 }
 
 export function renderInputViews() {
+  if (state.activeInputView === "semantic") {
+    renderSemanticView();
+  }
   if (state.activeInputView === "text") {
     renderFormattedTextView();
   }
@@ -102,6 +105,250 @@ function pendingViewMessage(viewName) {
     return t("input.noLoaded");
   }
   return t("input.pendingView", { view: viewName });
+}
+
+function renderSemanticView() {
+  const projection = state.semanticProjection;
+  if (!projection || !Array.isArray(projection.lines) || !hasCurrentAnalysis()) {
+    elements.semanticEditor.innerHTML = `<div class="empty">${escapeHTML(pendingViewMessage("semantic YAML"))}</div>`;
+    setInputFilterStats(0, 0);
+    return;
+  }
+
+  const terms = currentInputFilterTerms();
+  const visibleLines = semanticVisibleLines(projection.lines, terms);
+  const visibleObjectIndexes = new Set(
+    visibleLines.filter((line) => line.objectIndex !== undefined && line.objectIndex !== null).map((line) => String(line.objectIndex)),
+  );
+  setInputFilterStats(visibleObjectIndexes.size || (state.report?.objects?.length || 0), state.report?.objects?.length || 0);
+
+  elements.semanticEditor.innerHTML = `
+    <div class="semantic-toolbar">
+      <div class="json-meta">
+        <span class="badge">${escapeHTML(projection.schema || "eplus-semantic/0.1")}</span>
+        <span class="badge">Version ${escapeHTML(projection.energyplusVersion || "unknown")}</span>
+        <span class="badge">${escapeHTML(t("count.objects", { count: projection.objectCount || 0 }))}</span>
+      </div>
+      <div class="semantic-actions">
+        <button id="semanticFocusObjectButton" type="button">${escapeHTML(t("input.focusObject"))}</button>
+        <button id="semanticFixDuplicatesButton" type="button" ${projection.duplicateGroups?.length ? "" : "disabled"}>
+          ${escapeHTML(t("semantic.fixDuplicates", { count: projection.duplicateGroups?.length || 0 }, `Fix duplicates (${projection.duplicateGroups?.length || 0})`))}
+        </button>
+      </div>
+    </div>
+    ${renderSemanticWarnings(projection)}
+    <div class="semantic-yaml" role="tree" aria-label="Semantic YAML projection">
+      ${visibleLines.map(renderSemanticLine).join("")}
+    </div>
+  `;
+  bindSemanticControls();
+}
+
+function semanticVisibleLines(lines, terms) {
+  if (!terms.length) {
+    return lines;
+  }
+  const matchingObjects = new Set();
+  const objectText = new Map();
+  for (const line of lines) {
+    if (line.objectIndex === undefined || line.objectIndex === null) {
+      continue;
+    }
+    const key = String(line.objectIndex);
+    objectText.set(key, `${objectText.get(key) || ""} ${line.text || ""} ${line.objectType || ""} ${line.objectName || ""}`.toLowerCase());
+  }
+  for (const [objectIndex, text] of objectText) {
+    if (terms.every((term) => text.includes(term))) {
+      matchingObjects.add(objectIndex);
+    }
+  }
+  return lines.filter((line) => {
+    if (line.objectIndex === undefined || line.objectIndex === null) {
+      return true;
+    }
+    return matchingObjects.has(String(line.objectIndex));
+  });
+}
+
+function renderSemanticWarnings(projection) {
+  const groups = projection.duplicateGroups || [];
+  if (!groups.length) {
+    return `<div class="semantic-health ok">${escapeHTML(t("semantic.noDuplicates", {}, "No duplicate object names in the current registry."))}</div>`;
+  }
+  return `
+    <div class="semantic-health warn">
+      <strong>${escapeHTML(t("semantic.duplicates", { count: groups.length }, `${groups.length} duplicate name groups`))}</strong>
+      ${groups
+        .map(
+          (group) => `
+            <span title="${escapeHTML((group.objectIndexes || []).join(", "))}">
+              ${escapeHTML(group.objectType)} / ${escapeHTML(group.name)} / ${escapeHTML((group.objectIndexes || []).join(", "))}
+            </span>`,
+        )
+        .join("")}
+    </div>`;
+}
+
+function renderSemanticLine(line, lineIndex) {
+  const objectIndex = line.objectIndex ?? "";
+  const fieldIndex = line.fieldIndex ?? "";
+  const selected = objectIndex !== "" && String(objectIndex) === String(state.semanticSelectedObjectIndex);
+  const attrs = [
+    `data-semantic-line="${lineIndex}"`,
+    `data-object-index="${escapeHTML(objectIndex)}"`,
+    `data-object-type="${escapeHTML(line.objectType || "")}"`,
+    `data-field-index="${escapeHTML(fieldIndex)}"`,
+    `data-field-index-kind="idf"`,
+  ].join(" ");
+  return `
+    <div class="semantic-line ${selected ? "selected" : ""} ${line.editable ? "editable" : ""}" ${attrs}>
+      ${renderSemanticLineContent(line)}
+    </div>`;
+}
+
+function renderSemanticLineContent(line) {
+  if (!line.editable) {
+    return `<code>${escapeHTML(line.text || "")}</code>`;
+  }
+  const indent = "  ".repeat(Number(line.indent || 0));
+  const prefix = `${indent}${line.key || "field"}: `;
+  return `
+    <code><span class="semantic-prefix">${escapeHTML(prefix)}</span><button class="semantic-value-token" type="button"
+      data-object-index="${escapeHTML(line.objectIndex ?? "")}"
+      data-field-index="${escapeHTML(line.fieldIndex ?? "")}"
+      data-field-index-kind="idf"
+      data-original="${escapeHTML(line.value ?? "")}">${escapeHTML(semanticDisplayScalar(line.value))}</button></code>`;
+}
+
+function bindSemanticControls() {
+  elements.semanticEditor.querySelector("#semanticFocusObjectButton")?.addEventListener("click", () => focusSelectedSemanticObject());
+  elements.semanticEditor.querySelector("#semanticFixDuplicatesButton")?.addEventListener("click", () => applySemanticDuplicateFixes());
+  elements.semanticEditor.querySelectorAll(".semantic-line[data-object-index]").forEach((line) => {
+    if (line.dataset.objectIndex === "") {
+      return;
+    }
+    line.addEventListener("pointerenter", () => highlightSemanticObject(line.dataset.objectIndex, true));
+    line.addEventListener("pointerleave", () => highlightSemanticObject(line.dataset.objectIndex, false));
+    line.addEventListener("click", () => selectSemanticLine(line));
+  });
+  elements.semanticEditor.querySelectorAll(".semantic-value-token").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      editSemanticValue(button);
+    });
+  });
+}
+
+function selectSemanticLine(line) {
+  state.semanticSelectedObjectIndex = line.dataset.objectIndex || "";
+  syncRawTextToFormattedTarget(line);
+  renderSemanticSelectionOnly();
+}
+
+function renderSemanticSelectionOnly() {
+  elements.semanticEditor.querySelectorAll(".semantic-line[data-object-index]").forEach((line) => {
+    line.classList.toggle("selected", line.dataset.objectIndex === String(state.semanticSelectedObjectIndex));
+  });
+}
+
+function highlightSemanticObject(objectIndex, active) {
+  elements.semanticEditor.querySelectorAll(`.semantic-line[data-object-index="${cssAttrEscape(objectIndex)}"]`).forEach((line) => {
+    line.classList.toggle("hovered", active);
+  });
+}
+
+function focusSelectedSemanticObject() {
+  const selected = state.semanticSelectedObjectIndex || elements.semanticEditor.querySelector(".semantic-line[data-object-index]:not([data-object-index=''])")?.dataset.objectIndex || "";
+  if (!selected) {
+    return;
+  }
+  state.semanticSelectedObjectIndex = selected;
+  const line = elements.semanticEditor.querySelector(`.semantic-line[data-object-index="${cssAttrEscape(selected)}"]`);
+  if (line) {
+    line.scrollIntoView({ block: "center", inline: "nearest" });
+    syncRawTextToFormattedTarget(line);
+    renderSemanticSelectionOnly();
+  }
+}
+
+function editSemanticValue(button) {
+  const current = button.dataset.original || "";
+  const editor = document.createElement("input");
+  editor.type = "text";
+  editor.className = "semantic-value-editor";
+  editor.value = current;
+  editor.dataset.objectIndex = button.dataset.objectIndex;
+  editor.dataset.fieldIndex = button.dataset.fieldIndex;
+  editor.dataset.fieldIndexKind = button.dataset.fieldIndexKind || "idf";
+  editor.dataset.original = current;
+  editor.style.width = `${Math.min(Math.max(current.length + 2, 10), 58)}ch`;
+  button.replaceWith(editor);
+  editor.focus();
+  editor.select();
+
+  let finished = false;
+  const restore = () => {
+    if (editor.isConnected) {
+      editor.replaceWith(button);
+    }
+  };
+  const commit = async () => {
+    if (finished) {
+      return;
+    }
+    finished = true;
+    if (editor.value === current) {
+      restore();
+      return;
+    }
+    await applyFieldValue(editor, t("semantic.fieldUpdated", {}, "Semantic YAML field updated"));
+  };
+  editor.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commit();
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      finished = true;
+      restore();
+    }
+  });
+  editor.addEventListener("blur", () => commit());
+}
+
+async function applySemanticDuplicateFixes() {
+  const api = backend();
+  if (!api || typeof api.ApplySemanticDuplicateNameFixText !== "function") {
+    setStatus(t("status.backendUnavailable"), "warn");
+    return;
+  }
+  try {
+    const result = await api.ApplySemanticDuplicateNameFixText(elements.idfInput.value);
+    elements.idfInput.value = result.text;
+    updateTextStats();
+    state.semanticProjection = result.semantic || null;
+    await analyzeCallback();
+    const count = result.warnings?.length || 0;
+    setStatus(t("semantic.duplicatesFixed", { count }, `Renamed ${count} duplicate objects`), "ok");
+  } catch (error) {
+    setStatus(error.message || String(error), "error");
+  }
+}
+
+function semanticDisplayScalar(value) {
+  const text = String(value ?? "");
+  if (text.trim() === "") {
+    return "null";
+  }
+  if (/^(true|false|yes|no|on|off|null)$/i.test(text) || /[,:[\]{}#*!|>&%@`"']/.test(text) || /\s{2,}/.test(text)) {
+    return JSON.stringify(text);
+  }
+  return text;
+}
+
+function cssAttrEscape(value) {
+  return String(value ?? "").replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 function renderFormattedTextView() {
@@ -387,6 +634,7 @@ async function commitJSONValueEdit(editor, nextRaw, restore) {
     state.report = result.report;
     state.model = result.model || null;
     state.epjsonText = result.epjson || "";
+    state.semanticProjection = result.semantic || null;
     state.lastAnalyzedText = result.text;
     state.analysisStage = "complete";
     state.diagnosticsReady = true;
@@ -992,6 +1240,16 @@ function nearestJSONStringBeforeOffset(text, offset) {
 }
 
 function findActiveViewTargetForRawToken(token) {
+  if (state.activeInputView === "semantic") {
+    if (token.type === "field") {
+      const idfFieldIndex =
+        token.fieldIndexKind === "model" ? modelFieldIndexToIDFFieldIndex(token.objectIndex, token.fieldIndex) : token.fieldIndex;
+      return elements.semanticEditor.querySelector(
+        `.semantic-line[data-object-index="${token.objectIndex}"][data-field-index="${idfFieldIndex}"]`,
+      );
+    }
+    return elements.semanticEditor.querySelector(`.semantic-line[data-object-index="${token.objectIndex}"]`);
+  }
   if (state.activeInputView === "json") {
     const modelFieldIndex =
       token.fieldIndexKind === "model" ? token.fieldIndex : idfFieldIndexToModelFieldIndex(token.objectIndex, token.fieldIndex);
@@ -1033,7 +1291,7 @@ function expandDetailsForViewTarget(element) {
 }
 
 function scrollActiveInputTargetIntoView(element) {
-  const container = element.closest(".formatted-object-view, .json-view, .field-table");
+  const container = element.closest(".semantic-editor, .formatted-object-view, .json-view, .field-table");
   if (!container) {
     return;
   }

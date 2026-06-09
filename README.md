@@ -60,6 +60,39 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\release.ps1
 
 Build artifacts and downloaded runtimes stay ignored by git.
 
+## CLI
+
+The packaged executable opens the desktop app when run without arguments. It also supports scriptable commands through
+`idf-analyzer cli ...`; recognized commands can also be used directly as `idf-analyzer summary ...`.
+
+```powershell
+# Summary / Diagnose / full analysis
+.\build\bin\idf-analyzer-v0.2.0.exe cli summary -format text .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli summary -format json -o .\summary.json .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli summary -format xlsx -o .\summary.xlsx .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli diagnostics -format csv -o .\diagnostics.csv .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli analyze -format json -o .\report.json .\model.idf
+
+# Multi-file summary
+.\build\bin\idf-analyzer-v0.2.0.exe cli multi-summary -format csv -o .\compare.csv .\a.idf .\b.epjson
+.\build\bin\idf-analyzer-v0.2.0.exe cli multi-summary -format xlsx -orientation files -o .\compare.xlsx .\a.idf .\b.idf
+
+# Cleanup
+.\build\bin\idf-analyzer-v0.2.0.exe cli clean --dry-run .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli clean -rules all --compact -o .\cleaned.idf .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli clean -rules none --semantic-duplicates -o .\semantic-fixed.idf .\model.idf
+
+# Conversion
+.\build\bin\idf-analyzer-v0.2.0.exe cli convert -to idf -o .\model.idf .\model.epjson
+.\build\bin\idf-analyzer-v0.2.0.exe cli convert -to json -o .\model.epjson .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli convert -to yaml -o .\model.semantic.yaml .\model.idf
+.\build\bin\idf-analyzer-v0.2.0.exe cli convert -to table -o .\model.tables.xlsx .\model.idf
+```
+
+The table conversion writes one XLSX worksheet with `[ObjectType]` section markers. Column headers are bold with a fill
+color and table cells carry borders so the export is easier to scan and filter in Excel. Use `-` as an input path to
+read stdin and `-o -` to write command output to stdout.
+
 ## Release Process
 
 Release timing is manual. Update `docs/release-notes/unreleased.md`, then create and push a `vX.Y.Z` tag when you want to publish. The tag push runs the GitHub Actions `Release` workflow, which builds a versioned executable from that tag and publishes the GitHub Release.

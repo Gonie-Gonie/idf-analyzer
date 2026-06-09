@@ -74,7 +74,7 @@ function highlightInputTarget(element) {
 }
 
 function scrollInputTargetIntoView(element) {
-  const container = element.closest(".formatted-object-view, .json-view, .field-table");
+  const container = element.closest(".semantic-editor, .formatted-object-view, .json-view, .field-table");
   if (!container) {
     return;
   }

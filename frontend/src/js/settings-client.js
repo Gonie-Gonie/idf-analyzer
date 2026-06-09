@@ -38,9 +38,10 @@ export const defaultAppSettings = {
       redoView: "Ctrl+Y, Ctrl+Shift+Z",
       jumpDefinition: "F12",
       jumpReferences: "Shift+F12",
-      inputText: "Ctrl+1",
-      inputJson: "Ctrl+2",
-      inputTable: "Ctrl+3",
+      inputSemantic: "Ctrl+1",
+      inputText: "Ctrl+2",
+      inputJson: "Ctrl+3",
+      inputTable: "Ctrl+4",
       tabSummary: "Ctrl+Alt+1",
       tabProfile: "Ctrl+Alt+2",
       tabHVAC: "Ctrl+Alt+3",
@@ -328,13 +329,33 @@ function normalizeTheme(value) {
 }
 
 function normalizeShortcuts(value, fallback) {
-  const source = value && typeof value === "object" ? value : {};
+  const rawSource = value && typeof value === "object" ? value : {};
+  const source = Object.hasOwn(rawSource, "inputSemantic") ? rawSource : migrateInputViewShortcutDefaults(rawSource);
   return Object.fromEntries(
     Object.entries(fallback).map(([id, defaultAccelerator]) => [
       id,
       normalizeShortcutValue(source[id], defaultAccelerator),
     ]),
   );
+}
+
+function migrateInputViewShortcutDefaults(source) {
+  const migrated = { ...source };
+  if (isBlankOrShortcut(migrated.inputText, "Ctrl+1")) {
+    migrated.inputText = "Ctrl+2";
+  }
+  if (isBlankOrShortcut(migrated.inputJson, "Ctrl+2")) {
+    migrated.inputJson = "Ctrl+3";
+  }
+  if (isBlankOrShortcut(migrated.inputTable, "Ctrl+3")) {
+    migrated.inputTable = "Ctrl+4";
+  }
+  return migrated;
+}
+
+function isBlankOrShortcut(value, expected) {
+  const shortcut = String(value || "").trim();
+  return shortcut === "" || shortcut.toLowerCase() === expected.toLowerCase();
 }
 
 function normalizeShortcutValue(value, fallback) {

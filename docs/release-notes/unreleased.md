@@ -18,6 +18,7 @@ The release script infers bump size from these sections:
 - Added EnergyPlus simulation execution support with external executable detection/registration, weather-file discovery, AppData-backed run directories, single-run progress, ERR parsing, CSV summaries, and graphable result series in the Analyze Simulation tab.
 - Added Simulation settings for EnergyPlus installations, extra weather folders, run-directory defaults, auto-run-on-open, and parallel worker defaults.
 - Added a Tools Multiple Simulation workflow for selecting files or recursive folders, running EnergyPlus in parallel, using shared or nearest-folder weather files, sorting result tables, and overlaying selected CSV output series.
+- Added CLI commands for summary, multi-summary, diagnostics, full analysis, cleanup, IDF/epJSON/semantic YAML conversion, and styled single-sheet XLSX table exports.
 
 ## Changed
 

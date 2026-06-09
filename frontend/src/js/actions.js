@@ -113,6 +113,7 @@ function applyOverviewResult(result, text, { complete = false } = {}) {
   state.report = result.report;
   state.model = result.model || null;
   state.epjsonText = result.epjson || "";
+  state.semanticProjection = result.semantic || null;
   state.lastAnalyzedText = text;
   state.analysisStage = complete ? "complete" : "overview";
   state.diagnosticsReady = complete;
@@ -175,6 +176,8 @@ export function registerLoadedDocument(text, { path = "", filename = "" } = {}) 
   state.report = null;
   state.model = null;
   state.epjsonText = "";
+  state.semanticProjection = null;
+  state.semanticSelectedObjectIndex = "";
   state.analysisStage = "idle";
   state.diagnosticsReady = false;
   state.geometryReady = false;

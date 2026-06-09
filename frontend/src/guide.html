@@ -23,6 +23,7 @@
       <nav class="guide-nav" aria-label="Guide sections" data-i18n-aria-label="guide.sections">
         <a href="#start" data-i18n="guide.nav.start">Start</a>
         <a href="#files" data-i18n="guide.nav.files">Files</a>
+        <a href="#cli" data-i18n="guide.nav.cli">CLI</a>
         <a href="#input-views" data-i18n="guide.nav.inputViews">Input Views</a>
         <a href="#summary" data-i18n="guide.nav.summary">Summary</a>
         <a href="#diagnose" data-i18n="guide.nav.diagnose">Diagnose</a>
@@ -63,6 +64,54 @@
             <article>
               <h3 data-i18n="guide.files.autoTitle">Automatic Analysis</h3>
               <p data-i18n="guide.files.autoBody">Analysis runs after opening a file and after editor changes pause briefly, so repeated edits do not need a separate Analyze button.</p>
+            </article>
+          </div>
+        </section>
+
+        <section id="cli" class="guide-section">
+          <h2 data-i18n="guide.cli.title">CLI Commands</h2>
+          <p data-i18n="guide.cli.body">
+            The packaged executable can also run non-interactive commands. Running without arguments opens the desktop
+            app; running `idf-analyzer cli ...` or a recognized top-level command runs the CLI. Use `-` as the input path
+            to read from stdin and `-o -` to write command output to stdout.
+          </p>
+          <div class="guide-grid">
+            <article>
+              <h3 data-i18n="guide.cli.summaryTitle">Summary and diagnostics</h3>
+              <p data-i18n="guide.cli.summaryBody">Export text, JSON, CSV, or styled XLSX summaries, and export Diagnose issues for scripts or CI checks.</p>
+              <pre><code>idf-analyzer cli summary model.idf
+idf-analyzer cli summary -format json -o summary.json model.idf
+idf-analyzer cli summary -format csv -o summary.csv model.idf
+idf-analyzer cli summary -format xlsx -o summary.xlsx model.idf
+idf-analyzer cli diagnostics -format text model.idf
+idf-analyzer cli diagnostics -format csv -o diagnostics.csv model.idf
+idf-analyzer cli analyze -format json -o report.json model.idf</code></pre>
+            </article>
+            <article>
+              <h3 data-i18n="guide.cli.multiTitle">Multi-file summary</h3>
+              <p data-i18n="guide.cli.multiBody">Compare Summary metrics across several models as CSV, JSON, text, or a styled single-sheet XLSX workbook.</p>
+              <pre><code>idf-analyzer cli multi-summary -format csv -o compare.csv a.idf b.idf c.epjson
+idf-analyzer cli multi-summary -format xlsx -orientation metrics -o compare.xlsx a.idf b.idf
+idf-analyzer cli multi-summary -format xlsx -orientation files -o compare-by-file.xlsx a.idf b.idf</code></pre>
+            </article>
+            <article>
+              <h3 data-i18n="guide.cli.cleanTitle">Clean</h3>
+              <p data-i18n="guide.cli.cleanBody">Preview cleanup candidates, apply default or explicit rules, compact formatting, and optionally rename duplicate semantic object names.</p>
+              <pre><code>idf-analyzer cli clean --dry-run model.idf
+idf-analyzer cli clean --dry-run -format json -o cleanup-preview.json model.idf
+idf-analyzer cli clean -o cleaned.idf model.idf
+idf-analyzer cli clean -rules all --compact -o cleaned.idf model.idf
+idf-analyzer cli clean -rules none --semantic-duplicates -o semantic-fixed.idf model.idf
+idf-analyzer cli clean -rules remove_unused_schedules,remove_duplicate_output_variables -o cleaned.idf model.idf</code></pre>
+            </article>
+            <article>
+              <h3 data-i18n="guide.cli.convertTitle">Convert</h3>
+              <p data-i18n="guide.cli.convertBody">Convert IDF and epJSON inputs to IDF, epJSON, semantic YAML, or a styled one-sheet Excel table export grouped by `[ObjectType]` markers.</p>
+              <pre><code>idf-analyzer cli convert -to idf -o model.idf model.epjson
+idf-analyzer cli convert -to json -o model.epjson model.idf
+idf-analyzer cli convert -to yaml -o model.semantic.yaml model.idf
+idf-analyzer cli convert -to table -o model.tables.xlsx model.idf
+type model.idf | idf-analyzer cli convert -to json -o - -</code></pre>
             </article>
           </div>
         </section>

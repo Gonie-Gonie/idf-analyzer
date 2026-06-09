@@ -21,20 +21,22 @@ type App struct {
 }
 
 type TextEditResult struct {
-	Text     string      `json:"text"`
-	Format   string      `json:"format"`
-	Version  string      `json:"version,omitempty"`
-	Report   *idf.Report `json:"report"`
-	Warnings []string    `json:"warnings,omitempty"`
+	Text     string                      `json:"text"`
+	Format   string                      `json:"format"`
+	Version  string                      `json:"version,omitempty"`
+	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report   *idf.Report                 `json:"report"`
+	Warnings []string                    `json:"warnings,omitempty"`
 }
 
 type InputAnalysisResult struct {
-	Text    string         `json:"text,omitempty"`
-	Format  string         `json:"format"`
-	Version string         `json:"version,omitempty"`
-	Model   *epinput.Model `json:"model"`
-	EPJSON  string         `json:"epjson,omitempty"`
-	Report  *idf.Report    `json:"report"`
+	Text     string                      `json:"text,omitempty"`
+	Format   string                      `json:"format"`
+	Version  string                      `json:"version,omitempty"`
+	Model    *epinput.Model              `json:"model"`
+	EPJSON   string                      `json:"epjson,omitempty"`
+	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report   *idf.Report                 `json:"report"`
 }
 
 type SummaryExportResult struct {
@@ -83,33 +85,36 @@ type CleanupApplyResult struct {
 }
 
 type ProfileApplyTextResult struct {
-	Text    string                  `json:"text"`
-	Format  string                  `json:"format,omitempty"`
-	Version string                  `json:"version,omitempty"`
-	Model   *epinput.Model          `json:"model,omitempty"`
-	EPJSON  string                  `json:"epjson,omitempty"`
-	Report  *idf.Report             `json:"report"`
-	Preview idf.ProfileApplyPreview `json:"preview"`
+	Text     string                      `json:"text"`
+	Format   string                      `json:"format,omitempty"`
+	Version  string                      `json:"version,omitempty"`
+	Model    *epinput.Model              `json:"model,omitempty"`
+	EPJSON   string                      `json:"epjson,omitempty"`
+	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report   *idf.Report                 `json:"report"`
+	Preview  idf.ProfileApplyPreview     `json:"preview"`
 }
 
 type HVACApplyTextResult struct {
-	Text    string               `json:"text"`
-	Format  string               `json:"format,omitempty"`
-	Version string               `json:"version,omitempty"`
-	Model   *epinput.Model       `json:"model,omitempty"`
-	EPJSON  string               `json:"epjson,omitempty"`
-	Report  *idf.Report          `json:"report"`
-	Preview idf.HVACApplyPreview `json:"preview"`
+	Text     string                      `json:"text"`
+	Format   string                      `json:"format,omitempty"`
+	Version  string                      `json:"version,omitempty"`
+	Model    *epinput.Model              `json:"model,omitempty"`
+	EPJSON   string                      `json:"epjson,omitempty"`
+	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report   *idf.Report                 `json:"report"`
+	Preview  idf.HVACApplyPreview        `json:"preview"`
 }
 
 type OutputApplyTextResult struct {
-	Text    string                 `json:"text"`
-	Format  string                 `json:"format,omitempty"`
-	Version string                 `json:"version,omitempty"`
-	Model   *epinput.Model         `json:"model,omitempty"`
-	EPJSON  string                 `json:"epjson,omitempty"`
-	Report  *idf.Report            `json:"report"`
-	Preview idf.OutputApplyPreview `json:"preview"`
+	Text     string                      `json:"text"`
+	Format   string                      `json:"format,omitempty"`
+	Version  string                      `json:"version,omitempty"`
+	Model    *epinput.Model              `json:"model,omitempty"`
+	EPJSON   string                      `json:"epjson,omitempty"`
+	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report   *idf.Report                 `json:"report"`
+	Preview  idf.OutputApplyPreview      `json:"preview"`
 }
 
 type AppSettings struct {
@@ -293,13 +298,24 @@ func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includ
 	}
 
 	return &InputAnalysisResult{
-		Text:    text,
-		Format:  string(model.Format),
-		Version: model.Version.Raw,
-		Model:   model,
-		EPJSON:  epjsonText,
-		Report:  &report,
+		Text:     text,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Model:    model,
+		EPJSON:   epjsonText,
+		Semantic: semanticProjectionForModelDoc(model, doc),
+		Report:   &report,
 	}, nil
+}
+
+func semanticProjectionForModelDoc(model *epinput.Model, doc idf.Document) *idf.SemanticYAMLProjection {
+	metadata := idf.SemanticYAMLMetadata{}
+	if model != nil {
+		metadata.EnergyPlusVersion = model.Version.Raw
+		metadata.SourceFormat = string(model.Format)
+	}
+	projection := idf.BuildSemanticYAMLProjection(doc, metadata)
+	return &projection
 }
 
 func (a *App) PatchModelValueText(text string, objectIndex int, fieldIndex int, jsonPath []string, rawValue string) (*ModelPatchResult, error) {
@@ -323,12 +339,13 @@ func (a *App) PatchModelValueText(text string, objectIndex int, fieldIndex int, 
 	}
 
 	return &ModelPatchResult{
-		Text:    resultText,
-		Format:  string(model.Format),
-		Version: model.Version.Raw,
-		Model:   model,
-		EPJSON:  epjsonText,
-		Report:  &report,
+		Text:     resultText,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Model:    model,
+		EPJSON:   epjsonText,
+		Semantic: semanticProjectionForModelDoc(model, doc),
+		Report:   &report,
 	}, nil
 }
 
@@ -434,10 +451,34 @@ func (a *App) UpdateFieldText(text string, objectIndex int, fieldIndex int, valu
 	resultText := writeDocumentInOriginalFormat(updated, model)
 	report := idf.Analyze(updated)
 	return &TextEditResult{
-		Text:    resultText,
-		Format:  string(model.Format),
-		Version: model.Version.Raw,
-		Report:  &report,
+		Text:     resultText,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Semantic: semanticProjectionForModelDoc(model, updated),
+		Report:   &report,
+	}, nil
+}
+
+func (a *App) ApplySemanticDuplicateNameFixText(text string) (*TextEditResult, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, err
+	}
+	doc := epinput.ToIDFDocument(model)
+	updated, fixes := idf.ApplySemanticDuplicateNameFixes(doc)
+	resultText := writeDocumentInOriginalFormat(updated, model)
+	report := idf.Analyze(updated)
+	warnings := make([]string, 0, len(fixes))
+	for _, fix := range fixes {
+		warnings = append(warnings, fmt.Sprintf("Renamed %s #%d from %q to %q.", fix.ObjectType, fix.ObjectIndex, fix.Before, fix.After))
+	}
+	return &TextEditResult{
+		Text:     resultText,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Semantic: semanticProjectionForModelDoc(model, updated),
+		Report:   &report,
+		Warnings: warnings,
 	}, nil
 }
 
@@ -460,10 +501,11 @@ func (a *App) RemoveUnusedObjectsText(text string) (*TextEditResult, error) {
 	resultText := writeDocumentInOriginalFormat(updated, model)
 	report := idf.Analyze(updated)
 	return &TextEditResult{
-		Text:    resultText,
-		Format:  string(model.Format),
-		Version: model.Version.Raw,
-		Report:  &report,
+		Text:     resultText,
+		Format:   string(model.Format),
+		Version:  model.Version.Raw,
+		Semantic: semanticProjectionForModelDoc(model, updated),
+		Report:   &report,
 	}, nil
 }
 
@@ -582,13 +624,14 @@ func (a *App) ApplyProfileText(text string, request idf.ProfileApplyRequest) (*P
 		return nil, err
 	}
 	return &ProfileApplyTextResult{
-		Text:    resultText,
-		Format:  string(updatedModel.Format),
-		Version: updatedModel.Version.Raw,
-		Model:   updatedModel,
-		EPJSON:  epjsonText,
-		Report:  &report,
-		Preview: preview,
+		Text:     resultText,
+		Format:   string(updatedModel.Format),
+		Version:  updatedModel.Version.Raw,
+		Model:    updatedModel,
+		EPJSON:   epjsonText,
+		Semantic: semanticProjectionForModelDoc(updatedModel, updatedDoc),
+		Report:   &report,
+		Preview:  preview,
 	}, nil
 }
 
@@ -624,13 +667,14 @@ func (a *App) ApplyHVACText(text string, request idf.HVACApplyRequest) (*HVACApp
 		return nil, err
 	}
 	return &HVACApplyTextResult{
-		Text:    resultText,
-		Format:  string(updatedModel.Format),
-		Version: updatedModel.Version.Raw,
-		Model:   updatedModel,
-		EPJSON:  epjsonText,
-		Report:  &report,
-		Preview: preview,
+		Text:     resultText,
+		Format:   string(updatedModel.Format),
+		Version:  updatedModel.Version.Raw,
+		Model:    updatedModel,
+		EPJSON:   epjsonText,
+		Semantic: semanticProjectionForModelDoc(updatedModel, updatedDoc),
+		Report:   &report,
+		Preview:  preview,
 	}, nil
 }
 
@@ -666,13 +710,14 @@ func (a *App) ApplyOutputText(text string, request idf.OutputApplyRequest) (*Out
 		return nil, err
 	}
 	return &OutputApplyTextResult{
-		Text:    resultText,
-		Format:  string(updatedModel.Format),
-		Version: updatedModel.Version.Raw,
-		Model:   updatedModel,
-		EPJSON:  epjsonText,
-		Report:  &report,
-		Preview: preview,
+		Text:     resultText,
+		Format:   string(updatedModel.Format),
+		Version:  updatedModel.Version.Raw,
+		Model:    updatedModel,
+		EPJSON:   epjsonText,
+		Semantic: semanticProjectionForModelDoc(updatedModel, updatedDoc),
+		Report:   &report,
+		Preview:  preview,
 	}, nil
 }
 
@@ -1061,9 +1106,10 @@ func defaultAppSettings() AppSettings {
 				"redoView":       "Ctrl+Y, Ctrl+Shift+Z",
 				"jumpDefinition": "F12",
 				"jumpReferences": "Shift+F12",
-				"inputText":      "Ctrl+1",
-				"inputJson":      "Ctrl+2",
-				"inputTable":     "Ctrl+3",
+				"inputSemantic":  "Ctrl+1",
+				"inputText":      "Ctrl+2",
+				"inputJson":      "Ctrl+3",
+				"inputTable":     "Ctrl+4",
 				"tabSummary":     "Ctrl+Alt+1",
 				"tabProfile":     "Ctrl+Alt+2",
 				"tabHVAC":        "Ctrl+Alt+3",
@@ -1114,6 +1160,9 @@ func normalizeAppSettings(settings AppSettings) AppSettings {
 
 func normalizeShortcutSettings(values map[string]string, defaults map[string]string) map[string]string {
 	out := make(map[string]string, len(defaults))
+	if _, hasSemantic := values["inputSemantic"]; !hasSemantic {
+		values = migrateInputViewShortcutDefaults(values)
+	}
 	for key, fallback := range defaults {
 		value := strings.TrimSpace(values[key])
 		if value == "" {
@@ -1122,6 +1171,28 @@ func normalizeShortcutSettings(values map[string]string, defaults map[string]str
 		out[key] = value
 	}
 	return out
+}
+
+func migrateInputViewShortcutDefaults(values map[string]string) map[string]string {
+	migrated := make(map[string]string, len(values)+1)
+	for key, value := range values {
+		migrated[key] = value
+	}
+	if isBlankOrShortcut(migrated["inputText"], "Ctrl+1") {
+		migrated["inputText"] = "Ctrl+2"
+	}
+	if isBlankOrShortcut(migrated["inputJson"], "Ctrl+2") {
+		migrated["inputJson"] = "Ctrl+3"
+	}
+	if isBlankOrShortcut(migrated["inputTable"], "Ctrl+3") {
+		migrated["inputTable"] = "Ctrl+4"
+	}
+	return migrated
+}
+
+func isBlankOrShortcut(value string, expected string) bool {
+	value = strings.TrimSpace(value)
+	return value == "" || strings.EqualFold(value, expected)
 }
 
 func normalizeAppLanguage(value string, fallback string) string {

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"net/http"
+	"os"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 	"github.com/wailsapp/wails/v2"
@@ -34,6 +35,10 @@ type wailsAppConfig struct {
 }
 
 func main() {
+	if handled, exitCode := maybeRunCLI(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
+		os.Exit(exitCode)
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
