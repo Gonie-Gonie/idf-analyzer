@@ -223,13 +223,19 @@ type CSVColumnSummary struct {
 }
 
 type SimulationSeries struct {
-	File     string            `json:"file"`
-	Column   string            `json:"column"`
-	Min      float64           `json:"min"`
-	Max      float64           `json:"max"`
-	Average  float64           `json:"average"`
-	Points   []SimulationPoint `json:"points"`
-	RowCount int               `json:"rowCount"`
+	File           string            `json:"file"`
+	Column         string            `json:"column"`
+	DisplayColumn  string            `json:"displayColumn,omitempty"`
+	DisplayUnit    string            `json:"displayUnit,omitempty"`
+	Min            float64           `json:"min"`
+	Max            float64           `json:"max"`
+	Average        float64           `json:"average"`
+	DisplayMin     float64           `json:"displayMin,omitempty"`
+	DisplayMax     float64           `json:"displayMax,omitempty"`
+	DisplayAverage float64           `json:"displayAverage,omitempty"`
+	Points         []SimulationPoint `json:"points"`
+	DisplayPoints  []SimulationPoint `json:"displayPoints,omitempty"`
+	RowCount       int               `json:"rowCount"`
 }
 
 type SimulationPoint struct {
@@ -1349,7 +1355,7 @@ func parseSimulationCSV(path string) (CSVSummary, []SimulationSeries, error) {
 			Last:         acc.last,
 		})
 		if points := seriesPoints[index]; len(points) > 0 {
-			series = append(series, SimulationSeries{
+			series = append(series, normalizeSimulationSeriesDisplay(SimulationSeries{
 				File:     filepath.Base(path),
 				Column:   acc.name,
 				Min:      acc.min,
@@ -1357,7 +1363,7 @@ func parseSimulationCSV(path string) (CSVSummary, []SimulationSeries, error) {
 				Average:  average,
 				Points:   downsamplePoints(points, maxCSVSeriesPoints),
 				RowCount: rowCount,
-			})
+			}))
 		}
 	}
 	return summary, series, nil

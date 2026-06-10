@@ -226,7 +226,7 @@ func parseSimulationSQLSeries(path string) ([]SimulationSeries, error) {
 			continue
 		}
 		average := acc.sum / float64(acc.numericCount)
-		series = append(series, SimulationSeries{
+		series = append(series, normalizeSimulationSeriesDisplay(SimulationSeries{
 			File:     filepath.Base(path),
 			Column:   acc.name,
 			Min:      acc.min,
@@ -234,7 +234,7 @@ func parseSimulationSQLSeries(path string) ([]SimulationSeries, error) {
 			Average:  average,
 			Points:   downsamplePoints(seriesPoints[dictionary.index], maxCSVSeriesPoints),
 			RowCount: rowCount,
-		})
+		}))
 	}
 	return series, nil
 }
@@ -1005,24 +1005,11 @@ func normalizeEnergyOutputName(value string) string {
 }
 
 func convertEnergySQLValue(value float64, unit string) (float64, string) {
-	switch strings.ToLower(strings.TrimSpace(unit)) {
-	case "j":
-		return value / 3600000, "kWh"
-	case "kj":
-		return value / 3600, "kWh"
-	case "mj":
-		return value / 3.6, "kWh"
-	case "gj":
-		return value * 277.7777777778, "kWh"
-	case "wh":
-		return value / 1000, "kWh"
-	case "kwh":
-		return value, "kWh"
-	case "w":
-		return value / 1000, "kW"
-	default:
+	normalized := normalizeSimulationDisplayUnit(unit)
+	if normalized.Unit == "" {
 		return value, strings.TrimSpace(unit)
 	}
+	return value * normalized.Factor, normalized.Unit
 }
 
 func roundedEnergyNumber(value float64) float64 {

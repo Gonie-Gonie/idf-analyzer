@@ -550,10 +550,10 @@ function renderSimulationHVACLoopResult(loop) {
           <td>${escapeHTML(metricName)}</td>
           <td>${escapeHTML(series.file || "")}</td>
           <td>${renderSourceInspectorCell(sourceOutputForSeriesColumn(series.column), { series, keyValue: nodeName, variableName: metricName })}</td>
-          <td>${escapeHTML(formatNumber(series.min))}</td>
-          <td>${escapeHTML(formatNumber(series.max))}</td>
-          <td>${escapeHTML(formatNumber(series.average))}</td>
-          <td>${escapeHTML(series.points?.length || 0)}</td>
+          <td>${escapeHTML(formatSeriesStat(series, "min"))}</td>
+          <td>${escapeHTML(formatSeriesStat(series, "max"))}</td>
+          <td>${escapeHTML(formatSeriesStat(series, "average"))}</td>
+          <td>${escapeHTML(simulationSeriesPointCount(series))}</td>
         </tr>`;
       },
     )
@@ -609,12 +609,12 @@ function renderSimulationHVACLoopSnapshot(loop) {
 }
 
 function hvacLoopFrameCount(loop) {
-  return Math.max(0, ...(loop.series || []).map((series) => series.points?.length || 0));
+  return Math.max(0, ...(loop.series || []).map((series) => simulationSeriesPointCount(series)));
 }
 
 function hvacLoopFrameLabel(loop, frameIndex) {
-  const series = (loop.series || []).find((item) => item.points?.[frameIndex]);
-  const point = series?.points?.[frameIndex];
+  const series = (loop.series || []).find((item) => simulationSeriesPointAt(item, frameIndex));
+  const point = simulationSeriesPointAt(series, frameIndex);
   if (!point) {
     return `Frame ${frameIndex + 1}`;
   }
@@ -626,7 +626,7 @@ function hvacNodeFrameSnapshots(loop, frameIndex) {
   for (const series of loop.series || []) {
     const nodeName = seriesNodeKey(series.column) || t("common.unknown", {}, "Unknown");
     const metricName = seriesVariableName(series.column);
-    const point = series.points?.[Math.min(frameIndex, Math.max(0, (series.points?.length || 1) - 1))];
+    const point = simulationSeriesPointAt(series, frameIndex);
     if (!point) {
       continue;
     }
@@ -635,7 +635,7 @@ function hvacNodeFrameSnapshots(loop, frameIndex) {
     const metric = {
       name: metricName,
       value: Number(point.value),
-      unit: seriesColumnUnit(series.column),
+      unit: simulationSeriesDisplayUnit(series),
       source: series.file || "",
     };
     switch (normalizeOutputMatchToken(metricName)) {
@@ -699,7 +699,7 @@ function hvacComponentFrameSnapshots(loop, frameIndex) {
   const out = [];
   for (const component of loop.components || []) {
     for (const series of component.series || []) {
-      const point = series.points?.[Math.min(frameIndex, Math.max(0, (series.points?.length || 1) - 1))];
+      const point = simulationSeriesPointAt(series, frameIndex);
       if (!point) {
         continue;
       }
@@ -708,7 +708,7 @@ function hvacComponentFrameSnapshots(loop, frameIndex) {
         componentType: component.componentType || "",
         metricName: seriesVariableName(series.column),
         value: Number(point.value),
-        unit: seriesColumnUnit(series.column),
+        unit: simulationSeriesDisplayUnit(series),
       });
     }
   }
@@ -1383,6 +1383,40 @@ function formatValueWithUnit(value, unit) {
 
 function formatOptionalValueWithUnit(value, unit) {
   return Number.isFinite(Number(value)) ? formatValueWithUnit(value, unit) : "";
+}
+
+function simulationSeriesDisplayColumn(series = {}) {
+  return series.displayColumn || series.column || "";
+}
+
+function simulationSeriesDisplayUnit(series = {}) {
+  return series.displayUnit || seriesColumnUnit(simulationSeriesDisplayColumn(series));
+}
+
+function simulationSeriesPoints(series = {}) {
+  return Array.isArray(series.displayPoints) && series.displayPoints.length === (series.points || []).length
+    ? series.displayPoints
+    : (series.points || []);
+}
+
+function simulationSeriesPointCount(series = {}) {
+  return simulationSeriesPoints(series).length;
+}
+
+function simulationSeriesPointAt(series = {}, frameIndex = 0) {
+  const points = simulationSeriesPoints(series);
+  if (!points.length) {
+    return null;
+  }
+  return points[Math.min(frameIndex, Math.max(0, points.length - 1))] || null;
+}
+
+function formatSeriesStat(series = {}, key = "average") {
+  const displayKey = `display${key.slice(0, 1).toUpperCase()}${key.slice(1)}`;
+  const displayValue = Number(series[displayKey]);
+  const rawValue = Number(series[key]);
+  const value = Number.isFinite(displayValue) ? displayValue : rawValue;
+  return Number.isFinite(value) ? formatValueWithUnit(value, simulationSeriesDisplayUnit(series)) : "";
 }
 
 function sourceOutputForSeriesColumn(column) {
@@ -3075,14 +3109,15 @@ function simulationSeriesGroupID(series) {
 function renderSimulationChart() {
   const result = state.simulationResult;
   const series = currentSimulationSeries();
-  if (!series || !series.points?.length) {
+  const seriesPoints = simulationSeriesPoints(series);
+  if (!series || !seriesPoints.length) {
     renderSimulationSeriesRangeControls(null);
     elements.simulationChart.innerHTML = `<div class="empty">${t("simulation.noGraph", {}, "SQL/CSV graph will appear after a run with numeric output.")}</div>`;
     return;
   }
-  const visibleRange = normalizeSimulationSeriesRange(series.points.length);
+  const visibleRange = normalizeSimulationSeriesRange(seriesPoints.length);
   renderSimulationSeriesRangeControls(series, visibleRange);
-  const visiblePoints = series.points.slice(visibleRange.start, visibleRange.end + 1);
+  const visiblePoints = seriesPoints.slice(visibleRange.start, visibleRange.end + 1);
   const width = 900;
   const height = 260;
   const pad = { left: 76, right: 18, top: 24, bottom: 42 };
@@ -3105,16 +3140,17 @@ function renderSimulationChart() {
   const tickHTML = yTicks
     .map((value) => {
       const y = yFor(value);
-      return `<g><line x1="${pad.left}" x2="${width - pad.right}" y1="${y}" y2="${y}" class="simulation-grid" /><text x="8" y="${y + 4}" class="simulation-axis">${escapeHTML(formatNumber(value))}</text></g>`;
+      return `<g><line x1="${pad.left}" x2="${width - pad.right}" y1="${y}" y2="${y}" class="simulation-grid" /><text x="8" y="${y + 4}" class="simulation-axis">${escapeHTML(formatValueWithUnit(value, simulationSeriesDisplayUnit(series)))}</text></g>`;
     })
     .join("");
   const firstLabel = visiblePoints[0]?.label || "start";
   const lastLabel = visiblePoints[visiblePoints.length - 1]?.label || "end";
-  const title = visiblePoints.length === series.points.length
-    ? series.column
-    : `${series.column} (${visibleRange.start + 1}-${visibleRange.end + 1} / ${series.points.length})`;
+  const displayColumn = simulationSeriesDisplayColumn(series);
+  const title = visiblePoints.length === seriesPoints.length
+    ? displayColumn
+    : `${displayColumn} (${visibleRange.start + 1}-${visibleRange.end + 1} / ${seriesPoints.length})`;
   elements.simulationChart.innerHTML = `
-    <svg class="simulation-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(series.column)}">
+    <svg class="simulation-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(displayColumn)}">
       ${tickHTML}
       <line x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${height - pad.bottom}" class="simulation-axis-line" />
       <line x1="${pad.left}" x2="${width - pad.right}" y1="${height - pad.bottom}" y2="${height - pad.bottom}" class="simulation-axis-line" />
@@ -3136,7 +3172,7 @@ function renderSimulationSeriesRangeControls(series, visibleRange = null) {
   if (!elements.simulationSeriesRangeStart || !elements.simulationSeriesRangeEnd || !elements.simulationSeriesRangeLabel) {
     return;
   }
-  const pointCount = series?.points?.length || 0;
+  const pointCount = simulationSeriesPointCount(series);
   const disabled = pointCount <= 1;
   const maxIndex = Math.max(0, pointCount - 1);
   const range = pointCount > 0 ? (visibleRange || normalizeSimulationSeriesRange(pointCount)) : { start: 0, end: 0 };
@@ -3156,12 +3192,13 @@ function renderSimulationSeriesRangeControls(series, visibleRange = null) {
 }
 
 function seriesRangeLabel(series, range) {
-  const pointCount = series?.points?.length || 0;
+  const points = simulationSeriesPoints(series);
+  const pointCount = points.length;
   if (!pointCount) {
     return t("simulation.seriesRangeEmpty", {}, "No range");
   }
-  const startPoint = series.points[range.start] || {};
-  const endPoint = series.points[range.end] || {};
+  const startPoint = points[range.start] || {};
+  const endPoint = points[range.end] || {};
   const labels = [startPoint.label, endPoint.label].filter(Boolean);
   const indexLabel = `${range.start + 1}-${range.end + 1} / ${pointCount}`;
   return labels.length === 2 ? `${indexLabel} (${labels[0]} - ${labels[1]})` : indexLabel;
@@ -3169,13 +3206,13 @@ function seriesRangeLabel(series, range) {
 
 function updateSimulationSeriesRangeFromControls(changed) {
   const series = currentSimulationSeries();
-  if (!series?.points?.length) {
+  if (!simulationSeriesPointCount(series)) {
     renderSimulationSeriesRangeControls(null);
     return;
   }
   state.simulationSeriesRangeStart = Number(elements.simulationSeriesRangeStart?.value) || 0;
   state.simulationSeriesRangeEnd = Number(elements.simulationSeriesRangeEnd?.value) || 0;
-  normalizeSimulationSeriesRange(series.points.length, changed);
+  normalizeSimulationSeriesRange(simulationSeriesPointCount(series), changed);
   renderSimulationChart();
 }
 
@@ -3220,7 +3257,7 @@ function bindSimulationChartInteractions(series) {
 }
 
 function zoomSimulationSeriesRange(event, series) {
-  const pointCount = series?.points?.length || 0;
+  const pointCount = simulationSeriesPointCount(series);
   if (pointCount <= 2) {
     return;
   }

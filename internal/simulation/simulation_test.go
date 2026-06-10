@@ -347,6 +347,53 @@ func TestConvertEnergySQLValueUnits(t *testing.T) {
 	}
 }
 
+func TestNormalizeSimulationSeriesDisplayUnits(t *testing.T) {
+	energy := normalizeSimulationSeriesDisplay(SimulationSeries{
+		File:    "eplusout.sql",
+		Column:  "Electricity:Facility [J]",
+		Min:     0,
+		Max:     7200000,
+		Average: 3600000,
+		Points: []SimulationPoint{
+			{X: 1, Label: "M1", Value: 3600000},
+			{X: 2, Label: "M2", Value: 7200000},
+		},
+	})
+	if energy.DisplayColumn != "Electricity:Facility [kWh]" || energy.DisplayUnit != "kWh" {
+		t.Fatalf("energy display identity = %q %q", energy.DisplayColumn, energy.DisplayUnit)
+	}
+	if energy.DisplayMax != 2 || energy.DisplayAverage != 1 || len(energy.DisplayPoints) != 2 || energy.DisplayPoints[1].Value != 2 {
+		t.Fatalf("energy display values = %#v", energy)
+	}
+
+	power := normalizeSimulationSeriesDisplay(SimulationSeries{
+		File:    "eplusout.sql",
+		Column:  "Supply Fan:Fan Electricity Rate [W]",
+		Min:     500,
+		Max:     1500,
+		Average: 1000,
+		Points: []SimulationPoint{
+			{X: 1, Value: 500},
+			{X: 2, Value: 1500},
+		},
+	})
+	if power.DisplayUnit != "kW" || power.DisplayMin != 0.5 || power.DisplayMax != 1.5 || power.DisplayAverage != 1 {
+		t.Fatalf("power display values = %#v", power)
+	}
+
+	humidity := normalizeSimulationSeriesDisplay(SimulationSeries{
+		File:    "eplusout.sql",
+		Column:  "Node:System Node Humidity Ratio [kgWater/kgDryAir]",
+		Min:     0.004,
+		Max:     0.009,
+		Average: 0.006,
+		Points:  []SimulationPoint{{X: 1, Value: 0.006}},
+	})
+	if humidity.DisplayColumn != "Node:System Node Humidity Ratio [kg/kg]" || humidity.DisplayUnit != "kg/kg" || len(humidity.DisplayPoints) != 0 {
+		t.Fatalf("humidity display = %#v", humidity)
+	}
+}
+
 func TestParseSimulationEnergySQLTotalsConvertedMonthlyPoints(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "eplusout.sql")

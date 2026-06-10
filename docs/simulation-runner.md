@@ -99,6 +99,13 @@ viewers are added. Basic Energy SQL rows are converted to display units
 points when `Time.Month` is available, so hourly or timestep energy rows can
 still feed monthly dashboards.
 
+Generic SQL and CSV series keep original values for compatibility and also
+expose display metadata (`displayColumn`, `displayUnit`, `displayMin`,
+`displayMax`, `displayAverage`, and converted `displayPoints` when values
+change). Result charts and purpose summary tables use these display fields so
+energy, power/rate, temperature, mass-flow, and humidity-ratio units stay
+consistent across viewers.
+
 `parseSimulationSQL` is the combined SQLite entrypoint. It gathers generic
 time-series rows, Basic Energy dashboard data, SQL heat-flow data, Integrity
 diagnostics/tabular reports, and Comfort unmet-hours rows into one parse result,

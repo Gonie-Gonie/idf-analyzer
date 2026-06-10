@@ -675,20 +675,20 @@ func hvacNodeSummaryFromBucket(bucket *hvacNodeSeriesBucket) HVACNodeRunSummary 
 	}
 	if bucket.temperature != nil {
 		summary.HasTemperature = true
-		summary.TemperatureAverage = roundedPurposeNumber(bucket.temperature.Average)
-		summary.TemperatureUnit = unitFromSeriesColumn(bucket.temperature.Column)
+		summary.TemperatureAverage = roundedPurposeNumber(seriesDisplayAverage(*bucket.temperature))
+		summary.TemperatureUnit = seriesDisplayUnit(*bucket.temperature)
 	}
 	if bucket.massFlow != nil {
 		summary.HasMassFlow = true
-		summary.MassFlowAverage = roundedPurposeNumber(bucket.massFlow.Average)
-		summary.MassFlowMax = roundedPurposeNumber(bucket.massFlow.Max)
-		summary.MassFlowUnit = unitFromSeriesColumn(bucket.massFlow.Column)
+		summary.MassFlowAverage = roundedPurposeNumber(seriesDisplayAverage(*bucket.massFlow))
+		summary.MassFlowMax = roundedPurposeNumber(seriesDisplayMax(*bucket.massFlow))
+		summary.MassFlowUnit = seriesDisplayUnit(*bucket.massFlow)
 		summary.ActiveMassFlowFraction = roundedPurposeNumber(hvacActiveMassFlowFraction(bucket.massFlow.Points))
 	}
 	if bucket.setpoint != nil {
 		summary.HasSetpoint = true
-		summary.SetpointAverage = roundedPurposeNumber(bucket.setpoint.Average)
-		summary.SetpointUnit = unitFromSeriesColumn(bucket.setpoint.Column)
+		summary.SetpointAverage = roundedPurposeNumber(seriesDisplayAverage(*bucket.setpoint))
+		summary.SetpointUnit = seriesDisplayUnit(*bucket.setpoint)
 	}
 	if bucket.temperature != nil && bucket.setpoint != nil {
 		delta, samples := hvacAverageAbsoluteDelta(bucket.temperature.Points, bucket.setpoint.Points)
@@ -735,13 +735,13 @@ func buildHVACComponentRunSummaries(series []SimulationSeries) []HVACComponentRu
 			_, variableName := splitPurposeSeriesColumn(item.Column)
 			metrics = append(metrics, HVACComponentOperationMetric{
 				Name:       variableName,
-				Unit:       unitFromSeriesColumn(item.Column),
+				Unit:       seriesDisplayUnit(item),
 				Source:     item.File,
-				Min:        roundedPurposeNumber(item.Min),
-				Max:        roundedPurposeNumber(item.Max),
-				Average:    roundedPurposeNumber(item.Average),
-				Total:      roundedPurposeNumber(seriesTotal(item)),
-				PointCount: len(item.Points),
+				Min:        roundedPurposeNumber(seriesDisplayMin(item)),
+				Max:        roundedPurposeNumber(seriesDisplayMax(item)),
+				Average:    roundedPurposeNumber(seriesDisplayAverage(item)),
+				Total:      roundedPurposeNumber(seriesDisplayTotal(item)),
+				PointCount: len(seriesDisplayPoints(item)),
 			})
 		}
 		sort.SliceStable(metrics, func(i, j int) bool {
@@ -1000,12 +1000,12 @@ func buildComfortResult(series []SimulationSeries, scope SimulationPurposeScope)
 		}
 		zone.Metrics = append(zone.Metrics, ComfortMetricResult{
 			Name:    variableName,
-			Unit:    unitFromSeriesColumn(item.Column),
+			Unit:    seriesDisplayUnit(filteredItem),
 			Source:  filteredItem.File,
-			Min:     filteredItem.Min,
-			Max:     filteredItem.Max,
-			Average: filteredItem.Average,
-			Points:  append([]SimulationPoint(nil), filteredItem.Points...),
+			Min:     seriesDisplayMin(filteredItem),
+			Max:     seriesDisplayMax(filteredItem),
+			Average: seriesDisplayAverage(filteredItem),
+			Points:  append([]SimulationPoint(nil), seriesDisplayPoints(filteredItem)...),
 		})
 	}
 	sort.SliceStable(zoneOrder, func(i, j int) bool {
@@ -1041,7 +1041,7 @@ func filterComfortSeriesByPeriod(item SimulationSeries, scope SimulationPurposeS
 		return filtered, false
 	}
 	filtered.Min, filtered.Max, filtered.Average = simulationPointStats(filtered.Points)
-	return filtered, true
+	return normalizeSimulationSeriesDisplay(filtered), true
 }
 
 func comfortPeriodScopeDays(scope SimulationPurposeScope) (int, int, bool) {
@@ -2705,13 +2705,13 @@ func planWeight(seriesCount int, frameCount int) string {
 func buildEnergyDashboardResult(series []SimulationSeries) EnergyDashboardResult {
 	var result EnergyDashboardResult
 	for _, item := range series {
-		name := item.Column
-		total := seriesTotal(item)
+		name := simulationSeriesDisplayName(item)
+		total := seriesDisplayTotal(item)
 		energy := EnergySeries{
 			Name:   name,
-			Unit:   unitFromSeriesColumn(name),
+			Unit:   seriesDisplayUnit(item),
 			Source: item.File,
-			Points: append([]SimulationPoint(nil), item.Points...),
+			Points: append([]SimulationPoint(nil), seriesDisplayPoints(item)...),
 			Total:  total,
 		}
 		zoneName, zoneMetric, isZone := splitZoneEnergySeriesName(name)
@@ -2737,9 +2737,51 @@ func buildEnergyDashboardResult(series []SimulationSeries) EnergyDashboardResult
 	return result
 }
 
-func seriesTotal(series SimulationSeries) float64 {
+func simulationSeriesDisplayName(series SimulationSeries) string {
+	if strings.TrimSpace(series.DisplayColumn) != "" {
+		return strings.TrimSpace(series.DisplayColumn)
+	}
+	return series.Column
+}
+
+func seriesDisplayUnit(series SimulationSeries) string {
+	if strings.TrimSpace(series.DisplayUnit) != "" {
+		return strings.TrimSpace(series.DisplayUnit)
+	}
+	return unitFromSeriesColumn(series.Column)
+}
+
+func seriesDisplayMin(series SimulationSeries) float64 {
+	if strings.TrimSpace(series.DisplayUnit) != "" {
+		return series.DisplayMin
+	}
+	return series.Min
+}
+
+func seriesDisplayMax(series SimulationSeries) float64 {
+	if strings.TrimSpace(series.DisplayUnit) != "" {
+		return series.DisplayMax
+	}
+	return series.Max
+}
+
+func seriesDisplayAverage(series SimulationSeries) float64 {
+	if strings.TrimSpace(series.DisplayUnit) != "" {
+		return series.DisplayAverage
+	}
+	return series.Average
+}
+
+func seriesDisplayPoints(series SimulationSeries) []SimulationPoint {
+	if len(series.DisplayPoints) == len(series.Points) && len(series.DisplayPoints) > 0 {
+		return series.DisplayPoints
+	}
+	return series.Points
+}
+
+func seriesDisplayTotal(series SimulationSeries) float64 {
 	total := 0.0
-	for _, point := range series.Points {
+	for _, point := range seriesDisplayPoints(series) {
 		total += point.Value
 	}
 	return total
