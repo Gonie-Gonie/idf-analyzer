@@ -43,6 +43,7 @@ The release script infers bump size from these sections:
 - Summary envelope area is now labeled as gross, with a separate net opaque envelope area metric that subtracts recognized fenestration.
 - Semantic YAML lines now show Raw, Computed, Summary, and Inferred badges so derived values are visually distinct from editable IDF fields.
 - Summary internal-load metrics now report resolved object coverage and unresolved calculation-method counts for People, Lights, and ElectricEquipment.
+- HVAC terminal inlet mismatch warnings now expose relation edge ids, source field indexes, expected/actual nodes, and fix targets for UI inspection.
 
 ## Fixed
 

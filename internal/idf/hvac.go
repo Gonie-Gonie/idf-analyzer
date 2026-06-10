@@ -272,6 +272,8 @@ type HVACWarning struct {
 	FieldIndex         int      `json:"fieldIndex,omitempty"`
 	Field              string   `json:"field,omitempty"`
 	Value              string   `json:"value,omitempty"`
+	EdgeID             string   `json:"edgeId,omitempty"`
+	SourceFieldIndex   int      `json:"sourceFieldIndex,omitempty"`
 	ExpectedNodes      []string `json:"expectedNodes,omitempty"`
 	ActualNode         string   `json:"actualNode,omitempty"`
 	SuggestedFixTarget string   `json:"suggestedFixTarget,omitempty"`
@@ -990,13 +992,23 @@ func newHVACComponent(ctx *hvacContext, objectType string, objectNameValue strin
 	for _, usage := range component.NodeUsages {
 		switch usage.Role {
 		case "water_inlet", "plant_inlet":
-			component.WaterInletNode = firstNonEmpty(component.WaterInletNode, usage.NodeName)
+			if component.WaterInletNode == "" {
+				component.WaterInletNode = usage.NodeName
+			}
 		case "water_outlet", "plant_outlet":
-			component.WaterOutletNode = firstNonEmpty(component.WaterOutletNode, usage.NodeName)
+			if component.WaterOutletNode == "" {
+				component.WaterOutletNode = usage.NodeName
+			}
 		case "inlet", "air_inlet", "zone_inlet", "condenser_inlet":
-			component.InletNode = firstNonEmpty(component.InletNode, usage.NodeName)
+			if component.InletNode == "" {
+				component.InletNode = usage.NodeName
+				component.InletFieldIndex = usage.FieldIndex
+			}
 		case "outlet", "air_outlet", "zone_outlet", "condenser_outlet":
-			component.OutletNode = firstNonEmpty(component.OutletNode, usage.NodeName)
+			if component.OutletNode == "" {
+				component.OutletNode = usage.NodeName
+				component.OutletFieldIndex = usage.FieldIndex
+			}
 		}
 	}
 	if inlet := fieldValueByCatalogName(obj, "Air Inlet Node Name", "Inlet Node Name"); inlet != "" {
@@ -1158,6 +1170,10 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 			if terminal.OutletNode != "" && len(zoneInletNodes) > 0 && !stringSliceContainsFold(zoneInletNodes, terminal.OutletNode) {
 				warning := hvacWarningForComponent(terminal, "terminal_not_connected_to_zone_inlet",
 					fmt.Sprintf("Terminal %s outlet node %q is not in Zone %q inlet nodes.", componentLabel(terminal), terminal.OutletNode, zoneName))
+				warning.EdgeID = hvacTerminalOutletEdgeID(relation, terminal)
+				warning.FieldIndex = terminal.OutletFieldIndex
+				warning.SourceFieldIndex = terminal.OutletFieldIndex
+				warning.Field = "Air Outlet Node Name"
 				warning.ExpectedNodes = append([]string(nil), zoneInletNodes...)
 				warning.ActualNode = terminal.OutletNode
 				warning.SuggestedFixTarget = "ZoneHVAC:EquipmentConnections/Zone Air Inlet Node or NodeList Name"
@@ -1246,6 +1262,10 @@ func buildHVACSpaceRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Ob
 			if terminal.OutletNode != "" && len(spaceInletNodes) > 0 && !stringSliceContainsFold(spaceInletNodes, terminal.OutletNode) {
 				warning := hvacWarningForComponent(terminal, "terminal_not_connected_to_space_inlet",
 					fmt.Sprintf("Terminal %s outlet node %q is not in Space %q inlet nodes.", componentLabel(terminal), terminal.OutletNode, spaceName))
+				warning.EdgeID = hvacTerminalOutletEdgeID(relation, terminal)
+				warning.FieldIndex = terminal.OutletFieldIndex
+				warning.SourceFieldIndex = terminal.OutletFieldIndex
+				warning.Field = "Air Outlet Node Name"
 				warning.ExpectedNodes = append([]string(nil), spaceInletNodes...)
 				warning.ActualNode = terminal.OutletNode
 				warning.SuggestedFixTarget = "SpaceHVAC:EquipmentConnections/Space Air Inlet Node or NodeList Name"
@@ -2952,6 +2972,22 @@ func hvacWarningForComponent(component HVACComponent, code string, message strin
 		ObjectType:  component.ObjectType,
 		ObjectName:  component.ObjectName,
 	}
+}
+
+func hvacTerminalOutletEdgeID(relation HVACZoneChain, terminal HVACComponent) string {
+	scope := "zone"
+	subject := relation.ZoneName
+	if strings.EqualFold(relation.RelationScope, "space") && relation.SpaceName != "" {
+		scope = "space"
+		subject = relation.SpaceName
+	}
+	return strings.Join([]string{
+		scope,
+		normalizeName(subject),
+		"terminal_outlet",
+		normalizeName(terminal.ObjectType),
+		normalizeName(terminal.ObjectName),
+	}, ":")
 }
 
 func zoneObjectIndex(ctx *hvacContext, zoneName string) int {

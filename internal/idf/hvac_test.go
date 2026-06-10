@@ -260,6 +260,50 @@ func TestAnalyzeHVACReadsZoneEquipmentListSixFieldGroup(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACTerminalMismatchWarningIncludesEdgeMetadata(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office", Comment: "Zone Name"},
+			{Value: "Office Equipment", Comment: "Zone Conditioning Equipment List Name"},
+			{Value: "Expected Zone Inlet", Comment: "Zone Air Inlet Node or NodeList Name"},
+			{Value: "", Comment: "Zone Air Exhaust Node or NodeList Name"},
+			{Value: "Office Zone Air Node", Comment: "Zone Air Node Name"},
+			{Value: "Office Return Node", Comment: "Zone Return Air Node or NodeList Name"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment", Comment: "Name"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Comment: "Zone Equipment 1 Object Type"},
+			{Value: "Office Terminal", Comment: "Zone Equipment 1 Name"},
+			{Value: "1", Comment: "Zone Equipment 1 Cooling Sequence"},
+			{Value: "1", Comment: "Zone Equipment 1 Heating or No-Load Sequence"},
+		}},
+		{Index: 3, Type: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Fields: []Field{
+			{Value: "Office Terminal", Comment: "Name"},
+			{Value: "Terminal Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Wrong Outlet", Comment: "Air Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	warning := findHVACWarningByCode(report.Warnings, "terminal_not_connected_to_zone_inlet")
+	if warning == nil {
+		t.Fatalf("warnings = %#v, want terminal_not_connected_to_zone_inlet", report.Warnings)
+	}
+	if warning.EdgeID == "" || !strings.Contains(warning.EdgeID, "terminal_outlet") {
+		t.Fatalf("warning edge id = %q, want terminal outlet edge", warning.EdgeID)
+	}
+	if warning.FieldIndex != 2 || warning.SourceFieldIndex != 2 || warning.Field != "Air Outlet Node Name" {
+		t.Fatalf("warning source field = index %d source %d field %q, want outlet field 2", warning.FieldIndex, warning.SourceFieldIndex, warning.Field)
+	}
+	if !stringSliceContainsFold(warning.ExpectedNodes, "Expected Zone Inlet") || warning.ActualNode != "Wrong Outlet" {
+		t.Fatalf("warning nodes = expected %#v actual %q, want Expected Zone Inlet/Wrong Outlet", warning.ExpectedNodes, warning.ActualNode)
+	}
+	if warning.SuggestedFixTarget == "" {
+		t.Fatalf("warning missing suggested fix target: %#v", *warning)
+	}
+}
+
 func TestAnalyzeHVACBuildsSpaceHVACRelation(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Open Office"}}},
@@ -707,12 +751,16 @@ func findHVACTestingZoneRelation(report HVACReport, name string) *HVACZoneChain 
 }
 
 func hasHVACWarningCode(warnings []HVACWarning, code string) bool {
+	return findHVACWarningByCode(warnings, code) != nil
+}
+
+func findHVACWarningByCode(warnings []HVACWarning, code string) *HVACWarning {
 	for _, warning := range warnings {
 		if warning.Code == code {
-			return true
+			return &warning
 		}
 	}
-	return false
+	return nil
 }
 
 func hasDemandGraphEdge(graph AirLoopDemandGraph, role string, fromNode string, toNode string) bool {

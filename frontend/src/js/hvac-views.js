@@ -1159,12 +1159,20 @@ function renderHVACWarnings(hvac, query) {
 }
 
 function renderHVACWarning(warning) {
+  const details = [
+    warning.edgeId ? `edge ${warning.edgeId}` : "",
+    warning.sourceFieldIndex !== undefined && warning.sourceFieldIndex !== null ? `source field ${warning.sourceFieldIndex}` : "",
+    (warning.expectedNodes || []).length ? `expected ${warning.expectedNodes.join(", ")}` : "",
+    warning.actualNode ? `actual ${warning.actualNode}` : "",
+    warning.suggestedFixTarget ? `fix ${warning.suggestedFixTarget}` : "",
+  ].filter(Boolean);
   return `
     <article class="hvac-warning ${escapeHTML(warning.severity || "warning")}">
       <div>
         <strong>${escapeHTML(warning.message || "")}</strong>
         <span>${escapeHTML([warning.code, warning.source, warning.confidence, warning.objectType, warning.objectName].filter(Boolean).join(" / "))}</span>
         ${warning.evidence ? `<small>${escapeHTML(warning.evidence)}</small>` : ""}
+        ${details.length ? `<small>${escapeHTML(details.join(" / "))}</small>` : ""}
       </div>
       ${renderObjectLink(warning.objectIndex, warning.objectType)}
     </article>`;
@@ -1412,7 +1420,7 @@ function warningMatchesQuery(warning, query) {
   if (!query) {
     return true;
   }
-  return [warning.severity, warning.category, warning.code, warning.source, warning.confidence, warning.evidence, warning.message, warning.objectType, warning.objectName, warning.field, warning.value]
+  return [warning.severity, warning.category, warning.code, warning.source, warning.confidence, warning.evidence, warning.message, warning.objectType, warning.objectName, warning.field, warning.value, warning.edgeId, warning.sourceFieldIndex, warning.actualNode, warning.suggestedFixTarget, ...(warning.expectedNodes || [])]
     .join(" ")
     .toLowerCase()
     .includes(query);
