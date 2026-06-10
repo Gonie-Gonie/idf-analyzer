@@ -111,6 +111,7 @@ The release script infers bump size from these sections:
 - Simulation run results and manifests now record SQL, CSV, and ESO source priority plus the actual sources used by result parsers.
 - Comfort Check now supports custom period scope inputs that filter comfort trends, summaries, issue ranking, and HTML exports to the selected date range.
 - Purpose run-plan tests now lock the `will_be_persisted` state shown when purpose outputs are planned as permanent edits.
+- Integrity purpose results now cross-check SQL tabular zone, surface, construction, and nominal-load rows against static IDF names with exact, normalized, alias, static-only, and SQL-only statuses.
 
 ## Fixed
 

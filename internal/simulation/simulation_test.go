@@ -514,6 +514,72 @@ func TestPurposeResultBundleUsesSQLIntegrityResult(t *testing.T) {
 	}
 }
 
+func TestPurposeResultBundleCrossChecksIntegrityTabularNames(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.sql")
+	createTestIntegrityCrossCheckSQL(t, path)
+	inputPath := filepath.Join(dir, "run.idf")
+	input := `Version, 9.6;
+
+Zone,
+  Office;
+
+Zone,
+  Lab;
+
+Material,
+  Gypsum,
+  Smooth,
+  0.012,
+  0.16,
+  800,
+  1090;
+
+Construction,
+  Wall Cons,
+  Gypsum;
+
+BuildingSurface:Detailed,
+  South Wall,
+  Wall,
+  Wall Cons,
+  Office,
+  Outdoors,
+  ,
+  SunExposed,
+  WindExposed,
+  0.5,
+  4,
+  0, 0, 3,
+  4, 0, 3,
+  4, 0, 0,
+  0, 0, 0;
+`
+	if err := os.WriteFile(inputPath, []byte(input), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := &SimulationRunResult{
+		Status:    "succeeded",
+		InputPath: inputPath,
+		Files: []SimulationFileInfo{{
+			Name: "eplusout.sql",
+			Path: path,
+			Kind: "sqlite",
+		}},
+	}
+	bundle := BuildPurposeResultBundle(result, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeIntegrity},
+	})
+
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "zone", "Office", "exact")
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "zone", "Lab", "static_only")
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "zone", "SQL Only Zone", "sql_only")
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "construction", "Wall Cons", "normalized")
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "surface", "South Wall", "alias")
+	assertIntegrityCrossCheck(t, bundle.Integrity.CrossChecks, "nominal_load", "Office", "info")
+}
+
 func TestPurposeResultBundleBuildsHVACLoopSeries(t *testing.T) {
 	result := &SimulationRunResult{
 		Status: "succeeded",
@@ -844,6 +910,16 @@ func integrityHasStaticDiagnostic(items []idf.Diagnostic, code string) bool {
 	return false
 }
 
+func assertIntegrityCrossCheck(t *testing.T, items []IntegrityCrossCheck, category string, name string, status string) {
+	t.Helper()
+	for _, item := range items {
+		if item.Category == category && item.Name == name && item.Status == status {
+			return
+		}
+	}
+	t.Fatalf("missing integrity cross check category=%q name=%q status=%q in %#v", category, name, status, items)
+}
+
 func stringSliceContains(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
@@ -1063,6 +1139,39 @@ func createTestIntegritySQL(t *testing.T, path string) {
 		`INSERT INTO TabularDataWithStrings VALUES
 			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Site and Source Energy', 'Total Site Energy', 'Total Energy', 'GJ', 1, 1, '12.5'),
 			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Site and Source Energy', 'Total Site Energy', 'Energy Per Total Building Area', 'MJ/m2', 1, 2, '85.1')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("sql fixture statement failed: %v\n%s", err, statement)
+		}
+	}
+}
+
+func createTestIntegrityCrossCheckSQL(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	statements := []string{
+		`CREATE TABLE TabularDataWithStrings (
+			ReportName TEXT,
+			ReportForString TEXT,
+			TableName TEXT,
+			RowName TEXT,
+			ColumnName TEXT,
+			Units TEXT,
+			RowId INTEGER,
+			ColumnId INTEGER,
+			Value TEXT
+		)`,
+		`INSERT INTO TabularDataWithStrings VALUES
+			('InputVerificationandResultsSummary', 'Entire Facility', 'Zone Summary', 'Office', 'Conditioned', '', 1, 1, 'Yes'),
+			('InputVerificationandResultsSummary', 'Entire Facility', 'Zone Summary', 'SQL Only Zone', 'Conditioned', '', 2, 1, 'Yes'),
+			('EnvelopeSummary', 'Entire Facility', 'Constructions', 'wall   cons', 'U-Factor', 'W/m2-K', 3, 1, '0.4'),
+			('EnvelopeSummary', 'Entire Facility', 'Opaque Exterior', 'South-Wall', 'Area', 'm2', 4, 1, '12.0'),
+			('ComponentSizingSummary', 'Entire Facility', 'Zone Sensible Cooling Nominal Loads', 'Office', 'Nominal Total Capacity', 'W', 5, 1, '4200')`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 )
@@ -271,6 +272,7 @@ type IntegrityResult struct {
 	Files             []SimulationFileInfo     `json:"files,omitempty"`
 	Completed         bool                     `json:"completed"`
 	StaticDiagnostics []idf.Diagnostic         `json:"staticDiagnostics,omitempty"`
+	CrossChecks       []IntegrityCrossCheck    `json:"crossChecks,omitempty"`
 	SQLIssues         []IntegritySQLIssue      `json:"sqlIssues,omitempty"`
 	TabularReports    []IntegrityTabularReport `json:"tabularReports,omitempty"`
 }
@@ -280,6 +282,18 @@ type IntegritySQLIssue struct {
 	Message  string `json:"message"`
 	Count    int    `json:"count,omitempty"`
 	Source   string `json:"source,omitempty"`
+}
+
+type IntegrityCrossCheck struct {
+	Category     string            `json:"category"`
+	Name         string            `json:"name"`
+	Status       string            `json:"status"`
+	StaticSource string            `json:"staticSource,omitempty"`
+	SQLSource    string            `json:"sqlSource,omitempty"`
+	SQLReport    string            `json:"sqlReport,omitempty"`
+	SQLTable     string            `json:"sqlTable,omitempty"`
+	Message      string            `json:"message,omitempty"`
+	Values       map[string]string `json:"values,omitempty"`
 }
 
 type IntegrityTabularReport struct {
@@ -544,6 +558,7 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 				Files:             append([]SimulationFileInfo(nil), result.Files...),
 				Completed:         result.ERR.Completed,
 				StaticDiagnostics: buildIntegrityStaticDiagnostics(result.InputPath),
+				CrossChecks:       buildIntegrityCrossChecks(result.InputPath, sqlIntegrity.TabularReports),
 				SQLIssues:         sqlIntegrity.Issues,
 				TabularReports:    sqlIntegrity.TabularReports,
 			}
@@ -1379,6 +1394,418 @@ func buildIntegrityStaticDiagnostics(path string) []idf.Diagnostic {
 		return []idf.Diagnostic{integrityStaticDiagnosticUnavailable(fmt.Sprintf("Static Diagnose could not parse the run input: %v", err))}
 	}
 	return idf.AnalyzeDiagnostics(doc)
+}
+
+type integrityNamedEntity struct {
+	Category   string
+	Name       string
+	Source     string
+	ReportName string
+	TableName  string
+	Values     map[string]string
+}
+
+func buildIntegrityCrossChecks(path string, reports []IntegrityTabularReport) []IntegrityCrossCheck {
+	staticEntities := buildIntegrityStaticEntities(path)
+	sqlEntities, nominalRows := buildIntegritySQLTabularEntities(reports)
+	var checks []IntegrityCrossCheck
+	for _, category := range []string{"zone", "surface", "construction"} {
+		checks = append(checks, matchIntegrityCrossCheckCategory(
+			category,
+			staticEntities[category],
+			sqlEntities[category],
+		)...)
+	}
+	checks = append(checks, nominalRows...)
+	sort.SliceStable(checks, func(i, j int) bool {
+		left := checks[i]
+		right := checks[j]
+		if left.Category != right.Category {
+			return left.Category < right.Category
+		}
+		if integrityCrossCheckStatusRank(left.Status) != integrityCrossCheckStatusRank(right.Status) {
+			return integrityCrossCheckStatusRank(left.Status) < integrityCrossCheckStatusRank(right.Status)
+		}
+		return strings.ToLower(left.Name) < strings.ToLower(right.Name)
+	})
+	if len(checks) > 240 {
+		return checks[:240]
+	}
+	return checks
+}
+
+func buildIntegrityStaticEntities(path string) map[string][]integrityNamedEntity {
+	out := map[string][]integrityNamedEntity{}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return out
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return out
+	}
+	doc, err := idf.Parse(string(content))
+	if err != nil {
+		return out
+	}
+	seen := map[string]bool{}
+	for _, obj := range doc.Objects {
+		category := integrityStaticEntityCategory(obj.Type)
+		if category == "" {
+			continue
+		}
+		name := purposeObjectName(obj)
+		if !integrityCandidateNameValid(name) {
+			continue
+		}
+		key := category + "\x00" + integrityAliasKey(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out[category] = append(out[category], integrityNamedEntity{
+			Category: category,
+			Name:     strings.TrimSpace(name),
+			Source:   obj.Type,
+		})
+	}
+	for category := range out {
+		sort.SliceStable(out[category], func(i, j int) bool {
+			return strings.ToLower(out[category][i].Name) < strings.ToLower(out[category][j].Name)
+		})
+	}
+	return out
+}
+
+func integrityStaticEntityCategory(objectType string) string {
+	objectType = strings.ToLower(strings.TrimSpace(objectType))
+	switch objectType {
+	case "zone":
+		return "zone"
+	case "buildingsurface:detailed", "fenestrationsurface:detailed", "wall:detailed", "roofceiling:detailed", "floor:detailed", "window", "door", "glazeddoor", "internalmass":
+		return "surface"
+	}
+	if strings.HasPrefix(objectType, "construction") {
+		return "construction"
+	}
+	if strings.Contains(objectType, "surface") && !strings.Contains(objectType, "control") {
+		return "surface"
+	}
+	return ""
+}
+
+func buildIntegritySQLTabularEntities(reports []IntegrityTabularReport) (map[string][]integrityNamedEntity, []IntegrityCrossCheck) {
+	entities := map[string][]integrityNamedEntity{}
+	var nominalRows []IntegrityCrossCheck
+	seen := map[string]bool{}
+	for _, report := range reports {
+		categories := integrityTabularReportCategories(report)
+		nominal := integrityTabularReportHasNominalLoad(report)
+		for _, row := range report.Rows {
+			if nominal && integrityCandidateNameValid(row.Name) {
+				nominalRows = append(nominalRows, IntegrityCrossCheck{
+					Category:  "nominal_load",
+					Name:      strings.TrimSpace(row.Name),
+					Status:    "info",
+					SQLSource: report.Source,
+					SQLReport: report.ReportName,
+					SQLTable:  report.TableName,
+					Message:   "Nominal load row captured from SQL tabular results for sizing/load review.",
+					Values:    limitedIntegrityValues(row.Values, 6),
+				})
+			}
+			for _, category := range categories {
+				candidates := integritySQLRowNameCandidates(report, row, category)
+				for _, name := range candidates {
+					key := category + "\x00" + integrityAliasKey(name)
+					if seen[key] {
+						continue
+					}
+					seen[key] = true
+					entities[category] = append(entities[category], integrityNamedEntity{
+						Category:   category,
+						Name:       strings.TrimSpace(name),
+						Source:     report.Source,
+						ReportName: report.ReportName,
+						TableName:  report.TableName,
+						Values:     limitedIntegrityValues(row.Values, 6),
+					})
+				}
+			}
+		}
+	}
+	for category := range entities {
+		sort.SliceStable(entities[category], func(i, j int) bool {
+			return strings.ToLower(entities[category][i].Name) < strings.ToLower(entities[category][j].Name)
+		})
+	}
+	return entities, nominalRows
+}
+
+func integrityTabularReportCategories(report IntegrityTabularReport) []string {
+	text := integrityReportMatchText(report)
+	var categories []string
+	if integrityTextHasWord(text, "zone") {
+		categories = append(categories, "zone")
+	}
+	if strings.Contains(text, "surface") || strings.Contains(text, "fenestration") || strings.Contains(text, "opaque exterior") || strings.Contains(text, "window") || strings.Contains(text, "door") {
+		categories = append(categories, "surface")
+	}
+	if strings.Contains(text, "construction") {
+		categories = append(categories, "construction")
+	}
+	return categories
+}
+
+func integrityTabularReportHasNominalLoad(report IntegrityTabularReport) bool {
+	text := integrityReportMatchText(report)
+	if strings.Contains(text, "nominal") && strings.Contains(text, "load") {
+		return true
+	}
+	if strings.Contains(text, "sizing") && strings.Contains(text, "load") {
+		return true
+	}
+	for _, column := range report.Columns {
+		columnText := normalizePurposeToken(column)
+		if strings.Contains(columnText, "nominal") && strings.Contains(columnText, "load") {
+			return true
+		}
+	}
+	return false
+}
+
+func integrityReportMatchText(report IntegrityTabularReport) string {
+	return normalizePurposeToken(strings.Join([]string{report.ReportName, report.For, report.TableName}, " "))
+}
+
+func integrityTextHasWord(text string, word string) bool {
+	for _, field := range strings.Fields(text) {
+		if field == word {
+			return true
+		}
+	}
+	return false
+}
+
+func integritySQLRowNameCandidates(report IntegrityTabularReport, row IntegrityTabularRow, category string) []string {
+	seen := map[string]bool{}
+	var candidates []string
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if !integrityCandidateNameValid(value) {
+			return
+		}
+		key := integrityAliasKey(value)
+		if key == "" || seen[key] {
+			return
+		}
+		seen[key] = true
+		candidates = append(candidates, value)
+	}
+	if integrityReportRowNameLikelyCategory(report, category) {
+		add(row.Name)
+	}
+	for column, value := range row.Values {
+		if integrityColumnLikelyCategory(column, category) {
+			add(value)
+		}
+	}
+	return candidates
+}
+
+func integrityReportRowNameLikelyCategory(report IntegrityTabularReport, category string) bool {
+	text := integrityReportMatchText(report)
+	switch category {
+	case "zone":
+		return integrityTextHasWord(text, "zone")
+	case "surface":
+		return strings.Contains(text, "surface") || strings.Contains(text, "fenestration") || strings.Contains(text, "opaque exterior") || strings.Contains(text, "window") || strings.Contains(text, "door")
+	case "construction":
+		return strings.Contains(text, "construction")
+	default:
+		return false
+	}
+}
+
+func integrityColumnLikelyCategory(column string, category string) bool {
+	text := normalizePurposeToken(column)
+	switch category {
+	case "zone":
+		return strings.Contains(text, "zone name") || text == "zone"
+	case "surface":
+		return strings.Contains(text, "surface name") || text == "surface" || strings.Contains(text, "base surface")
+	case "construction":
+		return strings.Contains(text, "construction name") || text == "construction"
+	default:
+		return false
+	}
+}
+
+func matchIntegrityCrossCheckCategory(category string, staticEntities []integrityNamedEntity, sqlEntities []integrityNamedEntity) []IntegrityCrossCheck {
+	usedSQL := map[int]bool{}
+	var checks []IntegrityCrossCheck
+	for _, staticEntity := range staticEntities {
+		index, status := findIntegritySQLEntityMatch(staticEntity.Name, sqlEntities, usedSQL)
+		if index >= 0 {
+			usedSQL[index] = true
+			sqlEntity := sqlEntities[index]
+			checks = append(checks, IntegrityCrossCheck{
+				Category:     category,
+				Name:         staticEntity.Name,
+				Status:       status,
+				StaticSource: staticEntity.Source,
+				SQLSource:    sqlEntity.Source,
+				SQLReport:    sqlEntity.ReportName,
+				SQLTable:     sqlEntity.TableName,
+				Message:      integrityCrossCheckMessage(status),
+				Values:       limitedIntegrityValues(sqlEntity.Values, 6),
+			})
+			continue
+		}
+		checks = append(checks, IntegrityCrossCheck{
+			Category:     category,
+			Name:         staticEntity.Name,
+			Status:       "static_only",
+			StaticSource: staticEntity.Source,
+			Message:      integrityCrossCheckMessage("static_only"),
+		})
+	}
+	for index, sqlEntity := range sqlEntities {
+		if usedSQL[index] {
+			continue
+		}
+		checks = append(checks, IntegrityCrossCheck{
+			Category:  category,
+			Name:      sqlEntity.Name,
+			Status:    "sql_only",
+			SQLSource: sqlEntity.Source,
+			SQLReport: sqlEntity.ReportName,
+			SQLTable:  sqlEntity.TableName,
+			Message:   integrityCrossCheckMessage("sql_only"),
+			Values:    limitedIntegrityValues(sqlEntity.Values, 6),
+		})
+	}
+	return checks
+}
+
+func findIntegritySQLEntityMatch(staticName string, sqlEntities []integrityNamedEntity, used map[int]bool) (int, string) {
+	for index, sqlEntity := range sqlEntities {
+		if used[index] {
+			continue
+		}
+		if staticName == sqlEntity.Name {
+			return index, "exact"
+		}
+	}
+	staticNormalized := normalizePurposeToken(staticName)
+	for index, sqlEntity := range sqlEntities {
+		if used[index] {
+			continue
+		}
+		if staticNormalized != "" && staticNormalized == normalizePurposeToken(sqlEntity.Name) {
+			return index, "normalized"
+		}
+	}
+	staticAlias := integrityAliasKey(staticName)
+	for index, sqlEntity := range sqlEntities {
+		if used[index] {
+			continue
+		}
+		if staticAlias != "" && staticAlias == integrityAliasKey(sqlEntity.Name) {
+			return index, "alias"
+		}
+	}
+	return -1, ""
+}
+
+func integrityCrossCheckMessage(status string) string {
+	switch status {
+	case "exact":
+		return "Static IDF name matches SQL tabular row exactly."
+	case "normalized":
+		return "Matched after case or whitespace normalization."
+	case "alias":
+		return "Matched after compact alias normalization."
+	case "static_only":
+		return "Name exists in the IDF but was not found in parsed SQL tabular rows."
+	case "sql_only":
+		return "Name appears in SQL tabular rows but was not found in the static IDF model."
+	case "info":
+		return "SQL tabular row captured for review."
+	default:
+		return ""
+	}
+}
+
+func integrityCrossCheckStatusRank(status string) int {
+	switch status {
+	case "static_only", "sql_only":
+		return 0
+	case "alias", "normalized":
+		return 1
+	case "exact":
+		return 2
+	case "info":
+		return 3
+	default:
+		return 4
+	}
+}
+
+func integrityCandidateNameValid(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) < 2 {
+		return false
+	}
+	switch normalizePurposeToken(value) {
+	case "total", "subtotal", "grand total", "not part of total", "not applicable", "n/a", "na", "none", "unknown":
+		return false
+	}
+	if _, err := strconv.ParseFloat(strings.ReplaceAll(value, ",", ""), 64); err == nil {
+		return false
+	}
+	return integrityAliasKey(value) != ""
+}
+
+func integrityAliasKey(value string) string {
+	var builder strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(value)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			builder.WriteRune(r)
+		}
+	}
+	return builder.String()
+}
+
+func purposeObjectName(obj idf.Object) string {
+	if len(obj.Fields) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(obj.Fields[0].Value)
+}
+
+func limitedIntegrityValues(values map[string]string, limit int) map[string]string {
+	if len(values) == 0 || limit <= 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(values))
+	for key, value := range values {
+		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	if len(keys) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for _, key := range keys {
+		if len(out) >= limit {
+			break
+		}
+		out[key] = strings.TrimSpace(values[key])
+	}
+	return out
 }
 
 func integrityStaticDiagnosticUnavailable(message string) idf.Diagnostic {

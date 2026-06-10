@@ -1207,16 +1207,37 @@
 }
 
 .simulation-integrity-static,
+.simulation-integrity-crosscheck,
 .simulation-integrity-sql {
   display: grid;
   gap: 12px;
 }
 
 .simulation-integrity-static h4,
+.simulation-integrity-crosscheck h4,
 .simulation-integrity-sql h4,
 .simulation-tabular-report h5 {
   margin: 0 0 6px;
   font-size: 13px;
+}
+
+.simulation-crosscheck-status {
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.simulation-crosscheck-status.static_only,
+.simulation-crosscheck-status.sql_only {
+  color: var(--amber);
+}
+
+.simulation-crosscheck-status.alias,
+.simulation-crosscheck-status.normalized {
+  color: var(--teal);
+}
+
+.simulation-crosscheck-status.exact {
+  color: var(--green);
 }
 
 .simulation-tabular-reports {

@@ -2547,6 +2547,7 @@ function renderSimulationSummary(result, stale) {
   const err = result.err || {};
   const integrity = result.purposeResults?.integrity || {};
   const staticDiagnostics = integrity.staticDiagnostics || (!stale ? state.report?.diagnostics || [] : []);
+  const crossChecks = integrity.crossChecks || [];
   const sqlIssues = integrity.sqlIssues || [];
   const tabularReports = integrity.tabularReports || [];
   const staleBadge = stale ? `<span class="simulation-badge stale">${escapeHTML(t("simulation.stale", {}, "Stale"))}</span>` : "";
@@ -2587,6 +2588,7 @@ function renderSimulationSummary(result, stale) {
       <div><span>${escapeHTML(t("simulation.errSevere", {}, "Severe/Fatal"))}</span><strong>${escapeHTML((err.severe || 0) + (err.fatal || 0))}</strong></div>
       <div><span>${escapeHTML(t("simulation.csvFiles", {}, "CSV files"))}</span><strong>${escapeHTML(result.csvs?.length || 0)}</strong></div>
       <div><span>${escapeHTML(t("simulation.staticDiagnostics", {}, "Static diagnostics"))}</span><strong>${escapeHTML(staticDiagnostics.length)}</strong></div>
+      <div><span>${escapeHTML(t("simulation.integrityCrossChecks", {}, "Cross checks"))}</span><strong>${escapeHTML(crossChecks.length)}</strong></div>
       <div><span>${escapeHTML(t("simulation.sqlDiagnostics", {}, "SQL diagnostics"))}</span><strong>${escapeHTML(sqlIssues.length)}</strong></div>
       <div><span>${escapeHTML(t("simulation.tabularReports", {}, "Tabular reports"))}</span><strong>${escapeHTML(tabularReports.length)}</strong></div>
     </div>
@@ -2616,6 +2618,7 @@ function renderSimulationSummary(result, stale) {
       </section>
     </div>
     ${renderIntegrityStaticDiagnostics(staticDiagnostics)}
+    ${renderIntegrityCrossChecks(crossChecks)}
     ${renderIntegritySQLDetails(sqlIssues, tabularReports)}`;
 }
 
@@ -2735,6 +2738,46 @@ function renderIntegrityStaticDiagnostics(diagnostics = []) {
     </div>`;
 }
 
+function renderIntegrityCrossChecks(crossChecks = []) {
+  if (!crossChecks.length) {
+    return "";
+  }
+  const query = normalizeOutputMatchToken(state.simulationIntegrityQuery);
+  const filtered = query ? crossChecks.filter((item) => integrityCrossCheckMatches(item, query)) : crossChecks;
+  const rows = filtered
+    .slice(0, 48)
+    .map((item) => {
+      const sqlLocation = [item.sqlReport, item.sqlTable].filter(Boolean).join(" / ");
+      const values = Object.entries(item.values || {})
+        .slice(0, 4)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("; ");
+      return `
+        <tr>
+          <td>${escapeHTML(simulationDiagnosticSourceLabel(item.category || ""))}</td>
+          <td>${escapeHTML(item.name || "")}</td>
+          <td><span class="simulation-crosscheck-status ${escapeHTML(item.status || "info")}">${escapeHTML(simulationIntegrityCrossCheckStatusLabel(item.status || "info"))}</span></td>
+          <td>${escapeHTML(item.staticSource || "")}</td>
+          <td>${escapeHTML(sqlLocation || item.sqlSource || "")}</td>
+          <td>${escapeHTML(item.message || "")}</td>
+          <td>${escapeHTML(values)}</td>
+        </tr>`;
+    })
+    .join("");
+  return `
+    <div class="simulation-integrity-crosscheck">
+      <section>
+        <h4>${escapeHTML(integrityFilteredTitle(t("simulation.integrityCrossChecks", {}, "Cross checks"), filtered.length, crossChecks.length, query))}</h4>
+        <div class="output-table-wrap">
+          <table class="output-table">
+            <thead><tr><th>${escapeHTML(t("common.category", {}, "Category"))}</th><th>${escapeHTML(t("common.name", {}, "Name"))}</th><th>${escapeHTML(t("common.status", {}, "Status"))}</th><th>${escapeHTML(t("simulation.staticSource", {}, "Static source"))}</th><th>${escapeHTML(t("simulation.sqlSource", {}, "SQL source"))}</th><th>${escapeHTML(t("common.message", {}, "Message"))}</th><th>${escapeHTML(t("common.values", {}, "Values"))}</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="7">${escapeHTML(t("simulation.noIntegrityCrossChecks", {}, "No matching cross checks"))}</td></tr>`}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>`;
+}
+
 function integrityFilteredTitle(title, shown, total, query) {
   return query ? `${title} (${shown}/${total})` : title;
 }
@@ -2766,6 +2809,38 @@ function simulationDiagnosticSourceLabel(source) {
 
 function integritySQLIssueMatches(issue, query) {
   return normalizeOutputMatchToken([issue.severity, issue.message, issue.count, issue.source].filter(Boolean).join(" ")).includes(query);
+}
+
+function integrityCrossCheckMatches(item, query) {
+  return normalizeOutputMatchToken([
+    item.category,
+    item.name,
+    item.status,
+    item.staticSource,
+    item.sqlSource,
+    item.sqlReport,
+    item.sqlTable,
+    item.message,
+    ...Object.keys(item.values || {}),
+    ...Object.values(item.values || {}),
+  ].filter(Boolean).join(" ")).includes(query);
+}
+
+function simulationIntegrityCrossCheckStatusLabel(status) {
+  switch (String(status || "").toLowerCase()) {
+    case "exact":
+      return t("simulation.crossCheckExact", {}, "Exact");
+    case "normalized":
+      return t("simulation.crossCheckNormalized", {}, "Normalized");
+    case "alias":
+      return t("simulation.crossCheckAlias", {}, "Alias");
+    case "static_only":
+      return t("simulation.crossCheckStaticOnly", {}, "Static only");
+    case "sql_only":
+      return t("simulation.crossCheckSQLOnly", {}, "SQL only");
+    default:
+      return simulationDiagnosticSourceLabel(status || "info");
+  }
 }
 
 function filterIntegrityTabularReport(report, query) {
@@ -4477,7 +4552,21 @@ function renderPurposeHTMLIntegrity(integrity) {
       diagnostic.code || "",
       simulationDiagnosticSourceLabel(diagnostic.source || ""),
     ]);
-  if (!staticRows.length && !errRows.length && !sqlRows.length && !tabularRows.length && !err.total && !(integrity.tabularReports || []).length) {
+  const crossCheckRows = (integrity.crossChecks || [])
+    .slice(0, 160)
+    .map((item) => [
+      simulationDiagnosticSourceLabel(item.category || ""),
+      item.name || "",
+      simulationIntegrityCrossCheckStatusLabel(item.status || "info"),
+      item.staticSource || "",
+      [item.sqlReport, item.sqlTable].filter(Boolean).join(" / ") || item.sqlSource || "",
+      item.message || "",
+      Object.entries(item.values || {})
+        .slice(0, 4)
+        .map(([key, value]) => `${key}: ${value}`)
+        .join("; "),
+    ]);
+  if (!staticRows.length && !crossCheckRows.length && !errRows.length && !sqlRows.length && !tabularRows.length && !err.total && !(integrity.tabularReports || []).length) {
     return "";
   }
   const summaryRows = [
@@ -4486,6 +4575,7 @@ function renderPurposeHTMLIntegrity(integrity) {
     ["ERR warnings", err.warnings || 0],
     ["ERR severe/fatal", (err.severe || 0) + (err.fatal || 0)],
     ["Static diagnostics", (integrity.staticDiagnostics || []).length],
+    ["Cross checks", (integrity.crossChecks || []).length],
     ["SQL diagnostics", (integrity.sqlIssues || []).length],
     ["Tabular reports", (integrity.tabularReports || []).length],
   ];
@@ -4493,6 +4583,9 @@ function renderPurposeHTMLIntegrity(integrity) {
     `<h2>Integrity Summary</h2>${renderPurposeHTMLTable(["Field", "Value"], summaryRows)}`,
     staticRows.length
       ? `<h2>Integrity Static Diagnostics</h2>${renderPurposeHTMLTable(["Severity", "Category", "Message", "Location", "Code", "Source"], staticRows)}`
+      : "",
+    crossCheckRows.length
+      ? `<h2>Integrity Cross Checks</h2>${renderPurposeHTMLTable(["Category", "Name", "Status", "Static Source", "SQL Source", "Message", "Values"], crossCheckRows)}`
       : "",
     errRows.length ? `<h2>Integrity ERR Issues</h2>${renderPurposeHTMLTable(["Severity", "Message", "Count", "Lines"], errRows)}` : "",
     sqlRows.length

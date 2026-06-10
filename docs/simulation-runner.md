@@ -118,7 +118,10 @@ Purpose result viewers now include:
 - Comfort zone metric summaries for temperature, setpoint, PMV, and PPD series,
   with optional custom `MM-DD` period scoping for the rendered trends and issue
   ranking.
-- Integrity ERR, SQL error table, and tabular report previews.
+- Integrity ERR, SQL error table, tabular report previews, and SQL/static
+  cross-checks for zone, surface, construction, and nominal-load tabular rows.
+  Cross-check statuses distinguish exact names, normalized matches, compact
+  aliases, static-only names, and SQL-only names.
 
 Where a row can be matched back to the run plan, result tables show the source
 output state and signature so the user can distinguish existing, temporary, and
