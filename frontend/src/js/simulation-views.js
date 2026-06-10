@@ -756,6 +756,7 @@ function renderSimulationHeatFlow() {
 
   elements.simulationHeatFlow.innerHTML = `
     ${renderHeatFlowGuide()}
+    ${renderHeatFlowTimelineBrush(dataset, zoneMap.get(normalizeHeatFlowName(selectedZone)), visibleRange, frameIndex)}
     <div class="heatflow-layout">
       <div class="heatflow-floor-grid">
         ${visibleHeatFlowStories(geometry).map((story) => renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex)).join("")}
@@ -774,6 +775,59 @@ function renderHeatFlowGuide() {
       <span><i class="heatflow-guide-fill"></i>${escapeHTML(t("simulation.heatFlowGuideFill", {}, "Zone fill shows the selected overlay: net heat flow or temperature."))}</span>
       <span><i class="heatflow-guide-stack"></i>${escapeHTML(t("simulation.heatFlowGuideStack", {}, "Stack bars show each heat-flow category; up is heat entering, down is heat leaving."))}</span>
       <span><i class="heatflow-guide-ring"></i>${escapeHTML(t("simulation.heatFlowGuideRing", {}, "The +/- ring marks the zone's net direction and relative magnitude. Click a zone for the ledger."))}</span>
+    </div>`;
+}
+
+function renderHeatFlowTimelineBrush(dataset, zoneSeries, visibleRange, frameIndex) {
+  const frameCount = Math.max(0, Number(dataset?.frameCount) || dataset?.labels?.length || 0);
+  if (frameCount <= 1) {
+    return "";
+  }
+  const width = 760;
+  const height = 92;
+  const pad = { left: 38, right: 18, top: 14, bottom: 24 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const sampleCount = Math.min(frameCount, 240);
+  const values = [];
+  for (let index = 0; index < sampleCount; index += 1) {
+    const frame = sampleCount === 1 ? 0 : Math.round(index * (frameCount - 1) / (sampleCount - 1));
+    values.push({ frame, value: heatFlowTimelineValue(dataset, zoneSeries, frame) });
+  }
+  const maxAbs = Math.max(1, ...values.map((point) => Math.abs(point.value || 0)));
+  const yMid = pad.top + plotHeight / 2;
+  const path = values
+    .map((point, index) => {
+      const x = pad.left + (point.frame / Math.max(frameCount - 1, 1)) * plotWidth;
+      const y = yMid - (point.value / maxAbs) * (plotHeight / 2 - 3);
+      return `${index === 0 ? "M" : "L"} ${roundSVG(x)} ${roundSVG(y)}`;
+    })
+    .join(" ");
+  const rangeStartX = pad.left + (visibleRange.start / Math.max(frameCount - 1, 1)) * plotWidth;
+  const rangeEndX = pad.left + (visibleRange.end / Math.max(frameCount - 1, 1)) * plotWidth;
+  const cursorX = pad.left + (clampNumber(frameIndex, 0, frameCount - 1) / Math.max(frameCount - 1, 1)) * plotWidth;
+  const presets = [
+    ["reset", "Reset"],
+    ["fit", "Fit"],
+    ["day", "Day"],
+    ["week", "Week"],
+    ["month", "Month"],
+    ["runperiod", "RunPeriod"],
+  ];
+  return `
+    <div class="heatflow-timeline">
+      <div class="heatflow-range-actions">
+        ${presets.map(([preset, label]) => `<button type="button" data-heatflow-range-preset="${escapeHTML(preset)}">${escapeHTML(label)}</button>`).join("")}
+      </div>
+      <svg class="heatflow-timeline-brush" viewBox="0 0 ${width} ${height}" role="img" aria-label="Heat-flow visible frame range">
+        <line x1="${pad.left}" x2="${width - pad.right}" y1="${roundSVG(yMid)}" y2="${roundSVG(yMid)}" class="simulation-axis-line" />
+        ${path ? `<path d="${path}" class="heatflow-timeline-line" />` : ""}
+        <rect x="${roundSVG(rangeStartX)}" y="${pad.top}" width="${roundSVG(Math.max(2, rangeEndX - rangeStartX))}" height="${plotHeight}" class="heatflow-range-window"></rect>
+        <line x1="${roundSVG(cursorX)}" x2="${roundSVG(cursorX)}" y1="${pad.top}" y2="${pad.top + plotHeight}" class="heatflow-cursor" />
+        <rect class="heatflow-brush-hit" x="${pad.left}" y="${pad.top}" width="${plotWidth}" height="${plotHeight}" data-heatflow-brush="1"></rect>
+        <text x="${pad.left}" y="${height - 7}" class="simulation-axis">${escapeHTML(dataset.labels?.[0] || "start")}</text>
+        <text x="${width - pad.right}" y="${height - 7}" text-anchor="end" class="simulation-axis">${escapeHTML(dataset.labels?.[frameCount - 1] || "end")}</text>
+      </svg>
     </div>`;
 }
 
@@ -1061,6 +1115,10 @@ function renderHeatFlowStackChart(dataset, zoneSeries, frameIndex) {
 function bindHeatFlowInteractions(dataset, geometry, zoneMap) {
   const host = elements.simulationHeatFlow;
   const tooltip = host.querySelector(".heatflow-tooltip");
+  host.querySelectorAll("[data-heatflow-range-preset]").forEach((button) => {
+    button.addEventListener("click", () => applyHeatFlowRangePreset(dataset, button.dataset.heatflowRangePreset || "fit"));
+  });
+  bindHeatFlowTimelineBrush(host, dataset);
   host.querySelectorAll("[data-heat-zone]").forEach((shape) => {
     shape.addEventListener("pointerenter", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
     shape.addEventListener("pointermove", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
@@ -1108,6 +1166,10 @@ function zoomHeatFlowRange(event, dataset) {
   }
   const { start, end } = heatFlowVisibleRange(dataset);
   const currentSize = end - start + 1;
+  if (event.shiftKey) {
+    panHeatFlowRange(event, dataset, currentSize);
+    return;
+  }
   const nextSize = event.deltaY < 0
     ? Math.max(4, Math.ceil(currentSize * 0.7))
     : Math.min(frameCount, Math.ceil(currentSize / 0.7));
@@ -1136,6 +1198,112 @@ function zoomHeatFlowRange(event, dataset) {
   state.simulationHeatFlowRangeEnd = nextEnd;
   state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, nextStart, nextEnd);
   renderSimulationHeatFlow();
+}
+
+function panHeatFlowRange(event, dataset, currentSize) {
+  const frameCount = Math.max(0, Number(dataset?.frameCount) || dataset?.labels?.length || 0);
+  const { start, end } = heatFlowVisibleRange(dataset);
+  if (currentSize >= frameCount) {
+    return;
+  }
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+  const direction = delta < 0 ? -1 : 1;
+  const step = Math.max(1, Math.round(currentSize * 0.15));
+  let nextStart = clampNumber(start + direction * step, 0, Math.max(0, frameCount - currentSize));
+  let nextEnd = nextStart + currentSize - 1;
+  if (nextEnd > frameCount - 1) {
+    nextEnd = frameCount - 1;
+    nextStart = Math.max(0, nextEnd - currentSize + 1);
+  }
+  state.simulationHeatFlowRangeStart = nextStart;
+  state.simulationHeatFlowRangeEnd = nextEnd;
+  state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, nextStart, nextEnd);
+  renderSimulationHeatFlow();
+}
+
+function applyHeatFlowRangePreset(dataset, preset) {
+  const frameCount = Math.max(0, Number(dataset?.frameCount) || dataset?.labels?.length || 0);
+  if (frameCount <= 1) {
+    return;
+  }
+  const sizes = {
+    day: 24,
+    week: 24 * 7,
+    month: 24 * 30,
+  };
+  if (preset === "reset" || preset === "fit" || preset === "runperiod" || !sizes[preset]) {
+    state.simulationHeatFlowRangeStart = 0;
+    state.simulationHeatFlowRangeEnd = -1;
+    normalizeHeatFlowFrameRange(frameCount);
+    renderSimulationHeatFlow();
+    return;
+  }
+  const size = Math.min(frameCount, sizes[preset]);
+  setHeatFlowRangeAroundFrame(frameCount, size, state.simulationHeatFlowFrameIndex);
+  renderSimulationHeatFlow();
+}
+
+function setHeatFlowRangeAroundFrame(frameCount, size, frame) {
+  const center = clampNumber(Math.round(frame), 0, frameCount - 1);
+  let start = Math.round(center - (size - 1) / 2);
+  let end = start + size - 1;
+  if (start < 0) {
+    end -= start;
+    start = 0;
+  }
+  if (end > frameCount - 1) {
+    const overflow = end - (frameCount - 1);
+    start = Math.max(0, start - overflow);
+    end = frameCount - 1;
+  }
+  state.simulationHeatFlowRangeStart = start;
+  state.simulationHeatFlowRangeEnd = end;
+  state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, start, end);
+}
+
+function bindHeatFlowTimelineBrush(host, dataset) {
+  const brush = host.querySelector("[data-heatflow-brush]");
+  if (!brush) {
+    return;
+  }
+  let startFrame = null;
+  brush.addEventListener("pointerdown", (event) => {
+    startFrame = heatFlowFrameFromBrushEvent(event, dataset);
+    brush.setPointerCapture?.(event.pointerId);
+  });
+  brush.addEventListener("pointerup", (event) => {
+    if (startFrame === null) {
+      return;
+    }
+    const endFrame = heatFlowFrameFromBrushEvent(event, dataset);
+    if (Math.abs(endFrame - startFrame) <= 1) {
+      state.simulationHeatFlowFrameIndex = endFrame;
+    } else {
+      state.simulationHeatFlowRangeStart = Math.min(startFrame, endFrame);
+      state.simulationHeatFlowRangeEnd = Math.max(startFrame, endFrame);
+      state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, state.simulationHeatFlowRangeStart, state.simulationHeatFlowRangeEnd);
+    }
+    startFrame = null;
+    normalizeHeatFlowFrameRange(Math.max(0, Number(dataset?.frameCount) || dataset?.labels?.length || 0));
+    renderSimulationHeatFlow();
+  });
+  brush.addEventListener("pointercancel", () => {
+    startFrame = null;
+  });
+}
+
+function heatFlowFrameFromBrushEvent(event, dataset) {
+  const frameCount = Math.max(1, Number(dataset?.frameCount) || dataset?.labels?.length || 1);
+  const rect = event.currentTarget.getBoundingClientRect();
+  const ratio = clampNumber((event.clientX - rect.left) / Math.max(rect.width, 1), 0, 1);
+  return clampNumber(Math.round(ratio * (frameCount - 1)), 0, frameCount - 1);
+}
+
+function heatFlowTimelineValue(dataset, zoneSeries, frameIndex) {
+  if (zoneSeries) {
+    return heatFlowZoneNet(zoneSeries, dataset, frameIndex);
+  }
+  return (dataset.zones || []).reduce((sum, zone) => sum + heatFlowZoneNet(zone, dataset, frameIndex), 0);
 }
 
 function showHeatFlowTooltip(event, zoneName, dataset, zoneMap, tooltip) {

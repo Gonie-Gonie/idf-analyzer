@@ -429,6 +429,59 @@
   flex: 0 0 auto;
 }
 
+.heatflow-timeline {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  padding: 8px;
+}
+
+.heatflow-range-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.heatflow-range-actions button {
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.heatflow-timeline-brush {
+  width: 100%;
+  min-width: 280px;
+  height: 92px;
+}
+
+.heatflow-timeline-line {
+  fill: none;
+  stroke: var(--teal);
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.heatflow-range-window {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+  stroke-width: 1;
+  opacity: 0.74;
+}
+
+.heatflow-brush-hit {
+  cursor: crosshair;
+  fill: transparent;
+  pointer-events: all;
+}
+
 .heatflow-guide-fill {
   width: 16px;
   height: 10px;
