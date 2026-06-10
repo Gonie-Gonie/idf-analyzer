@@ -114,6 +114,39 @@ func TestDiscoverAvailableOutputsMarksPurposeAlias(t *testing.T) {
 	}
 }
 
+func TestDiscoverAvailableOutputsMarksPurposeMeterAlias(t *testing.T) {
+	dir := t.TempDir()
+	mddPath := filepath.Join(dir, "eplusout.mdd")
+	if err := os.WriteFile(mddPath, []byte("Gas:Facility [J]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := DiscoverAvailableOutputs(OutputDiscoveryRequest{
+		Text: purposePlanFixtureIDF + `
+GasEquipment,
+  Office Gas Equipment,
+  Office,
+  ,
+  EquipmentLevel,
+  100;
+`,
+		MDDPath: mddPath,
+		PurposeRequest: &SimulationPurposeRequest{
+			Purposes: []SimulationPurposeID{SimulationPurposeBasicEnergy},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, ok := discoveryFind(result.Items, "Output:Meter", "NaturalGas:Facility", "NaturalGas:Facility", "alias")
+	if !ok || item.AliasOf != "Gas:Facility" {
+		t.Fatalf("missing meter alias item: %#v", result.Items)
+	}
+	if !discoveryHas(result.Items, "Output:Meter", "Electricity:Facility", "Electricity:Facility", "fallback") {
+		t.Fatalf("purpose meter fallback should use meter name instead of empty variable name: %#v", result.Items)
+	}
+}
+
 func discoveryHas(items []OutputDiscoveryItem, objectType string, keyValue string, name string, status string) bool {
 	_, ok := discoveryFind(items, objectType, keyValue, name, status)
 	return ok

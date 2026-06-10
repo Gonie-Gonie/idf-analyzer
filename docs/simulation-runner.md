@@ -136,7 +136,8 @@ present, then merges selected purpose-plan outputs as `available`, `alias`, or
 - `available`: the exact requested output, wildcard equivalent, or dictionary
   class equivalent was discovered.
 - `alias`: an alternate discovered variable can satisfy the purpose request
-  (for example, `Zone Air Temperature` for `Zone Mean Air Temperature`).
+  (for example, `Zone Air Temperature` for `Zone Mean Air Temperature`, or
+  `Gas:Facility` for `NaturalGas:Facility`).
 - `fallback`: the purpose preset can still request the output, but it was not
   discovered in the current SQL/RDD/MDD catalog.
 

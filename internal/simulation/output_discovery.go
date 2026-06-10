@@ -97,24 +97,25 @@ func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryRe
 				if !purposeObjectIsSeries(object.ObjectType) {
 					continue
 				}
+				name := purposeOutputDiscoveryName(object)
 				status := "fallback"
 				aliasOf := ""
 				aliasReason := ""
 				units := ""
 				source := "purpose_plan"
-				if collector.has(object.ObjectType, object.KeyValue, object.VariableName) {
+				if collector.has(object.ObjectType, object.KeyValue, name) {
 					status = "available"
-				} else if alias, ok := collector.aliasFor(object.ObjectType, object.KeyValue, object.VariableName); ok {
+				} else if alias, ok := collector.aliasFor(object.ObjectType, object.KeyValue, name); ok {
 					status = "alias"
 					aliasOf = alias.Name
-					aliasReason = "A discovered output variable can be used as an alias for this purpose output."
+					aliasReason = "A discovered output can be used as an alias for this purpose output."
 					units = alias.Units
 					source = mergeDiscoveryToken(source, alias.Source)
 				}
 				collector.add(OutputDiscoveryItem{
 					ObjectType:         object.ObjectType,
 					KeyValue:           object.KeyValue,
-					Name:               object.VariableName,
+					Name:               name,
 					Units:              units,
 					ReportingFrequency: object.ReportingFrequency,
 					Source:             source,
@@ -136,6 +137,16 @@ func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryRe
 	sort.Strings(result.Sources)
 	result.Sources = normalizePurposeStrings(result.Sources)
 	return result, nil
+}
+
+func purposeOutputDiscoveryName(object PurposeOutputObject) string {
+	if strings.TrimSpace(object.VariableName) != "" {
+		return strings.TrimSpace(object.VariableName)
+	}
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(object.ObjectType)), "output:meter") {
+		return strings.TrimSpace(object.KeyValue)
+	}
+	return strings.TrimSpace(object.KeyValue)
 }
 
 func discoverOutputsCached(kind string, path string, loader func(string) ([]OutputDiscoveryItem, error)) ([]OutputDiscoveryItem, error) {
@@ -427,15 +438,33 @@ func outputDiscoveryKey(objectType string, keyValue string, name string) string 
 }
 
 func outputDiscoveryAliases(objectType string, name string) []string {
-	if !strings.EqualFold(strings.TrimSpace(objectType), "Output:Variable") {
-		return nil
+	switch strings.ToLower(strings.TrimSpace(objectType)) {
+	case "output:variable":
+		switch normalizePurposeToken(name) {
+		case "zone mean air temperature":
+			return []string{"Zone Air Temperature", "Space Mean Air Temperature"}
+		default:
+			return nil
+		}
+	case "output:meter", "output:meter:meterfileonly", "output:meter:cumulative", "output:meter:cumulativemeterfileonly":
+		switch normalizePurposeToken(name) {
+		case "naturalgas:facility":
+			return []string{"Gas:Facility"}
+		case "naturalgas:heating":
+			return []string{"Gas:Heating"}
+		case "naturalgas:watersystems":
+			return []string{"Gas:WaterSystems"}
+		case "gas:facility":
+			return []string{"NaturalGas:Facility"}
+		case "gas:heating":
+			return []string{"NaturalGas:Heating"}
+		case "gas:watersystems":
+			return []string{"NaturalGas:WaterSystems"}
+		default:
+			return nil
+		}
 	}
-	switch normalizePurposeToken(name) {
-	case "zone mean air temperature":
-		return []string{"Zone Air Temperature", "Space Mean Air Temperature"}
-	default:
-		return nil
-	}
+	return nil
 }
 
 func mergeDiscoveryToken(left string, right string) string {
