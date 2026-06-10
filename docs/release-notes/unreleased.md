@@ -92,6 +92,7 @@ The release script infers bump size from these sections:
 - Simulation output discovery now structures MDD meter catalog entries with resource type, end-use category, and meter group metadata for Basic Energy availability checks and custom output search.
 - Purpose result source rows now include a Chart action that opens the matched SQL/CSV series in the common time-range chart for zone energy, HVAC node/component, and comfort metrics.
 - The SQL/CSV Series result tab now exposes visible All/Start/End time-range controls that stay synchronized with wheel zoom and row-driven chart inspection.
+- Zone Heat Flow playback now uses the active purpose heat-flow dataset and keeps explicit zoom start/end plus visible frame index state in sync with the range controls.
 - Simulation empty-state and advanced-option labels now frame legacy standard-output presets as secondary to the purpose-driven Run & Inspect flow.
 
 ## Fixed

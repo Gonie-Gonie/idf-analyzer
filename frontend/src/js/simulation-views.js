@@ -2478,8 +2478,7 @@ function renderSimulationHeatFlow() {
   if (!elements.simulationHeatFlow) {
     return;
   }
-  const purposeDataset = state.simulationResult?.purposeResults?.zoneHeatFlow;
-  const dataset = purposeDataset?.zones?.length ? purposeDataset : state.simulationResult?.heatFlow;
+  const dataset = activeHeatFlowDataset();
   if (!dataset?.zones?.length || !dataset?.categories?.length || !(dataset.frameCount > 0)) {
     renderSimulationHeatFlowEmpty(t("simulation.noHeatFlow", {}, "Select Zone Heat Flow to inspect the zone heat-flow ledger."));
     return;
@@ -2542,6 +2541,11 @@ function renderSimulationHeatFlow() {
     </div>
     <div class="heatflow-tooltip hidden" role="tooltip"></div>`;
   bindHeatFlowInteractions(dataset, geometry, zoneMap);
+}
+
+function activeHeatFlowDataset() {
+  const purposeDataset = state.simulationResult?.purposeResults?.zoneHeatFlow;
+  return purposeDataset?.zones?.length ? purposeDataset : state.simulationResult?.heatFlow;
 }
 
 function readHeatFlowInspectorCollapsed() {
@@ -2639,6 +2643,9 @@ function renderHeatFlowTimelineBrush(dataset, zoneSeries, visibleRange, frameInd
 
 function renderSimulationHeatFlowEmpty(message) {
   stopHeatFlowPlayback();
+  state.simulationHeatFlowZoomStart = 0;
+  state.simulationHeatFlowZoomEnd = -1;
+  state.simulationHeatFlowVisibleFrameIndexes = [];
   if (elements.simulationHeatFlowStats) {
     elements.simulationHeatFlowStats.textContent = t("simulation.noHeatFlowShort", {}, "No heat-flow output");
   }
@@ -2692,8 +2699,19 @@ function normalizeHeatFlowFrameRange(frameCount = Number(state.simulationResult?
   }
   state.simulationHeatFlowRangeStart = start;
   state.simulationHeatFlowRangeEnd = end;
+  state.simulationHeatFlowZoomStart = start;
+  state.simulationHeatFlowZoomEnd = end;
+  state.simulationHeatFlowVisibleFrameIndexes = heatFlowFrameIndexes(start, end);
   state.simulationHeatFlowFrameIndex = clampNumber(state.simulationHeatFlowFrameIndex, start, end);
   return { start, end };
+}
+
+function heatFlowFrameIndexes(start, end) {
+  const indexes = [];
+  for (let index = start; index <= end; index += 1) {
+    indexes.push(index);
+  }
+  return indexes;
 }
 
 function updateHeatFlowStorySelect(geometry) {
@@ -3264,7 +3282,7 @@ function toggleHeatFlowPlayback() {
 
 function startHeatFlowPlayback() {
   stopHeatFlowPlayback(false);
-  const dataset = state.simulationResult?.heatFlow;
+  const dataset = activeHeatFlowDataset();
   const frameCount = Number(dataset?.frameCount) || 0;
   if (frameCount <= 1) {
     return;
@@ -3868,6 +3886,9 @@ async function runCurrentSimulation({ silent = false, auto = false } = {}) {
     state.simulationSeriesRangeEnd = -1;
     state.simulationHeatFlowRangeStart = 0;
     state.simulationHeatFlowRangeEnd = -1;
+    state.simulationHeatFlowZoomStart = 0;
+    state.simulationHeatFlowZoomEnd = -1;
+    state.simulationHeatFlowVisibleFrameIndexes = [];
     state.simulationHeatFlowFrameIndex = 0;
     state.simulationHeatFlowStory = "all";
     state.simulationProgress = { runId: runID, percent: 100, message: simulationDoneMessage(result), status: result.status };
