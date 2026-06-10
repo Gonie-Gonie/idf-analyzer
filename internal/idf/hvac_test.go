@@ -360,6 +360,93 @@ func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.
 	}
 }
 
+func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "AirTerminal:SingleDuct:VAV:Reheat"},
+			{Value: "Office VAV"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "AirTerminal:SingleDuct:VAV:Reheat", Fields: []Field{
+			{Value: "Office VAV", Comment: "Name"},
+			{Value: "Office Terminal Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Supply Inlet", Comment: "Air Outlet Node Name"},
+			{Value: "Coil:Heating:Water", Comment: "Reheat Coil Object Type"},
+			{Value: "Office Reheat Coil", Comment: "Reheat Coil Name"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "HW Demand Branches"},
+			{Value: "Reheat Coil Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Reheat Coil Branch"},
+			{Value: ""},
+			{Value: "Coil:Heating:Water"},
+			{Value: "Office Reheat Coil"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+		{Index: 7, Type: "Coil:Heating:Water", Fields: []Field{
+			{Value: "Office Reheat Coil", Comment: "Name"},
+			{Value: "HW Demand Inlet", Comment: "Water Inlet Node Name"},
+			{Value: "HW Demand Outlet", Comment: "Water Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil {
+		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+	}
+	if !stringSliceContainsFold(relation.PlantLoopNames, "Heating Water Loop") {
+		t.Fatalf("plant loops = %#v, want Heating Water Loop from terminal->coil reference", relation.PlantLoopNames)
+	}
+	if len(report.ComponentReferences) == 0 {
+		t.Fatalf("component references are empty")
+	}
+	if !hasHVACComponentReference(report.ComponentReferences, "Office VAV", "Coil:Heating:Water", "Office Reheat Coil", "internal_component_reference") {
+		t.Fatalf("component references = %#v, want Office VAV -> Office Reheat Coil", report.ComponentReferences)
+	}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{"component_references:", `target_class: "Coil:Heating:Water"`, "relation_role: internal_component_reference"} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic component references missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
 func TestAnalyzeHVACCondenserLoopAndLoopRuleWarnings(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "CondenserLoop", Fields: []Field{
@@ -558,6 +645,18 @@ func hasHVACWarningCode(warnings []HVACWarning, code string) bool {
 func hasDemandGraphEdge(graph AirLoopDemandGraph, role string, fromNode string, toNode string) bool {
 	for _, edge := range graph.Edges {
 		if edge.Role == role && strings.EqualFold(edge.FromNode, fromNode) && strings.EqualFold(edge.ToNode, toNode) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHVACComponentReference(references []HVACComponentReference, fromName string, targetType string, targetName string, role string) bool {
+	for _, reference := range references {
+		if strings.EqualFold(reference.FromObjectName, fromName) &&
+			strings.EqualFold(reference.TargetObjectType, targetType) &&
+			strings.EqualFold(reference.TargetObjectName, targetName) &&
+			reference.RelationRole == role {
 			return true
 		}
 	}

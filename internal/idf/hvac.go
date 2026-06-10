@@ -20,6 +20,7 @@ type HVACReport struct {
 	NodeOutputVariables []HVACNodeOutputVariable `json:"nodeOutputVariables,omitempty"`
 	NodeOutputMonitors  []HVACNodeOutputMonitor  `json:"nodeOutputMonitors,omitempty"`
 	NodeEdges           []HVACNodeEdge           `json:"nodeEdges,omitempty"`
+	ComponentReferences []HVACComponentReference `json:"componentReferences,omitempty"`
 	Warnings            []HVACWarning            `json:"warnings"`
 }
 
@@ -239,6 +240,24 @@ type HVACCrossLoopRelation struct {
 	LoopType      string `json:"loopType"`
 }
 
+type HVACComponentReference struct {
+	FromObjectType    string `json:"fromObjectType"`
+	FromObjectName    string `json:"fromObjectName,omitempty"`
+	FromObjectIndex   int    `json:"fromObjectIndex,omitempty"`
+	TypeFieldIndex    int    `json:"typeFieldIndex,omitempty"`
+	TypeFieldName     string `json:"typeFieldName,omitempty"`
+	NameFieldIndex    int    `json:"nameFieldIndex,omitempty"`
+	NameFieldName     string `json:"nameFieldName,omitempty"`
+	TargetObjectType  string `json:"targetObjectType"`
+	TargetObjectName  string `json:"targetObjectName"`
+	TargetObjectIndex int    `json:"targetObjectIndex,omitempty"`
+	TargetExists      bool   `json:"targetExists"`
+	RelationRole      string `json:"relationRole,omitempty"`
+	Source            string `json:"source"`
+	RelationshipType  string `json:"relationshipType,omitempty"`
+	TargetClass       string `json:"targetClass,omitempty"`
+}
+
 type HVACWarning struct {
 	Severity           string   `json:"severity"`
 	Category           string   `json:"category"`
@@ -290,17 +309,19 @@ type HVACNodeOutputMonitor struct {
 }
 
 type hvacContext struct {
-	doc                Document
-	objectsByTypeName  map[string]Object
-	objectsByName      map[string][]Object
-	objectsByType      map[string][]Object
-	nodeLists          map[string][]string
-	nodeUsages         []HVACNodeUsage
-	nodeUsagesByName   map[string][]HVACNodeUsage
-	branches           map[string]HVACBranch
-	componentLoopNames map[string]map[string]string
-	componentLoopTypes map[string]map[string]string
-	warnings           []HVACWarning
+	doc                          Document
+	objectsByTypeName            map[string]Object
+	objectsByName                map[string][]Object
+	objectsByType                map[string][]Object
+	nodeLists                    map[string][]string
+	nodeUsages                   []HVACNodeUsage
+	nodeUsagesByName             map[string][]HVACNodeUsage
+	branches                     map[string]HVACBranch
+	componentLoopNames           map[string]map[string]string
+	componentLoopTypes           map[string]map[string]string
+	componentReferences          []HVACComponentReference
+	componentReferencesByFromKey map[string][]HVACComponentReference
+	warnings                     []HVACWarning
 }
 
 func AnalyzeHVAC(doc Document) HVACReport {
@@ -339,6 +360,7 @@ func AnalyzeHVAC(doc Document) HVACReport {
 		NodeOutputVariables: HVACNodeOutputVariables(),
 		NodeOutputMonitors:  hvacNodeOutputMonitors(doc),
 		NodeEdges:           buildHVACNodeEdges(loops),
+		ComponentReferences: append([]HVACComponentReference(nil), ctx.componentReferences...),
 	}
 	report.LoopCount = len(report.Loops)
 	report.ZoneRelationCount = len(report.ZoneRelations)
@@ -361,15 +383,16 @@ func AnalyzeHVAC(doc Document) HVACReport {
 
 func newHVACContext(doc Document) *hvacContext {
 	ctx := &hvacContext{
-		doc:                doc,
-		objectsByTypeName:  map[string]Object{},
-		objectsByName:      map[string][]Object{},
-		objectsByType:      map[string][]Object{},
-		nodeLists:          map[string][]string{},
-		nodeUsagesByName:   map[string][]HVACNodeUsage{},
-		branches:           map[string]HVACBranch{},
-		componentLoopNames: map[string]map[string]string{},
-		componentLoopTypes: map[string]map[string]string{},
+		doc:                          doc,
+		objectsByTypeName:            map[string]Object{},
+		objectsByName:                map[string][]Object{},
+		objectsByType:                map[string][]Object{},
+		nodeLists:                    map[string][]string{},
+		nodeUsagesByName:             map[string][]HVACNodeUsage{},
+		branches:                     map[string]HVACBranch{},
+		componentLoopNames:           map[string]map[string]string{},
+		componentLoopTypes:           map[string]map[string]string{},
+		componentReferencesByFromKey: map[string][]HVACComponentReference{},
 	}
 	for _, obj := range doc.Objects {
 		typeKey := normalizeFieldCatalogKey(obj.Type)
@@ -393,6 +416,13 @@ func newHVACContext(doc Document) *hvacContext {
 	}
 	for _, obj := range doc.Objects {
 		collectHVACNodeUsages(ctx, obj)
+	}
+	ctx.componentReferences = buildHVACComponentReferenceGraph(ctx)
+	for _, reference := range ctx.componentReferences {
+		key := hvacObjectKey(reference.FromObjectType, reference.FromObjectName)
+		if key != "" {
+			ctx.componentReferencesByFromKey[key] = append(ctx.componentReferencesByFromKey[key], reference)
+		}
 	}
 	return ctx
 }
@@ -1716,6 +1746,143 @@ func referencedHVACComponentKeys(ctx *hvacContext, component HVACComponent) map[
 	return referencedHVACComponentKeysDepth(ctx, component, 1)
 }
 
+type hvacComponentReferencePair struct {
+	TypeIndex    int
+	NameIndex    int
+	RelationRole string
+	Source       string
+}
+
+func buildHVACComponentReferenceGraph(ctx *hvacContext) []HVACComponentReference {
+	var references []HVACComponentReference
+	for _, obj := range ctx.doc.Objects {
+		for _, pair := range hvacComponentReferencePairs(ctx, obj) {
+			if reference, ok := hvacComponentReferenceFromPair(ctx, obj, pair); ok {
+				references = append(references, reference)
+			}
+		}
+	}
+	sort.SliceStable(references, func(i, j int) bool {
+		if references[i].FromObjectIndex != references[j].FromObjectIndex {
+			return references[i].FromObjectIndex < references[j].FromObjectIndex
+		}
+		if references[i].NameFieldIndex != references[j].NameFieldIndex {
+			return references[i].NameFieldIndex < references[j].NameFieldIndex
+		}
+		return references[i].TargetObjectName < references[j].TargetObjectName
+	})
+	return references
+}
+
+func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentReferencePair {
+	switch normalizeFieldCatalogKey(obj.Type) {
+	case "branch":
+		var pairs []hvacComponentReferencePair
+		for _, reference := range branchComponentReferences(ctx, obj) {
+			pairs = append(pairs, hvacComponentReferencePair{
+				TypeIndex:    reference.TypeIndex,
+				NameIndex:    reference.NameIndex,
+				RelationRole: "branch_component",
+				Source:       "schema_field_pair",
+			})
+		}
+		return pairs
+	case "zonehvac:equipmentlist":
+		var pairs []hvacComponentReferencePair
+		for _, reference := range zoneEquipmentReferences(ctx, obj) {
+			pairs = append(pairs, hvacComponentReferencePair{
+				TypeIndex:    reference.TypeIndex,
+				NameIndex:    reference.NameIndex,
+				RelationRole: "zone_equipment",
+				Source:       "schema_field_pair",
+			})
+		}
+		return pairs
+	case "airloophvac:supplypath", "airloophvac:returnpath":
+		var pairs []hvacComponentReferencePair
+		for index := 2; index+1 < len(obj.Fields); index += 2 {
+			pairs = append(pairs, hvacComponentReferencePair{
+				TypeIndex:    index,
+				NameIndex:    index + 1,
+				RelationRole: "airloop_demand_path_component",
+				Source:       "schema_field_pair",
+			})
+		}
+		return pairs
+	default:
+		return hvacComponentReferencePairsFromFieldRoles(obj)
+	}
+}
+
+func hvacComponentReferencePairsFromFieldRoles(obj Object) []hvacComponentReferencePair {
+	var pairs []hvacComponentReferencePair
+	for index := 0; index+1 < len(obj.Fields); index++ {
+		if !hvacLooksLikeObjectTypeField(obj, index) || !hvacLooksLikeObjectNameField(obj, index+1) {
+			continue
+		}
+		pairs = append(pairs, hvacComponentReferencePair{
+			TypeIndex:    index,
+			NameIndex:    index + 1,
+			RelationRole: "internal_component_reference",
+			Source:       "schema_field_pair",
+		})
+	}
+	return pairs
+}
+
+func hvacLooksLikeObjectTypeField(obj Object, index int) bool {
+	if spec, ok := fieldSpecAt(obj.Type, index); ok && spec.Role == fieldRoleObjectTypeRef {
+		return true
+	}
+	comment := normalizeFieldName(obj.Fields[index].Comment)
+	return strings.Contains(comment, "object type")
+}
+
+func hvacLooksLikeObjectNameField(obj Object, index int) bool {
+	if spec, ok := fieldSpecAt(obj.Type, index); ok && spec.Role == fieldRoleObjectRef {
+		return true
+	}
+	comment := normalizeFieldName(obj.Fields[index].Comment)
+	return strings.Contains(comment, "name") &&
+		!strings.Contains(comment, "node") &&
+		!strings.Contains(comment, "schedule") &&
+		!strings.Contains(comment, "branch") &&
+		!strings.Contains(comment, "list")
+}
+
+func hvacComponentReferenceFromPair(ctx *hvacContext, obj Object, pair hvacComponentReferencePair) (HVACComponentReference, bool) {
+	targetType := hvacFieldValue(obj, pair.TypeIndex)
+	targetName := hvacFieldValue(obj, pair.NameIndex)
+	if targetType == "" || targetName == "" {
+		return HVACComponentReference{}, false
+	}
+	if !isHVACComponentType(targetType) && !isAirTerminalType(targetType) && !isHVACControlType(targetType) {
+		return HVACComponentReference{}, false
+	}
+	reference := HVACComponentReference{
+		FromObjectType:   obj.Type,
+		FromObjectName:   objectName(obj),
+		FromObjectIndex:  obj.Index,
+		TypeFieldIndex:   pair.TypeIndex,
+		TypeFieldName:    catalogFieldName(obj, pair.TypeIndex),
+		NameFieldIndex:   pair.NameIndex,
+		NameFieldName:    catalogFieldName(obj, pair.NameIndex),
+		TargetObjectType: targetType,
+		TargetObjectName: targetName,
+		RelationRole:     pair.RelationRole,
+		Source:           pair.Source,
+	}
+	if spec, ok := fieldSpecAt(obj.Type, pair.NameIndex); ok {
+		reference.RelationshipType = spec.RelationshipType
+		reference.TargetClass = spec.TargetClass
+	}
+	if targetObj, ok := ctx.objectsByTypeName[hvacObjectKey(targetType, targetName)]; ok {
+		reference.TargetExists = true
+		reference.TargetObjectIndex = targetObj.Index
+	}
+	return reference, true
+}
+
 func referencedHVACComponentKeysDepth(ctx *hvacContext, component HVACComponent, depth int) map[string]bool {
 	keys := map[string]bool{}
 	visited := map[string]bool{}
@@ -1729,27 +1896,14 @@ func referencedHVACComponentKeysDepth(ctx *hvacContext, component HVACComponent,
 			return
 		}
 		visited[currentKey] = true
-		obj, ok := ctx.objectsByTypeName[hvacObjectKey(current.ObjectType, current.ObjectName)]
-		if !ok {
-			return
-		}
-		for _, field := range obj.Fields {
-			value := strings.TrimSpace(field.Value)
-			if value == "" {
+		for _, reference := range ctx.componentReferencesByFromKey[currentKey] {
+			key := hvacObjectKey(reference.TargetObjectType, reference.TargetObjectName)
+			if key == "" || key == currentKey {
 				continue
 			}
-			for _, candidate := range ctx.objectsByName[normalizeName(value)] {
-				if !isHVACComponentType(candidate.Type) && !isAirTerminalType(candidate.Type) {
-					continue
-				}
-				key := hvacObjectKey(candidate.Type, objectName(candidate))
-				if key == "" || key == currentKey {
-					continue
-				}
-				keys[key] = true
-				if remaining > 0 {
-					visit(newHVACComponent(ctx, candidate.Type, objectName(candidate)), remaining-1)
-				}
+			keys[key] = true
+			if remaining > 0 && reference.TargetExists {
+				visit(newHVACComponent(ctx, reference.TargetObjectType, reference.TargetObjectName), remaining-1)
 			}
 		}
 	}

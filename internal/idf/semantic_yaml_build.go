@@ -1133,7 +1133,7 @@ func writeSemanticStringList(builder *semanticYAMLBuilder, indent int, key strin
 }
 
 func writeSemanticHVAC(builder *semanticYAMLBuilder, ctx *semanticContext) {
-	if len(ctx.hvac.Loops) == 0 && len(ctx.hvac.NodeUsages) == 0 {
+	if len(ctx.hvac.Loops) == 0 && len(ctx.hvac.NodeUsages) == 0 && len(ctx.hvac.ComponentReferences) == 0 {
 		builder.raw(1, "hvac: {}")
 		return
 	}
@@ -1141,8 +1141,32 @@ func writeSemanticHVAC(builder *semanticYAMLBuilder, ctx *semanticContext) {
 	writeSemanticHVACLoops(builder, ctx, "air_loops", "AirLoopHVAC")
 	writeSemanticHVACLoops(builder, ctx, "plant_loops", "PlantLoop")
 	writeSemanticHVACLoops(builder, ctx, "condenser_loops", "CondenserLoop")
+	writeSemanticHVACComponentReferences(builder, ctx)
 	writeSemanticHVACEquipmentCatalog(builder, ctx)
 	writeSemanticHVACNodes(builder, ctx)
+}
+
+func writeSemanticHVACComponentReferences(builder *semanticYAMLBuilder, ctx *semanticContext) {
+	if len(ctx.hvac.ComponentReferences) == 0 {
+		return
+	}
+	builder.raw(2, "component_references:")
+	for _, reference := range ctx.hvac.ComponentReferences {
+		ctx.mark(reference.FromObjectIndex)
+		if reference.TargetExists {
+			ctx.mark(reference.TargetObjectIndex)
+		}
+		builder.rawForObject(3, "- from: "+yamlScalar(reference.FromObjectName), reference.FromObjectIndex, reference.FromObjectType, reference.FromObjectName)
+		builder.kvForObject(4, "from_class", reference.FromObjectType, reference.FromObjectIndex, reference.FromObjectType, reference.FromObjectName)
+		builder.kvForObject(4, "field", reference.NameFieldName, reference.FromObjectIndex, reference.FromObjectType, reference.FromObjectName)
+		builder.kv(4, "target_class", reference.TargetObjectType)
+		builder.kv(4, "target_name", reference.TargetObjectName)
+		builder.kv(4, "relation_role", reference.RelationRole)
+		builder.kv(4, "source", reference.Source)
+		if !reference.TargetExists {
+			builder.kv(4, "target_exists", "false")
+		}
+	}
 }
 
 func writeSemanticAirflows(builder *semanticYAMLBuilder, ctx *semanticContext) {

@@ -26,6 +26,7 @@ The release script infers bump size from these sections:
 - Semantic YAML now defaults to a Basic outline, adds Detailed and Source/debug modes, and provides section jump buttons with narrower wrapping behavior for split-pane use.
 - Diagnose now groups issues into severity/workflow accordions, supports severity/source filters, and lets users hide noisy diagnostic codes while reviewing source evidence.
 - AirLoopHVAC demand paths now expose a structured SupplyPath/ReturnPath graph with splitter, mixer, plenum, and terminal evidence for zone relations and semantic exports.
+- HVAC plant relation inference now uses a typed component reference graph with source field metadata instead of blindly scanning every component field.
 
 ## Fixed
 
