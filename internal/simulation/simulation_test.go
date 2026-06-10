@@ -627,13 +627,14 @@ func TestWriteSimulationRunManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := &SimulationRunResult{
-		RunID:           "sim-test",
-		Status:          "succeeded",
-		InputPath:       inputPath,
-		Filename:        "in.idf",
-		OutputDirectory: dir,
-		StartedAt:       "2026-06-10T00:00:00Z",
-		FinishedAt:      "2026-06-10T00:00:01Z",
+		RunID:             "sim-test",
+		Status:            "succeeded",
+		InputPath:         inputPath,
+		Filename:          "in.idf",
+		EnergyPlusVersion: "24.2",
+		OutputDirectory:   dir,
+		StartedAt:         "2026-06-10T00:00:00Z",
+		FinishedAt:        "2026-06-10T00:00:01Z",
 		Files: []SimulationFileInfo{{
 			Name: "eplusout.sql",
 			Path: filepath.Join(dir, "eplusout.sql"),
@@ -661,6 +662,9 @@ func TestWriteSimulationRunManifest(t *testing.T) {
 	}
 	if manifest.RunID != "sim-test" || manifest.Status != "succeeded" || manifest.InputHash == "" {
 		t.Fatalf("manifest core fields = %+v", manifest)
+	}
+	if manifest.EnergyPlusVersion != "24.2" {
+		t.Fatalf("manifest EnergyPlus version = %q, want 24.2", manifest.EnergyPlusVersion)
 	}
 	if len(manifest.Purposes) != 1 || manifest.Purposes[0] != SimulationPurposeBasicEnergy {
 		t.Fatalf("manifest purposes = %#v", manifest.Purposes)
@@ -727,6 +731,22 @@ func TestSimulationUsesReadVarsESOPolicy(t *testing.T) {
 				t.Fatalf("simulationUsesReadVarsESO() = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestEnergyPlusVersionForExecutableUsesInstallationMetadata(t *testing.T) {
+	executable := filepath.Join(t.TempDir(), "energyplus.exe")
+
+	version := energyPlusVersionForExecutable(executable, []EnergyPlusInstallSetting{{
+		ExecutablePath: executable,
+		Version:        "25.1",
+	}})
+
+	if version != "25.1" {
+		t.Fatalf("version = %q, want 25.1", version)
+	}
+	if empty := energyPlusVersionForExecutable("", nil); empty != "" {
+		t.Fatalf("empty executable version = %q, want empty", empty)
 	}
 }
 

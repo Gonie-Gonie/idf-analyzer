@@ -129,6 +129,7 @@ type SimulationRunResult struct {
 	Filename                 string               `json:"filename,omitempty"`
 	WeatherPath              string               `json:"weatherPath,omitempty"`
 	EnergyPlusExecutablePath string               `json:"energyPlusExecutablePath,omitempty"`
+	EnergyPlusVersion        string               `json:"energyPlusVersion,omitempty"`
 	OutputDirectory          string               `json:"outputDirectory,omitempty"`
 	StartedAt                string               `json:"startedAt,omitempty"`
 	FinishedAt               string               `json:"finishedAt,omitempty"`
@@ -156,6 +157,7 @@ type SimulationRunManifest struct {
 	InputHash                string                `json:"inputHash,omitempty"`
 	Filename                 string                `json:"filename,omitempty"`
 	EnergyPlusExecutablePath string                `json:"energyPlusExecutablePath,omitempty"`
+	EnergyPlusVersion        string                `json:"energyPlusVersion,omitempty"`
 	WeatherPath              string                `json:"weatherPath,omitempty"`
 	OutputDirectory          string                `json:"outputDirectory,omitempty"`
 	Purposes                 []SimulationPurposeID `json:"purposes,omitempty"`
@@ -520,6 +522,20 @@ func EnergyPlusInstallFromExecutable(executable string, autoDetected bool) Energ
 	}
 }
 
+func energyPlusVersionForExecutable(executable string, installations []EnergyPlusInstallSetting) string {
+	executable = strings.TrimSpace(executable)
+	if executable == "" {
+		return ""
+	}
+	executable = filepath.Clean(executable)
+	for _, install := range normalizeEnergyPlusInstallations(installations) {
+		if strings.EqualFold(filepath.Clean(install.ExecutablePath), executable) && strings.TrimSpace(install.Version) != "" {
+			return strings.TrimSpace(install.Version)
+		}
+	}
+	return detectEnergyPlusVersion(executable, filepath.Dir(executable))
+}
+
 func detectEnergyPlusVersion(executable string, root string) string {
 	base := filepath.Base(root)
 	if strings.HasPrefix(strings.ToLower(base), "energyplusv") {
@@ -663,11 +679,16 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 	}
 	emitSimulationProgress(progress, request.RunID, "prepare", "running", "Preparing EnergyPlus run", 0, simulationProgressTotal, result.InputPath)
 
+	installations := settings.EnergyPlusInstallations
 	if result.EnergyPlusExecutablePath == "" {
-		installations := AutoDetectEnergyPlusInstallations()
+		installations = mergeEnergyPlusInstallations(settings.EnergyPlusInstallations, AutoDetectEnergyPlusInstallations())
 		if len(installations) > 0 {
 			result.EnergyPlusExecutablePath = installations[0].ExecutablePath
+			result.EnergyPlusVersion = installations[0].Version
 		}
+	}
+	if result.EnergyPlusVersion == "" {
+		result.EnergyPlusVersion = energyPlusVersionForExecutable(result.EnergyPlusExecutablePath, installations)
 	}
 	if result.EnergyPlusExecutablePath == "" {
 		result.Status = "missing_energyplus"
@@ -888,6 +909,7 @@ func writeSimulationRunManifest(result *SimulationRunResult, request SimulationR
 		InputHash:                fileSHA256(result.InputPath),
 		Filename:                 result.Filename,
 		EnergyPlusExecutablePath: result.EnergyPlusExecutablePath,
+		EnergyPlusVersion:        result.EnergyPlusVersion,
 		WeatherPath:              result.WeatherPath,
 		OutputDirectory:          result.OutputDirectory,
 		OutputPlan:               request.PurposeRunPlan,

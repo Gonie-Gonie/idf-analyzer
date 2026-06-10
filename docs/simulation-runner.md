@@ -158,7 +158,8 @@ locally and restored in later sessions.
 
 Purpose runs write `idf-analyzer-run.json`, `idf-analyzer-run-plan.json`, and
 `temporary_outputs.diff` in the output directory. The UI can export a purpose
-result JSON bundle or a standalone HTML report that embeds run metadata, the run
-plan, parsed purpose results, purpose-specific Energy/Heat Flow/HVAC/Comfort
-summary tables, completeness, file references, and the source output signatures
-visible in result tables.
+result JSON bundle or a standalone HTML report that embeds run metadata,
+including EnergyPlus executable/version metadata, the run plan, parsed purpose
+results, purpose-specific Energy/Heat Flow/HVAC/Comfort summary tables,
+completeness, file references, and the source output signatures visible in
+result tables.

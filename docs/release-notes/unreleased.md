@@ -103,6 +103,7 @@ The release script infers bump size from these sections:
 - Discovery-enabled purpose run plans now request EnergyPlus output dictionaries so RDD/MDD catalog generation is part of the temporary run plan.
 - HVAC Loop Check results now include a frame slider with node and component snapshots for inspecting selected-time temperatures, setpoints, flows, and operation values.
 - Simulation output discovery now marks user-entered Custom Outputs as `missing` when they are not found in the current SQL/RDD/MDD catalog.
+- Purpose simulation run manifests now include EnergyPlus version metadata when it can be resolved from configured or detected installations.
 
 ## Fixed
 
