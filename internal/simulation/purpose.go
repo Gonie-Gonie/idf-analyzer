@@ -215,6 +215,7 @@ type HVACComponentOperationMetric struct {
 type ComfortResult struct {
 	Zones        []ComfortZoneResult       `json:"zones,omitempty"`
 	Series       []SimulationSeries        `json:"series,omitempty"`
+	Issues       []ComfortIssueRank        `json:"issues,omitempty"`
 	Completeness []PurposeCompletenessItem `json:"completeness,omitempty"`
 }
 
@@ -231,6 +232,19 @@ type ComfortMetricResult struct {
 	Max     float64           `json:"max"`
 	Average float64           `json:"average"`
 	Points  []SimulationPoint `json:"points,omitempty"`
+}
+
+type ComfortIssueRank struct {
+	ZoneName         string  `json:"zoneName"`
+	Source           string  `json:"source,omitempty"`
+	UnmetSamples     int     `json:"unmetSamples"`
+	HeatingSamples   int     `json:"heatingSamples,omitempty"`
+	CoolingSamples   int     `json:"coolingSamples,omitempty"`
+	TotalSamples     int     `json:"totalSamples,omitempty"`
+	MaxDeviation     float64 `json:"maxDeviation"`
+	AverageDeviation float64 `json:"averageDeviation"`
+	Unit             string  `json:"unit,omitempty"`
+	PeakLabel        string  `json:"peakLabel,omitempty"`
 }
 
 type IntegrityResult struct {
@@ -951,8 +965,80 @@ func buildComfortResult(series []SimulationSeries) ComfortResult {
 		})
 		result.Zones = append(result.Zones, *zone)
 	}
+	result.Issues = buildComfortIssueRanking(result.Zones)
 	result.Completeness = comfortSeriesCompleteness(foundVariables, seriesSource(result.Series))
 	return result
+}
+
+func buildComfortIssueRanking(zones []ComfortZoneResult) []ComfortIssueRank {
+	issues := []ComfortIssueRank{}
+	for _, zone := range zones {
+		metrics := comfortMetricMap(zone.Metrics)
+		temperature := metrics[normalizePurposeToken("Zone Mean Air Temperature")]
+		if temperature == nil {
+			continue
+		}
+		heating := metrics[normalizePurposeToken("Zone Thermostat Heating Setpoint Temperature")]
+		cooling := metrics[normalizePurposeToken("Zone Thermostat Cooling Setpoint Temperature")]
+		if heating == nil && cooling == nil {
+			continue
+		}
+		issue := ComfortIssueRank{
+			ZoneName:     zone.ZoneName,
+			Source:       temperature.Source,
+			TotalSamples: len(temperature.Points),
+			Unit:         temperature.Unit,
+		}
+		totalDeviation := 0.0
+		for index, point := range temperature.Points {
+			deviation := 0.0
+			if heating != nil && index < len(heating.Points) && point.Value < heating.Points[index].Value {
+				deviation = heating.Points[index].Value - point.Value
+				issue.HeatingSamples++
+			}
+			if cooling != nil && index < len(cooling.Points) && point.Value > cooling.Points[index].Value {
+				coolingDeviation := point.Value - cooling.Points[index].Value
+				if coolingDeviation > deviation {
+					deviation = coolingDeviation
+				}
+				issue.CoolingSamples++
+			}
+			if deviation <= 0 {
+				continue
+			}
+			issue.UnmetSamples++
+			totalDeviation += deviation
+			if deviation > issue.MaxDeviation {
+				issue.MaxDeviation = deviation
+				issue.PeakLabel = point.Label
+			}
+		}
+		if issue.UnmetSamples == 0 {
+			continue
+		}
+		issue.MaxDeviation = roundedPurposeNumber(issue.MaxDeviation)
+		issue.AverageDeviation = roundedPurposeNumber(totalDeviation / float64(issue.UnmetSamples))
+		issues = append(issues, issue)
+	}
+	sort.SliceStable(issues, func(i, j int) bool {
+		if issues[i].UnmetSamples != issues[j].UnmetSamples {
+			return issues[i].UnmetSamples > issues[j].UnmetSamples
+		}
+		if issues[i].MaxDeviation != issues[j].MaxDeviation {
+			return issues[i].MaxDeviation > issues[j].MaxDeviation
+		}
+		return strings.ToLower(issues[i].ZoneName) < strings.ToLower(issues[j].ZoneName)
+	})
+	return issues
+}
+
+func comfortMetricMap(metrics []ComfortMetricResult) map[string]*ComfortMetricResult {
+	out := map[string]*ComfortMetricResult{}
+	for index := range metrics {
+		metric := &metrics[index]
+		out[normalizePurposeToken(metric.Name)] = metric
+	}
+	return out
 }
 
 func comfortSeriesCompleteness(found map[string]bool, source string) []PurposeCompletenessItem {

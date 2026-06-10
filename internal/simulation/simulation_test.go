@@ -467,9 +467,10 @@ func TestPurposeResultBundleBuildsComfortResult(t *testing.T) {
 	result := &SimulationRunResult{
 		Status: "succeeded",
 		Series: []SimulationSeries{
-			{File: "eplusout.sql", Column: "Office:Zone Mean Air Temperature [C]", Min: 20, Max: 24, Average: 22, Points: []SimulationPoint{{X: 1, Value: 22}}},
+			{File: "eplusout.sql", Column: "Office:Zone Mean Air Temperature [C]", Min: 18, Max: 28, Average: 23, Points: []SimulationPoint{{X: 1, Label: "01-01 01:00", Value: 18}, {X: 2, Label: "01-01 02:00", Value: 28}}},
 			{File: "eplusout.sql", Column: "Office:Zone Air Relative Humidity [%]", Min: 40, Max: 50, Average: 45, Points: []SimulationPoint{{X: 1, Value: 45}}},
-			{File: "eplusout.sql", Column: "Office:Zone Thermostat Cooling Setpoint Temperature [C]", Min: 26, Max: 26, Average: 26, Points: []SimulationPoint{{X: 1, Value: 26}}},
+			{File: "eplusout.sql", Column: "Office:Zone Thermostat Heating Setpoint Temperature [C]", Min: 20, Max: 20, Average: 20, Points: []SimulationPoint{{X: 1, Value: 20}, {X: 2, Value: 20}}},
+			{File: "eplusout.sql", Column: "Office:Zone Thermostat Cooling Setpoint Temperature [C]", Min: 26, Max: 26, Average: 26, Points: []SimulationPoint{{X: 1, Value: 26}, {X: 2, Value: 26}}},
 			{File: "eplusout.sql", Column: "Office:Zone Air System Sensible Heating Rate [W]", Min: 0, Max: 120, Average: 60, Points: []SimulationPoint{{X: 1, Value: 60}}},
 			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Temperature [C]", Min: 12, Max: 14, Average: 13, Points: []SimulationPoint{{X: 1, Value: 13}}},
 		},
@@ -481,8 +482,11 @@ func TestPurposeResultBundleBuildsComfortResult(t *testing.T) {
 	if len(bundle.Comfort.Zones) != 1 || bundle.Comfort.Zones[0].ZoneName != "Office" {
 		t.Fatalf("comfort zones = %#v", bundle.Comfort.Zones)
 	}
-	if len(bundle.Comfort.Series) != 4 || len(bundle.Comfort.Zones[0].Metrics) != 4 {
+	if len(bundle.Comfort.Series) != 5 || len(bundle.Comfort.Zones[0].Metrics) != 5 {
 		t.Fatalf("comfort series = %#v", bundle.Comfort)
+	}
+	if len(bundle.Comfort.Issues) != 1 || bundle.Comfort.Issues[0].UnmetSamples != 2 || bundle.Comfort.Issues[0].HeatingSamples != 1 || bundle.Comfort.Issues[0].CoolingSamples != 1 {
+		t.Fatalf("comfort issue ranking = %#v", bundle.Comfort.Issues)
 	}
 	if len(bundle.Completeness) != len(comfortCheckVariables()) ||
 		!purposeCompletenessFound(bundle.Completeness, "Zone Air Relative Humidity") ||

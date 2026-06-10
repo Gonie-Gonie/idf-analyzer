@@ -685,6 +685,7 @@ function renderSimulationComfort(result) {
   const completenessHTML = (comfort.completeness || []).length
     ? renderPurposeCompletenessRow(comfort.completeness || [])
     : "";
+  const issuesHTML = renderComfortIssueRanking(comfort.issues || []);
   const rows = zones
     .flatMap((zone) => (zone.metrics || []).map((metric) => ({ zoneName: zone.zoneName, metric })))
     .slice(0, 120)
@@ -705,10 +706,40 @@ function renderSimulationComfort(result) {
     .join("");
   elements.simulationComfortResults.innerHTML = `
     ${completenessHTML}
+    ${issuesHTML}
     <div class="output-table-wrap">
       <table class="output-table">
         <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.unit", {}, "Unit"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="9">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderComfortIssueRanking(issues = []) {
+  if (!issues.length) {
+    return "";
+  }
+  const rows = issues
+    .slice(0, 24)
+    .map(
+      (issue) => `
+        <tr>
+          <td>${escapeHTML(issue.zoneName || "")}</td>
+          <td>${escapeHTML(issue.unmetSamples || 0)}</td>
+          <td>${escapeHTML(issue.heatingSamples || 0)}</td>
+          <td>${escapeHTML(issue.coolingSamples || 0)}</td>
+          <td>${escapeHTML(formatValueWithUnit(issue.maxDeviation || 0, issue.unit || ""))}</td>
+          <td>${escapeHTML(formatValueWithUnit(issue.averageDeviation || 0, issue.unit || ""))}</td>
+          <td>${escapeHTML(issue.peakLabel || "")}</td>
+          <td>${escapeHTML(issue.source || "")}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <div class="output-table-wrap simulation-comfort-issues">
+      <table class="output-table">
+        <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("simulation.unmetSamples", {}, "Unmet samples"))}</th><th>${escapeHTML(t("simulation.heating", {}, "Heating"))}</th><th>${escapeHTML(t("simulation.cooling", {}, "Cooling"))}</th><th>${escapeHTML(t("simulation.maxDeviation", {}, "Max deviation"))}</th><th>${escapeHTML(t("simulation.avgDeviation", {}, "Avg deviation"))}</th><th>${escapeHTML(t("common.time", {}, "Time"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
@@ -3552,6 +3583,18 @@ function renderPurposeHTMLHVAC(loops) {
 }
 
 function renderPurposeHTMLComfort(comfort) {
+  const issueRows = (comfort.issues || [])
+    .map((issue) => [
+      issue.zoneName || "",
+      issue.unmetSamples || 0,
+      issue.heatingSamples || 0,
+      issue.coolingSamples || 0,
+      formatValueWithUnit(issue.maxDeviation || 0, issue.unit || ""),
+      formatValueWithUnit(issue.averageDeviation || 0, issue.unit || ""),
+      issue.peakLabel || "",
+      issue.source || "",
+    ])
+    .slice(0, 80);
   const rows = (comfort.zones || [])
     .flatMap((zone) =>
       (zone.metrics || []).map((metric) => [
@@ -3564,10 +3607,17 @@ function renderPurposeHTMLComfort(comfort) {
       ]),
     )
     .slice(0, 160);
-  if (!rows.length) {
+  if (!rows.length && !issueRows.length) {
     return "";
   }
-  return `<h2>Comfort Results</h2>${renderPurposeHTMLTable(["Zone", "Metric", "Min", "Max", "Avg", "Source"], rows)}`;
+  return [
+    issueRows.length
+      ? `<h2>Comfort Issue Ranking</h2>${renderPurposeHTMLTable(["Zone", "Unmet samples", "Heating", "Cooling", "Max deviation", "Avg deviation", "Time", "Source"], issueRows)}`
+      : "",
+    rows.length ? `<h2>Comfort Results</h2>${renderPurposeHTMLTable(["Zone", "Metric", "Min", "Max", "Avg", "Source"], rows)}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function maxAbsNestedValues(rows) {
