@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 )
@@ -36,11 +37,22 @@ type OutputDiscoveryItem struct {
 	PurposeIDs         []SimulationPurposeID `json:"purposeIds,omitempty"`
 }
 
+type outputDiscoveryCacheEntry struct {
+	modTimeUnixNano int64
+	size            int64
+	items           []OutputDiscoveryItem
+}
+
+var outputDiscoveryCache = struct {
+	sync.Mutex
+	items map[string]outputDiscoveryCacheEntry
+}{items: map[string]outputDiscoveryCacheEntry{}}
+
 func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryResult, error) {
 	result := OutputDiscoveryResult{Counts: map[string]int{}}
 	collector := outputDiscoveryCollector{items: map[string]OutputDiscoveryItem{}}
 	for _, path := range discoverySQLPaths(request) {
-		items, err := discoverOutputsFromSQL(path)
+		items, err := discoverOutputsCached("sql", path, discoverOutputsFromSQL)
 		if err != nil {
 			continue
 		}
@@ -52,7 +64,7 @@ func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryRe
 		}
 	}
 	for _, path := range discoveryRDDPaths(request) {
-		items, err := discoverOutputsFromRDD(path)
+		items, err := discoverOutputsCached("rdd", path, discoverOutputsFromRDD)
 		if err != nil {
 			continue
 		}
@@ -64,7 +76,7 @@ func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryRe
 		}
 	}
 	for _, path := range discoveryMDDPaths(request) {
-		items, err := discoverOutputsFromMDD(path)
+		items, err := discoverOutputsCached("mdd", path, discoverOutputsFromMDD)
 		if err != nil {
 			continue
 		}
@@ -109,6 +121,46 @@ func DiscoverAvailableOutputs(request OutputDiscoveryRequest) (OutputDiscoveryRe
 	sort.Strings(result.Sources)
 	result.Sources = normalizePurposeStrings(result.Sources)
 	return result, nil
+}
+
+func discoverOutputsCached(kind string, path string, loader func(string) ([]OutputDiscoveryItem, error)) ([]OutputDiscoveryItem, error) {
+	cleanPath := filepath.Clean(strings.TrimSpace(path))
+	info, err := os.Stat(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	key := strings.ToLower(kind + ":" + cleanPath)
+	modTime := info.ModTime().UnixNano()
+	size := info.Size()
+	outputDiscoveryCache.Lock()
+	if entry, ok := outputDiscoveryCache.items[key]; ok && entry.modTimeUnixNano == modTime && entry.size == size {
+		items := cloneOutputDiscoveryItems(entry.items)
+		outputDiscoveryCache.Unlock()
+		return items, nil
+	}
+	outputDiscoveryCache.Unlock()
+
+	items, err := loader(cleanPath)
+	if err != nil {
+		return nil, err
+	}
+	outputDiscoveryCache.Lock()
+	outputDiscoveryCache.items[key] = outputDiscoveryCacheEntry{
+		modTimeUnixNano: modTime,
+		size:            size,
+		items:           cloneOutputDiscoveryItems(items),
+	}
+	outputDiscoveryCache.Unlock()
+	return cloneOutputDiscoveryItems(items), nil
+}
+
+func cloneOutputDiscoveryItems(items []OutputDiscoveryItem) []OutputDiscoveryItem {
+	out := make([]OutputDiscoveryItem, len(items))
+	for index, item := range items {
+		out[index] = item
+		out[index].PurposeIDs = append([]SimulationPurposeID(nil), item.PurposeIDs...)
+	}
+	return out
 }
 
 type outputDiscoveryCollector struct {

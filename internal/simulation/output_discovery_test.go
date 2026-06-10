@@ -44,6 +44,50 @@ func TestDiscoverAvailableOutputsFromSQLRDDMDDAndPurposeFallback(t *testing.T) {
 	}
 }
 
+func TestDiscoverOutputsCachedInvalidatesOnFileChange(t *testing.T) {
+	outputDiscoveryCache.Lock()
+	outputDiscoveryCache.items = map[string]outputDiscoveryCacheEntry{}
+	outputDiscoveryCache.Unlock()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.rdd")
+	if err := os.WriteFile(path, []byte("First Variable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	loader := func(path string) ([]OutputDiscoveryItem, error) {
+		calls++
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		return []OutputDiscoveryItem{{ObjectType: "Output:Variable", Name: string(content), Status: "available"}}, nil
+	}
+
+	items, err := discoverOutputsCached("rdd", path, loader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items[0].Name = "mutated"
+	cachedItems, err := discoverOutputsCached("rdd", path, loader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 1 || cachedItems[0].Name != "First Variable" {
+		t.Fatalf("cache hit = calls %d items %#v", calls, cachedItems)
+	}
+	if err := os.WriteFile(path, []byte("Second Variable With New Size"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	updatedItems, err := discoverOutputsCached("rdd", path, loader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if calls != 2 || updatedItems[0].Name != "Second Variable With New Size" {
+		t.Fatalf("cache miss = calls %d items %#v", calls, updatedItems)
+	}
+}
+
 func discoveryHas(items []OutputDiscoveryItem, objectType string, keyValue string, name string, status string) bool {
 	for _, item := range items {
 		if item.ObjectType == objectType && item.KeyValue == keyValue && item.Name == name && item.Status == status {
