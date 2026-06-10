@@ -70,6 +70,7 @@ export const state = {
   simulationOutputDiscoveryQuery: "",
   simulationActiveResultView: "energy",
   simulationZoneEnergyMetric: "__total",
+  simulationComfortZone: "",
   simulationIntegrityQuery: "",
   simulationAutoStartedKey: "",
   profileGraphViewMode: "",

@@ -79,6 +79,7 @@ export function initializeSimulationControls() {
   elements.simulationEnergyDashboard?.addEventListener("change", handleSimulationEnergyDashboardChange);
   elements.simulationHVACLoopResults?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationComfortResults?.addEventListener("click", handleSimulationSeriesInspectClick);
+  elements.simulationComfortResults?.addEventListener("change", handleSimulationComfortResultsChange);
   elements.simulationExportPurposeJSON?.addEventListener("click", () => exportPurposeResultJSON());
   elements.simulationExportPurposeHTML?.addEventListener("click", () => exportPurposeResultHTML());
   elements.simulationRefreshEnv?.addEventListener("click", () => loadSimulationEnvironment());
@@ -732,6 +733,7 @@ function renderSimulationComfort(result) {
     .join("");
   elements.simulationComfortResults.innerHTML = `
     ${completenessHTML}
+    ${renderComfortTimeline(zones)}
     ${unmetHTML}
     ${issuesHTML}
     <div class="output-table-wrap">
@@ -740,6 +742,139 @@ function renderSimulationComfort(result) {
         <tbody>${rows || `<tr><td colspan="9">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
       </table>
     </div>`;
+}
+
+function renderComfortTimeline(zones = []) {
+  const zoneOptions = zones.filter((zone) => (zone.metrics || []).some((metric) => metric.points?.length));
+  if (!zoneOptions.length) {
+    return "";
+  }
+  if (!zoneOptions.some((zone) => zone.zoneName === state.simulationComfortZone)) {
+    state.simulationComfortZone = zoneOptions[0].zoneName || "";
+  }
+  const zone = zoneOptions.find((item) => item.zoneName === state.simulationComfortZone) || zoneOptions[0];
+  const options = zoneOptions
+    .map((item) => `<option value="${escapeHTML(item.zoneName || "")}" ${item.zoneName === zone.zoneName ? "selected" : ""}>${escapeHTML(item.zoneName || "")}</option>`)
+    .join("");
+  return `
+    <section class="simulation-comfort-timeline">
+      <div class="simulation-energy-block-head">
+        <h4>${escapeHTML(t("simulation.comfortTimeline", {}, "Comfort timeline"))}</h4>
+        <label>
+          <span>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</span>
+          <select data-simulation-comfort-zone>${options}</select>
+        </label>
+      </div>
+      ${renderComfortTimelineSVG(zone)}
+    </section>`;
+}
+
+function renderComfortTimelineSVG(zone) {
+  const metrics = comfortTimelineMetrics(zone);
+  const base = metrics.temperature || metrics.heatingSetpoint || metrics.coolingSetpoint || metrics.humidity || metrics.heatingRate || metrics.coolingRate;
+  const points = base?.points || [];
+  if (points.length < 2) {
+    return `<div class="empty">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</div>`;
+  }
+  const width = 820;
+  const height = 280;
+  const pad = { left: 54, right: 22, top: 18, bottom: 36 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  const tempValues = [
+    ...(metrics.temperature?.points || []).map((point) => Number(point.value)),
+    ...(metrics.heatingSetpoint?.points || []).map((point) => Number(point.value)),
+    ...(metrics.coolingSetpoint?.points || []).map((point) => Number(point.value)),
+  ].filter(Number.isFinite);
+  const minTemp = Math.min(...tempValues, 18) - 1;
+  const maxTemp = Math.max(...tempValues, 26) + 1;
+  const tempY = (value) => pad.top + plotHeight * (1 - (Number(value) - minTemp) / Math.max(maxTemp - minTemp, 1));
+  const xFor = (index) => pad.left + (index / Math.max(points.length - 1, 1)) * plotWidth;
+  const lineFor = (metric, yFor) => (metric?.points || [])
+    .slice(0, points.length)
+    .map((point, index) => `${roundSVG(xFor(index))},${roundSVG(yFor(point.value))}`)
+    .join(" ");
+  const heatLine = lineFor(metrics.heatingSetpoint, tempY);
+  const coolLine = lineFor(metrics.coolingSetpoint, tempY);
+  const tempLine = lineFor(metrics.temperature, tempY);
+  const humidityLine = lineFor(metrics.humidity, (value) => pad.top + plotHeight * (1 - clampNumber(Number(value), 0, 100) / 100));
+  const rateMax = Math.max(1, ...[...(metrics.heatingRate?.points || []), ...(metrics.coolingRate?.points || [])].map((point) => Math.abs(Number(point.value) || 0)));
+  const barWidth = Math.max(1, plotWidth / Math.max(points.length, 1));
+  const rateBars = [
+    ...comfortRateBars(metrics.heatingRate, points.length, xFor, barWidth, height - pad.bottom, rateMax, "#dc2626"),
+    ...comfortRateBars(metrics.coolingRate, points.length, xFor, barWidth, height - pad.bottom, rateMax, "#2563eb"),
+  ].join("");
+  const deviations = comfortDeviationBands(metrics, points.length, xFor, barWidth, pad.top, plotHeight);
+  const labels = [points[0]?.label || "start", points[points.length - 1]?.label || "end"];
+  return `
+    <div class="simulation-comfort-chart-wrap">
+      <svg class="simulation-comfort-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(zone.zoneName || "")} comfort timeline">
+        <line x1="${pad.left}" x2="${width - pad.right}" y1="${height - pad.bottom}" y2="${height - pad.bottom}" class="simulation-axis-line" />
+        <line x1="${pad.left}" x2="${pad.left}" y1="${pad.top}" y2="${height - pad.bottom}" class="simulation-axis-line" />
+        ${deviations}
+        ${heatLine && coolLine ? `<polygon points="${comfortBandPolygon(heatLine, coolLine)}" class="comfort-setpoint-band"></polygon>` : ""}
+        ${heatLine ? `<polyline points="${heatLine}" class="comfort-setpoint-line heat" />` : ""}
+        ${coolLine ? `<polyline points="${coolLine}" class="comfort-setpoint-line cool" />` : ""}
+        ${humidityLine ? `<polyline points="${humidityLine}" class="comfort-humidity-line" />` : ""}
+        ${rateBars}
+        ${tempLine ? `<polyline points="${tempLine}" class="comfort-temperature-line" />` : ""}
+        <text x="8" y="${pad.top + 8}" class="simulation-axis">${escapeHTML(formatTemperature(maxTemp))}</text>
+        <text x="8" y="${height - pad.bottom}" class="simulation-axis">${escapeHTML(formatTemperature(minTemp))}</text>
+        <text x="${pad.left}" y="${height - 12}" class="simulation-axis">${escapeHTML(labels[0])}</text>
+        <text x="${width - pad.right}" y="${height - 12}" text-anchor="end" class="simulation-axis">${escapeHTML(labels[1])}</text>
+      </svg>
+      <div class="simulation-energy-legend">
+        <span><i style="background:#f59e0b"></i>${escapeHTML(t("simulation.temperature", {}, "Temperature"))}</span>
+        <span><i style="background:#dc2626"></i>${escapeHTML(t("simulation.heating", {}, "Heating"))}</span>
+        <span><i style="background:#2563eb"></i>${escapeHTML(t("simulation.cooling", {}, "Cooling"))}</span>
+        <span><i style="background:#0f766e"></i>${escapeHTML(t("simulation.humidity", {}, "Humidity"))}</span>
+      </div>
+    </div>`;
+}
+
+function comfortTimelineMetrics(zone) {
+  const byName = new Map((zone.metrics || []).map((metric) => [normalizeOutputMatchToken(metric.name), metric]));
+  return {
+    temperature: byName.get("zone mean air temperature"),
+    humidity: byName.get("zone air relative humidity"),
+    heatingSetpoint: byName.get("zone thermostat heating setpoint temperature"),
+    coolingSetpoint: byName.get("zone thermostat cooling setpoint temperature"),
+    heatingRate: byName.get("zone air system sensible heating rate"),
+    coolingRate: byName.get("zone air system sensible cooling rate"),
+  };
+}
+
+function comfortBandPolygon(heatLine, coolLine) {
+  const heatPoints = heatLine.split(" ");
+  const coolPoints = coolLine.split(" ").reverse();
+  return [...heatPoints, ...coolPoints].join(" ");
+}
+
+function comfortRateBars(metric, pointCount, xFor, barWidth, baseline, maxAbs, color) {
+  return (metric?.points || []).slice(0, pointCount).map((point, index) => {
+    const value = Math.abs(Number(point.value) || 0);
+    if (value <= 1e-9) {
+      return "";
+    }
+    const height = Math.max(1, Math.min(42, value / maxAbs * 42));
+    return `<rect x="${roundSVG(xFor(index) - barWidth / 2)}" y="${roundSVG(baseline - height)}" width="${roundSVG(barWidth)}" height="${roundSVG(height)}" fill="${color}" opacity="0.38"><title>${escapeHTML(formatValueWithUnit(point.value, metric.unit || ""))}</title></rect>`;
+  });
+}
+
+function comfortDeviationBands(metrics, pointCount, xFor, barWidth, top, height) {
+  const temp = metrics.temperature?.points || [];
+  const heat = metrics.heatingSetpoint?.points || [];
+  const cool = metrics.coolingSetpoint?.points || [];
+  if (!temp.length || (!heat.length && !cool.length)) {
+    return "";
+  }
+  return temp.slice(0, pointCount).map((point, index) => {
+    const value = Number(point.value);
+    const heatValue = Number(heat[index]?.value);
+    const coolValue = Number(cool[index]?.value);
+    const outside = (Number.isFinite(heatValue) && value < heatValue) || (Number.isFinite(coolValue) && value > coolValue);
+    return outside ? `<rect x="${roundSVG(xFor(index) - barWidth / 2)}" y="${top}" width="${roundSVG(barWidth)}" height="${height}" class="comfort-deviation-band"><title>${escapeHTML(point.label || "")}</title></rect>` : "";
+  }).join("");
 }
 
 function renderComfortUnmetSummary(items = []) {
@@ -1195,6 +1330,18 @@ function handleSimulationEnergyDashboardChange(event) {
   }
   state.simulationZoneEnergyMetric = select.value || "__total";
   renderSimulationEnergyDashboard(state.simulationResult);
+}
+
+function handleSimulationComfortResultsChange(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const select = event.target.closest("[data-simulation-comfort-zone]");
+  if (!select) {
+    return;
+  }
+  state.simulationComfortZone = select.value || "";
+  renderSimulationComfort(state.simulationResult);
 }
 
 function selectSimulationSeries(series) {
