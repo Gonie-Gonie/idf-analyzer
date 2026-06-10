@@ -856,6 +856,7 @@ function renderHVACComponent(component) {
   const metaLabel = componentMetaLabel(component);
   const title = [displayName, metaLabel].filter(Boolean).join(" - ");
   const badges = renderHVACEvidenceBadges([
+    component.exists === false ? "Unresolved" : "",
     component.displayLabel || component.familyLabel || component.family,
     component.roleHere,
     component.relationConfidence,
@@ -875,6 +876,7 @@ function renderHVACComponent(component) {
         <span class="hvac-component-source">${renderObjectLink(component.objectIndex, component.objectType)}</span>
       </div>
       ${badges}
+      ${renderHVACComponentSourceReference(component)}
       <div class="hvac-node-line compact">
         ${renderNodePill(component.inletNode, "In")}
         <span class="hvac-arrow">-&gt;</span>
@@ -1480,6 +1482,12 @@ function componentSearchFields(component = {}) {
     component.roleHere,
     component.relationSource,
     component.relationConfidence,
+    component.sourceOwner,
+    component.sourceOwnerType,
+    component.sourceOwnerName,
+    component.typeFieldIndex,
+    component.nameFieldIndex,
+    component.expectedObjectType,
     ...(component.relationEvidence || []),
   ];
 }
@@ -1582,6 +1590,13 @@ function renderSelectedHVACDetail(selected) {
           <div><span>${t("common.inlet")}</span><strong>${escapeHTML(component.inletNode || "N/A")}</strong></div>
           <div><span>${t("common.outlet")}</span><strong>${escapeHTML(component.outletNode || "N/A")}</strong></div>
           <div><span>${t("common.water")}</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
+          ${component.sourceOwner ? `<div><span>Source owner</span><strong>${escapeHTML(component.sourceOwner)}</strong></div>` : ""}
+          ${
+            component.typeFieldIndex !== undefined || component.nameFieldIndex !== undefined
+              ? `<div><span>Source fields</span><strong>${escapeHTML(hvacSourceFieldLabel(component))}</strong></div>`
+              : ""
+          }
+          ${component.expectedObjectType ? `<div><span>Expected type</span><strong>${escapeHTML(component.expectedObjectType)}</strong></div>` : ""}
           ${component.loopName ? `<div><span>${t("hvac.viewLoop")}</span><strong>${escapeHTML(component.loopName)}</strong></div>` : ""}
         </div>
         ${renderHVACEvidenceBadges(component.relationEvidence || [])}
@@ -1781,6 +1796,28 @@ function truncateText(value, maxLength) {
     return text;
   }
   return `${text.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function renderHVACComponentSourceReference(component = {}) {
+  if (!component.sourceOwner && component.typeFieldIndex === undefined && component.nameFieldIndex === undefined) {
+    return "";
+  }
+  const parts = [
+    component.sourceOwner,
+    component.typeFieldIndex !== undefined ? `type field ${component.typeFieldIndex}` : "",
+    component.nameFieldIndex !== undefined ? `name field ${component.nameFieldIndex}` : "",
+    component.expectedObjectType ? `expected ${component.expectedObjectType}` : "",
+  ].filter(Boolean);
+  return `<small class="hvac-component-source-ref">${escapeHTML(parts.join(" / "))}</small>`;
+}
+
+function hvacSourceFieldLabel(component = {}) {
+  return [
+    component.typeFieldIndex !== undefined ? `type ${component.typeFieldIndex}` : "",
+    component.nameFieldIndex !== undefined ? `name ${component.nameFieldIndex}` : "",
+  ]
+    .filter(Boolean)
+    .join(" / ") || "N/A";
 }
 
 function componentDisplayName(component = {}) {

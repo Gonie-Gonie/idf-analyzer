@@ -44,6 +44,7 @@ The release script infers bump size from these sections:
 - Semantic YAML lines now show Raw, Computed, Summary, and Inferred badges so derived values are visually distinct from editable IDF fields.
 - Summary internal-load metrics now report resolved object coverage and unresolved calculation-method counts for People, Lights, and ElectricEquipment.
 - HVAC terminal inlet mismatch warnings now expose relation edge ids, source field indexes, expected/actual nodes, and fix targets for UI inspection.
+- Unresolved HVAC branch and zone equipment components now retain source owner and type/name field metadata across reports, semantic YAML, and the UI.
 
 ## Fixed
 

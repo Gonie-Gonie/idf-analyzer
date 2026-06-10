@@ -1397,6 +1397,21 @@ func writeSemanticHVACComponent(builder *semanticYAMLBuilder, indent int, compon
 	if !component.Exists {
 		builder.kvForObject(indent+1, "exists", "false", objectIndex, component.ObjectType, name)
 		builder.kvForObject(indent+1, "reason", "unresolved_component_reference", objectIndex, component.ObjectType, name)
+		if component.SourceOwner != "" || component.TypeFieldIndex > 0 || component.NameFieldIndex > 0 || component.ExpectedObjectType != "" {
+			builder.rawForObject(indent+1, "source_reference:", objectIndex, component.ObjectType, name)
+			if component.SourceOwner != "" {
+				builder.kvForObject(indent+2, "source_owner", component.SourceOwner, objectIndex, component.ObjectType, name)
+			}
+			if component.TypeFieldIndex > 0 {
+				builder.kvForObject(indent+2, "type_field_index", fmt.Sprint(component.TypeFieldIndex), objectIndex, component.ObjectType, name)
+			}
+			if component.NameFieldIndex > 0 {
+				builder.kvForObject(indent+2, "name_field_index", fmt.Sprint(component.NameFieldIndex), objectIndex, component.ObjectType, name)
+			}
+			if component.ExpectedObjectType != "" {
+				builder.kvForObject(indent+2, "expected_object_type", component.ExpectedObjectType, objectIndex, component.ObjectType, name)
+			}
+		}
 	}
 	if objectIndex >= 0 {
 		writeSemanticDuplicatedAs(builder, indent+1, objectIndex, component.ObjectType, name, roleHere, semanticHVACComponentAlsoShownIn(builder, component))

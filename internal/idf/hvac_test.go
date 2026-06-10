@@ -169,6 +169,92 @@ func TestAnalyzeHVACReportsMissingBranch(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACUnresolvedComponentsIncludeSourceFields(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "AirLoopHVAC", Fields: []Field{
+			{Value: "Main Air Loop"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Air Branches"},
+			{Value: ""},
+			{Value: "Air Supply Inlet"},
+			{Value: "Air Demand Outlet"},
+			{Value: "Air Demand Inlet"},
+			{Value: "Air Supply Outlet"},
+		}},
+		{Index: 1, Type: "BranchList", Fields: []Field{
+			{Value: "Air Branches"},
+			{Value: "Main Air Branch"},
+		}},
+		{Index: 2, Type: "Branch", Fields: []Field{
+			{Value: "Main Air Branch", Comment: "Name"},
+			{Value: "", Comment: "Pressure Drop Curve Name"},
+			{Value: "Fan:ConstantVolume", Comment: "Component 1 Object Type"},
+			{Value: "Missing Fan", Comment: "Component 1 Name"},
+			{Value: "Air Supply Inlet", Comment: "Component 1 Inlet Node Name"},
+			{Value: "Air Supply Outlet", Comment: "Component 1 Outlet Node Name"},
+		}},
+		{Index: 3, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 4, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office", Comment: "Zone Name"},
+			{Value: "Office Equipment", Comment: "Zone Conditioning Equipment List Name"},
+			{Value: "Office Supply Inlet", Comment: "Zone Air Inlet Node or NodeList Name"},
+			{Value: "", Comment: "Zone Air Exhaust Node or NodeList Name"},
+			{Value: "Office Zone Air Node", Comment: "Zone Air Node Name"},
+			{Value: "Office Return Node", Comment: "Zone Return Air Node or NodeList Name"},
+		}},
+		{Index: 5, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment", Comment: "Name"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Comment: "Zone Equipment 1 Object Type"},
+			{Value: "Missing Terminal", Comment: "Zone Equipment 1 Name"},
+			{Value: "1", Comment: "Zone Equipment 1 Cooling Sequence"},
+			{Value: "1", Comment: "Zone Equipment 1 Heating or No-Load Sequence"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	loop := findHVACTestingLoop(report, "Main Air Loop")
+	if loop == nil || len(loop.SupplySide.Branches) == 0 || len(loop.SupplySide.Branches[0].Components) == 0 {
+		t.Fatalf("air loop branch component missing from report: %#v", report.Loops)
+	}
+	branchComponent := loop.SupplySide.Branches[0].Components[0]
+	if branchComponent.Exists || branchComponent.SourceOwnerType != "Branch" || branchComponent.SourceOwnerName != "Main Air Branch" {
+		t.Fatalf("branch component source = %#v, want unresolved Branch/Main Air Branch", branchComponent)
+	}
+	if branchComponent.TypeFieldIndex != 2 || branchComponent.NameFieldIndex != 3 || branchComponent.ExpectedObjectType != "Fan:ConstantVolume" {
+		t.Fatalf("branch component fields = %#v, want type/name field 2/3", branchComponent)
+	}
+
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil || len(relation.ZoneEquipment) == 0 {
+		t.Fatalf("zone equipment missing from report: %#v", report.ZoneRelations)
+	}
+	zoneEquipment := relation.ZoneEquipment[0]
+	if zoneEquipment.Exists || zoneEquipment.SourceOwnerType != "ZoneHVAC:EquipmentList" || zoneEquipment.SourceOwnerName != "Office Equipment" {
+		t.Fatalf("zone equipment source = %#v, want unresolved ZoneHVAC:EquipmentList/Office Equipment", zoneEquipment)
+	}
+	if zoneEquipment.TypeFieldIndex != 1 || zoneEquipment.NameFieldIndex != 2 || zoneEquipment.ExpectedObjectType != "AirTerminal:SingleDuct:ConstantVolume:NoReheat" {
+		t.Fatalf("zone equipment fields = %#v, want type/name field 1/2", zoneEquipment)
+	}
+
+	branchWarning := findHVACWarningByCode(report.Warnings, "missing_branch_component")
+	if branchWarning == nil || branchWarning.FieldIndex != 3 || branchWarning.SourceFieldIndex != 3 || branchWarning.Value != "Missing Fan" {
+		t.Fatalf("branch warning = %#v, want missing component name field metadata", branchWarning)
+	}
+	zoneWarning := findHVACWarningByCode(report.Warnings, "missing_zone_equipment")
+	if zoneWarning == nil || zoneWarning.FieldIndex != 2 || zoneWarning.SourceFieldIndex != 2 || zoneWarning.Value != "Missing Terminal" {
+		t.Fatalf("zone warning = %#v, want missing equipment name field metadata", zoneWarning)
+	}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{"source_reference:", `source_owner: "ZoneHVAC:EquipmentList \"Office Equipment\""`, "name_field_index: 2"} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic unresolved component source missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
 func TestAnalyzeHVACReadsZoneEquipmentListWithLoadDistributionScheme(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

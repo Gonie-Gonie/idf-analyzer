@@ -127,6 +127,13 @@ type HVACComponent struct {
 	WaterOutletNode         string          `json:"waterOutletNode,omitempty"`
 	InletFieldIndex         int             `json:"inletFieldIndex,omitempty"`
 	OutletFieldIndex        int             `json:"outletFieldIndex,omitempty"`
+	SourceOwner             string          `json:"sourceOwner,omitempty"`
+	SourceOwnerType         string          `json:"sourceOwnerType,omitempty"`
+	SourceOwnerName         string          `json:"sourceOwnerName,omitempty"`
+	SourceOwnerObjectIndex  int             `json:"sourceOwnerObjectIndex,omitempty"`
+	TypeFieldIndex          int             `json:"typeFieldIndex,omitempty"`
+	NameFieldIndex          int             `json:"nameFieldIndex,omitempty"`
+	ExpectedObjectType      string          `json:"expectedObjectType,omitempty"`
 	RoleHere                string          `json:"roleHere,omitempty"`
 	CoolingSequence         string          `json:"coolingSequence,omitempty"`
 	HeatingSequence         string          `json:"heatingSequence,omitempty"`
@@ -755,6 +762,7 @@ func parseHVACBranch(ctx *hvacContext, obj Object) HVACBranch {
 			continue
 		}
 		component := newHVACComponent(ctx, componentType, componentName)
+		annotateHVACComponentSource(&component, obj, reference.TypeIndex, reference.NameIndex, componentType)
 		component.InletNode = firstNonEmpty(component.InletNode, inletNode)
 		component.OutletNode = firstNonEmpty(component.OutletNode, outletNode)
 		component.InletFieldIndex = reference.InletIndex
@@ -763,8 +771,11 @@ func parseHVACBranch(ctx *hvacContext, obj Object) HVACBranch {
 			component.ControlType = strings.TrimSpace(obj.Fields[reference.ControlIndex].Value)
 		}
 		if componentType != "" && componentName != "" && !component.Exists {
-			branch.Warnings = append(branch.Warnings, hvacWarningForObject(obj, "missing_branch_component",
-				fmt.Sprintf("Branch %q references missing %s %q.", branch.Name, componentType, componentName)))
+			warning := hvacWarningForObject(obj, "missing_branch_component",
+				fmt.Sprintf("Branch %q references missing %s %q.", branch.Name, componentType, componentName))
+			annotateHVACWarningField(&warning, obj, reference.NameIndex)
+			warning.Value = componentName
+			branch.Warnings = append(branch.Warnings, warning)
 		}
 		if strings.EqualFold(componentType, "Connector:Splitter") || strings.EqualFold(componentType, "Connector:Mixer") {
 			branch.Warnings = append(branch.Warnings, hvacWarningForObject(obj, "connector_inside_branch_component_list",
@@ -1315,6 +1326,7 @@ func equipmentFromHVACEquipmentList(ctx *hvacContext, equipmentList Object, rela
 			continue
 		}
 		component := newHVACComponent(ctx, objectType, objectNameValue)
+		annotateHVACComponentSource(&component, equipmentList, reference.TypeIndex, reference.NameIndex, objectType)
 		component.RoleHere = hvacZoneEquipmentRole(component)
 		if component.RoleHere == "zone_equipment" && defaultRole != "" {
 			component.RoleHere = defaultRole
@@ -1329,8 +1341,11 @@ func equipmentFromHVACEquipmentList(ctx *hvacContext, equipmentList Object, rela
 		component.HeatingFractionSchedule = hvacFieldValue(equipmentList, reference.HeatingScheduleIndex)
 		component.EditableFields = append(component.EditableFields, editableZoneEquipmentSequenceFields(ctx.doc, equipmentList, reference.TypeIndex)...)
 		if !component.Exists {
-			relation.Warnings = append(relation.Warnings, hvacWarningForObject(equipmentList, missingCode,
-				fmt.Sprintf("%s %q references missing %s %q.", objectLabel(equipmentList), objectName(equipmentList), objectType, objectNameValue)))
+			warning := hvacWarningForObject(equipmentList, missingCode,
+				fmt.Sprintf("%s %q references missing %s %q.", objectLabel(equipmentList), objectName(equipmentList), objectType, objectNameValue))
+			annotateHVACWarningField(&warning, equipmentList, reference.NameIndex)
+			warning.Value = objectNameValue
+			relation.Warnings = append(relation.Warnings, warning)
 		}
 		equipment = append(equipment, component)
 	}
@@ -2972,6 +2987,43 @@ func hvacWarningForComponent(component HVACComponent, code string, message strin
 		ObjectType:  component.ObjectType,
 		ObjectName:  component.ObjectName,
 	}
+}
+
+func annotateHVACComponentSource(component *HVACComponent, owner Object, typeFieldIndex int, nameFieldIndex int, expectedObjectType string) {
+	if component == nil {
+		return
+	}
+	component.SourceOwner = hvacSourceOwnerLabel(owner)
+	component.SourceOwnerType = owner.Type
+	component.SourceOwnerName = objectName(owner)
+	component.SourceOwnerObjectIndex = owner.Index
+	component.TypeFieldIndex = typeFieldIndex
+	component.NameFieldIndex = nameFieldIndex
+	component.ExpectedObjectType = strings.TrimSpace(expectedObjectType)
+}
+
+func annotateHVACWarningField(warning *HVACWarning, owner Object, fieldIndex int) {
+	if warning == nil || fieldIndex < 0 {
+		return
+	}
+	warning.FieldIndex = fieldIndex
+	warning.SourceFieldIndex = fieldIndex
+	warning.Field = hvacSourceFieldName(owner, fieldIndex)
+}
+
+func hvacSourceOwnerLabel(owner Object) string {
+	name := objectLabel(owner)
+	if name == "" {
+		return owner.Type
+	}
+	return fmt.Sprintf("%s %q", owner.Type, name)
+}
+
+func hvacSourceFieldName(owner Object, fieldIndex int) string {
+	if fieldIndex < 0 || fieldIndex >= len(owner.Fields) {
+		return ""
+	}
+	return firstNonEmpty(catalogFieldName(owner, fieldIndex), owner.Fields[fieldIndex].Comment, fmt.Sprintf("Field %d", fieldIndex+1))
 }
 
 func hvacTerminalOutletEdgeID(relation HVACZoneChain, terminal HVACComponent) string {
