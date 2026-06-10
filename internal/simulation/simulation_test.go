@@ -496,6 +496,31 @@ func TestPurposeResultBundleBuildsComfortResult(t *testing.T) {
 	}
 }
 
+func TestPurposeResultBundleBuildsComfortUnmetSummaries(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.sql")
+	createTestComfortSQL(t, path)
+
+	result := &SimulationRunResult{
+		Status: "succeeded",
+		Files: []SimulationFileInfo{{
+			Name: "eplusout.sql",
+			Path: path,
+			Kind: "sqlite",
+		}},
+	}
+	bundle := BuildPurposeResultBundle(result, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeComfort},
+	})
+
+	if len(bundle.Comfort.UnmetHours) != 2 {
+		t.Fatalf("comfort unmet summaries = %#v", bundle.Comfort.UnmetHours)
+	}
+	if bundle.Comfort.UnmetHours[0].ZoneName != "Office" || bundle.Comfort.UnmetHours[0].Value != 12.5 || bundle.Comfort.UnmetHours[0].Source != "eplusout.sql" {
+		t.Fatalf("top unmet summary = %#v", bundle.Comfort.UnmetHours[0])
+	}
+}
+
 func hvacLoopAlertExists(alerts []HVACLoopAlert, code string) bool {
 	for _, alert := range alerts {
 		if alert.Code == code {
@@ -815,6 +840,37 @@ func createTestIntegritySQL(t *testing.T, path string) {
 		`INSERT INTO TabularDataWithStrings VALUES
 			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Site and Source Energy', 'Total Site Energy', 'Total Energy', 'GJ', 1, 1, '12.5'),
 			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Site and Source Energy', 'Total Site Energy', 'Energy Per Total Building Area', 'MJ/m2', 1, 2, '85.1')`,
+	}
+	for _, statement := range statements {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("sql fixture statement failed: %v\n%s", err, statement)
+		}
+	}
+}
+
+func createTestComfortSQL(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	statements := []string{
+		`CREATE TABLE TabularDataWithStrings (
+			ReportName TEXT,
+			ReportForString TEXT,
+			TableName TEXT,
+			RowName TEXT,
+			ColumnName TEXT,
+			Units TEXT,
+			RowId INTEGER,
+			ColumnId INTEGER,
+			Value TEXT
+		)`,
+		`INSERT INTO TabularDataWithStrings VALUES
+			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Comfort and Setpoint Not Met Summary', 'Office', 'Time Setpoint Not Met During Occupied Heating', 'hr', 1, 1, '12.5'),
+			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Comfort and Setpoint Not Met Summary', 'Lab', 'Time Setpoint Not Met During Occupied Cooling', 'hr', 2, 1, '3.0'),
+			('AnnualBuildingUtilityPerformanceSummary', 'Entire Facility', 'Site and Source Energy', 'Total Site Energy', 'Total Energy', 'GJ', 3, 1, '99.0')`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {

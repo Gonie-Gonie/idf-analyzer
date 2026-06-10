@@ -685,6 +685,7 @@ function renderSimulationComfort(result) {
   const completenessHTML = (comfort.completeness || []).length
     ? renderPurposeCompletenessRow(comfort.completeness || [])
     : "";
+  const unmetHTML = renderComfortUnmetSummary(comfort.unmetHours || []);
   const issuesHTML = renderComfortIssueRanking(comfort.issues || []);
   const rows = zones
     .flatMap((zone) => (zone.metrics || []).map((metric) => ({ zoneName: zone.zoneName, metric })))
@@ -706,11 +707,39 @@ function renderSimulationComfort(result) {
     .join("");
   elements.simulationComfortResults.innerHTML = `
     ${completenessHTML}
+    ${unmetHTML}
     ${issuesHTML}
     <div class="output-table-wrap">
       <table class="output-table">
         <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.unit", {}, "Unit"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
         <tbody>${rows || `<tr><td colspan="9">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderComfortUnmetSummary(items = []) {
+  if (!items.length) {
+    return "";
+  }
+  const rows = items
+    .slice(0, 24)
+    .map(
+      (item) => `
+        <tr>
+          <td>${escapeHTML(item.zoneName || "")}</td>
+          <td>${escapeHTML(item.metric || "")}</td>
+          <td>${escapeHTML(formatValueWithUnit(item.value || 0, item.unit || ""))}</td>
+          <td>${escapeHTML(item.report || "")}</td>
+          <td>${escapeHTML(item.table || "")}</td>
+          <td>${escapeHTML(item.source || "")}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <div class="output-table-wrap simulation-comfort-unmet">
+      <table class="output-table">
+        <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.value", {}, "Value"))}</th><th>${escapeHTML(t("simulation.report", {}, "Report"))}</th><th>${escapeHTML(t("simulation.table", {}, "Table"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr></thead>
+        <tbody>${rows}</tbody>
       </table>
     </div>`;
 }
@@ -3583,6 +3612,16 @@ function renderPurposeHTMLHVAC(loops) {
 }
 
 function renderPurposeHTMLComfort(comfort) {
+  const unmetRows = (comfort.unmetHours || [])
+    .map((item) => [
+      item.zoneName || "",
+      item.metric || "",
+      formatValueWithUnit(item.value || 0, item.unit || ""),
+      item.report || "",
+      item.table || "",
+      item.source || "",
+    ])
+    .slice(0, 80);
   const issueRows = (comfort.issues || [])
     .map((issue) => [
       issue.zoneName || "",
@@ -3607,10 +3646,11 @@ function renderPurposeHTMLComfort(comfort) {
       ]),
     )
     .slice(0, 160);
-  if (!rows.length && !issueRows.length) {
+  if (!rows.length && !issueRows.length && !unmetRows.length) {
     return "";
   }
   return [
+    unmetRows.length ? `<h2>Comfort Unmet Hours</h2>${renderPurposeHTMLTable(["Zone", "Metric", "Value", "Report", "Table", "Source"], unmetRows)}` : "",
     issueRows.length
       ? `<h2>Comfort Issue Ranking</h2>${renderPurposeHTMLTable(["Zone", "Unmet samples", "Heating", "Cooling", "Max deviation", "Avg deviation", "Time", "Source"], issueRows)}`
       : "",

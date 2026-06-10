@@ -98,6 +98,9 @@ Output:Variable,
 
 Output:Diagnostics,
   DisplayExtraWarnings;
+
+Output:Table:SummaryReports,
+  AllSummary;
 `)
 	if err != nil {
 		t.Fatalf("parse output purpose fixture: %v", err)
@@ -122,6 +125,9 @@ Output:Diagnostics,
 	}
 	if !outputSummaryHasPurpose(report.Existing, "Output:Diagnostics", "", "integrity_check") {
 		t.Fatalf("diagnostics purpose tag missing: %#v", report.Existing)
+	}
+	if !outputSummaryHasPurpose(report.Existing, "Output:Table:SummaryReports", "", "comfort_check") {
+		t.Fatalf("summary report comfort purpose tag missing: %#v", report.Existing)
 	}
 }
 

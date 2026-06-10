@@ -222,6 +222,9 @@ func TestBuildPurposeRunPlanComfortSelectedZones(t *testing.T) {
 	if findPurposeOutput(plan, "Output:Variable", "Lab", "Zone Air System Sensible Heating Rate") == nil {
 		t.Fatalf("missing selected-zone heating-rate comfort output in %#v", plan.OutputObjects)
 	}
+	if findPurposeOutput(plan, "Output:Table:SummaryReports", "", "") == nil {
+		t.Fatalf("missing comfort summary report output in %#v", plan.OutputObjects)
+	}
 	if findPurposeOutput(plan, "Output:Variable", "*", "Zone Mean Air Temperature") != nil {
 		t.Fatalf("selected comfort plan should not use wildcard zone key: %#v", plan.OutputObjects)
 	}

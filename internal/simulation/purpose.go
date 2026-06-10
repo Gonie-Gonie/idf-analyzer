@@ -216,6 +216,7 @@ type ComfortResult struct {
 	Zones        []ComfortZoneResult       `json:"zones,omitempty"`
 	Series       []SimulationSeries        `json:"series,omitempty"`
 	Issues       []ComfortIssueRank        `json:"issues,omitempty"`
+	UnmetHours   []ComfortUnmetSummary     `json:"unmetHours,omitempty"`
 	Completeness []PurposeCompletenessItem `json:"completeness,omitempty"`
 }
 
@@ -245,6 +246,17 @@ type ComfortIssueRank struct {
 	AverageDeviation float64 `json:"averageDeviation"`
 	Unit             string  `json:"unit,omitempty"`
 	PeakLabel        string  `json:"peakLabel,omitempty"`
+}
+
+type ComfortUnmetSummary struct {
+	ZoneName  string  `json:"zoneName"`
+	Metric    string  `json:"metric"`
+	Value     float64 `json:"value"`
+	ValueText string  `json:"valueText,omitempty"`
+	Unit      string  `json:"unit,omitempty"`
+	Report    string  `json:"report,omitempty"`
+	Table     string  `json:"table,omitempty"`
+	Source    string  `json:"source,omitempty"`
 }
 
 type IntegrityResult struct {
@@ -506,6 +518,7 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 			))
 		case SimulationPurposeComfort:
 			bundle.Comfort = buildComfortResult(result.Series)
+			bundle.Comfort.UnmetHours = buildComfortUnmetSummariesFromFiles(result.Files)
 			bundle.Completeness = append(bundle.Completeness, bundle.Comfort.Completeness...)
 		case SimulationPurposeIntegrity:
 			sqlIntegrity := buildIntegritySQLResultFromFiles(result.Files)
@@ -1208,6 +1221,19 @@ func buildIntegritySQLResultFromFiles(files []SimulationFileInfo) integritySQLPa
 	return integritySQLParseResult{}
 }
 
+func buildComfortUnmetSummariesFromFiles(files []SimulationFileInfo) []ComfortUnmetSummary {
+	for _, file := range files {
+		if file.Kind != "sqlite" {
+			continue
+		}
+		items, err := parseComfortUnmetSQL(file.Path)
+		if err == nil && len(items) > 0 {
+			return items
+		}
+	}
+	return nil
+}
+
 func sqlIntegritySource(result integritySQLParseResult, fallback string) string {
 	if result.Source != "" {
 		return simulationSourceFromFilename(result.Source)
@@ -1652,6 +1678,7 @@ func (builder *purposePlanBuilder) addComfort() {
 		builder.warn("warning", "comfort_scope_empty", "Comfort Check needs Zone objects, but none were found.", SimulationPurposeComfort, "")
 		return
 	}
+	builder.addRecommendation("standard-summary-all", SimulationPurposeComfort)
 	keys := []string{"*"}
 	if strings.EqualFold(builder.request.Scope.ZoneMode, "selected") && len(builder.request.Scope.ZoneNames) > 0 {
 		keys = builder.request.Scope.ZoneNames

@@ -17,6 +17,7 @@ const (
 	maxIntegrityTabularRows     = 360
 	maxIntegrityTabularReports  = 12
 	maxIntegrityTabularRowCells = 80
+	maxComfortUnmetRows         = 240
 )
 
 type sqlOutputDictionaryRow struct {
@@ -650,6 +651,109 @@ LIMIT ?`,
 		reports = append(reports, report)
 	}
 	return reports, nil
+}
+
+func parseComfortUnmetSQL(path string) ([]ComfortUnmetSummary, error) {
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	hasTabular, err := sqlTableExists(db, "TabularDataWithStrings")
+	if err != nil || !hasTabular {
+		return nil, err
+	}
+	columns, err := sqlTableColumns(db, "TabularDataWithStrings")
+	if err != nil {
+		return nil, err
+	}
+	if !sqlHasColumns(columns, "ReportName", "TableName", "RowName", "ColumnName", "Value") {
+		return nil, nil
+	}
+	source := quoteSQLiteIdentifier("TabularDataWithStrings")
+	query := fmt.Sprintf(`
+SELECT %s AS report_name,
+       %s AS table_name,
+       %s AS row_name,
+       %s AS column_name,
+       %s AS units,
+       %s AS value
+FROM %s
+WHERE TRIM(COALESCE(%s, '')) <> ''
+ORDER BY %s
+LIMIT ?`,
+		sqlTextColumnExpr(columns, "ReportName", "''"),
+		sqlTextColumnExpr(columns, "TableName", "''"),
+		sqlTextColumnExpr(columns, "RowName", "''"),
+		sqlTextColumnExpr(columns, "ColumnName", "''"),
+		sqlTextColumnExpr(columns, "Units", "''"),
+		sqlTextColumnExpr(columns, "Value", "''"),
+		source,
+		sqlTextColumnExpr(columns, "Value", "''"),
+		integrityTabularOrderBy(columns),
+	)
+	rows, err := db.Query(query, maxComfortUnmetRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ComfortUnmetSummary{}
+	for rows.Next() {
+		var reportName, tableName, rowName, columnName, units, value sql.NullString
+		if err := rows.Scan(&reportName, &tableName, &rowName, &columnName, &units, &value); err != nil {
+			continue
+		}
+		if !comfortTabularLooksUnmet(reportName.String, tableName.String, rowName.String, columnName.String) {
+			continue
+		}
+		zoneName := strings.TrimSpace(rowName.String)
+		metric := tabularColumnLabel(columnName.String, units.String)
+		if zoneName == "" || metric == "" {
+			continue
+		}
+		valueText := strings.TrimSpace(value.String)
+		number, ok := parseComfortTabularNumber(valueText)
+		if !ok {
+			continue
+		}
+		out = append(out, ComfortUnmetSummary{
+			ZoneName:  zoneName,
+			Metric:    metric,
+			Value:     roundedPurposeNumber(number),
+			ValueText: valueText,
+			Unit:      strings.TrimSpace(units.String),
+			Report:    strings.TrimSpace(reportName.String),
+			Table:     strings.TrimSpace(tableName.String),
+			Source:    filepath.Base(path),
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Value != out[j].Value {
+			return out[i].Value > out[j].Value
+		}
+		if !strings.EqualFold(out[i].ZoneName, out[j].ZoneName) {
+			return strings.ToLower(out[i].ZoneName) < strings.ToLower(out[j].ZoneName)
+		}
+		return strings.ToLower(out[i].Metric) < strings.ToLower(out[j].Metric)
+	})
+	return out, nil
+}
+
+func comfortTabularLooksUnmet(values ...string) bool {
+	text := normalizeEnergyOutputName(strings.Join(values, " "))
+	return strings.Contains(text, "unmet") || strings.Contains(text, "not met")
+}
+
+func parseComfortTabularNumber(value string) (float64, bool) {
+	clean := strings.ReplaceAll(strings.TrimSpace(value), ",", "")
+	if clean == "" {
+		return 0, false
+	}
+	number, err := strconv.ParseFloat(clean, 64)
+	return number, err == nil
 }
 
 func sqlOutputSeriesDictionaries(db *sql.DB) ([]sqlOutputDictionaryRow, error) {

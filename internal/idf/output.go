@@ -422,7 +422,9 @@ func outputPurposeTags(objectType string, fields []OutputFieldValue) []string {
 		addOutputPurposeTags(tags, "basic_energy", "zone_heat_flow", "hvac_loop_check", "integrity_check", "comfort_check", "custom_outputs")
 	case "output:variabledictionary":
 		addOutputPurposeTags(tags, "custom_outputs")
-	case "output:table:summaryreports", "outputcontrol:table:style", "output:diagnostics":
+	case "output:table:summaryreports":
+		addOutputPurposeTags(tags, "integrity_check", "comfort_check")
+	case "outputcontrol:table:style", "output:diagnostics":
 		addOutputPurposeTags(tags, "integrity_check")
 	case "output:meter", "output:meter:meterfileonly", "output:meter:cumulative", "output:meter:cumulativemeterfileonly":
 		if outputMeterSupportsBasicEnergy(outputFieldValue(fields, "Key Name", "Key Value")) {
