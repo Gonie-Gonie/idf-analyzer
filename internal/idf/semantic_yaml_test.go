@@ -501,6 +501,84 @@ Lights,
 	}
 }
 
+func TestSemanticYAMLHVACDuplicatedAsUsesOccurrencePaths(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "AirTerminal:SingleDuct:VAV:Reheat"},
+			{Value: "Office VAV"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "AirTerminal:SingleDuct:VAV:Reheat", Fields: []Field{
+			{Value: "Office VAV", Comment: "Name"},
+			{Value: "Office Terminal Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Supply Inlet", Comment: "Air Outlet Node Name"},
+			{Value: "Coil:Heating:Water", Comment: "Reheat Coil Object Type"},
+			{Value: "Office Reheat Coil", Comment: "Reheat Coil Name"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "HW Demand Branches"},
+			{Value: "Reheat Coil Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Reheat Coil Branch"},
+			{Value: ""},
+			{Value: "Coil:Heating:Water"},
+			{Value: "Office Reheat Coil"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+		{Index: 7, Type: "Coil:Heating:Water", Fields: []Field{
+			{Value: "Office Reheat Coil", Comment: "Name"},
+			{Value: "HW Demand Inlet", Comment: "Water Inlet Node Name"},
+			{Value: "HW Demand Outlet", Comment: "Water Outlet Node Name"},
+		}},
+	}}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{
+		"- hvac/equipment_catalog/terminals/Office VAV",
+		"- zones/Office/hvac/equipment/Office VAV",
+		"- zones/Office/hvac/terminals/Office VAV",
+		"- hvac/equipment_catalog/coils/Office Reheat Coil",
+		"- hvac/plant_loops/Heating Water Loop/demand_side/branches/Reheat Coil Branch/components/Office Reheat Coil",
+	} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic duplicated_as occurrence paths missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
 func TestSemanticYAMLShowsSpacesAndDoesNotExpandSpaceListAsZones(t *testing.T) {
 	doc, err := Parse(`
 Zone,

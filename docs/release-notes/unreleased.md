@@ -36,6 +36,7 @@ The release script infers bump size from these sections:
 - HVAC analysis now builds separate SpaceHVAC equipment relations with parent-zone links, node-list provenance, splitter evidence, and UI labels.
 - HVAC node diagnostics now use typed loop component edges, avoid global disconnected-loop false positives, and treat outdoor/relief boundary nodes as expected one-sided nodes.
 - Summary HVAC node connection counts now use typed loop component connection pairs instead of sequential field fallback inference.
+- Semantic HVAC duplicate markers now list actual loop, zone relation, demand graph, and catalog occurrence paths instead of only pointing back to the catalog entry.
 
 ## Fixed
 

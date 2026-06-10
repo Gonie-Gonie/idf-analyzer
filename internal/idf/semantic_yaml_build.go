@@ -57,27 +57,28 @@ func buildSemanticProjectionNodes(builder *semanticYAMLBuilder, ctx *semanticCon
 }
 
 type semanticContext struct {
-	doc              Document
-	adapter          EnergyPlusSchemaAdapter
-	objectByIndex    map[int]Object
-	mapped           map[int]bool
-	geometry         GeometryReport
-	hvac             HVACReport
-	output           OutputReport
-	surfacesByZone   map[string][]GeometrySurface
-	windowsBySurface map[string][]GeometryWindow
-	loadsByZone      map[string]map[string][]Object
-	loadsBySpace     map[string]map[string][]Object
-	controlsByZone   map[string][]Object
-	outputsByTarget  map[string][]OutputObjectSummary
-	wildcardOutputs  []OutputObjectSummary
-	scheduleRefs     map[string][]semanticScheduleUse
-	zoneLists        map[string][]string
-	spaceLists       map[string][]string
-	zoneGroups       []Object
-	spacesByZone     map[string][]semanticSpace
-	spaceByName      map[string]semanticSpace
-	shownFields      map[int]map[int]bool
+	doc                          Document
+	adapter                      EnergyPlusSchemaAdapter
+	objectByIndex                map[int]Object
+	mapped                       map[int]bool
+	geometry                     GeometryReport
+	hvac                         HVACReport
+	output                       OutputReport
+	surfacesByZone               map[string][]GeometrySurface
+	windowsBySurface             map[string][]GeometryWindow
+	loadsByZone                  map[string]map[string][]Object
+	loadsBySpace                 map[string]map[string][]Object
+	controlsByZone               map[string][]Object
+	outputsByTarget              map[string][]OutputObjectSummary
+	wildcardOutputs              []OutputObjectSummary
+	scheduleRefs                 map[string][]semanticScheduleUse
+	zoneLists                    map[string][]string
+	spaceLists                   map[string][]string
+	zoneGroups                   []Object
+	spacesByZone                 map[string][]semanticSpace
+	spaceByName                  map[string]semanticSpace
+	shownFields                  map[int]map[int]bool
+	hvacComponentOccurrencePaths map[int][]string
 }
 
 type semanticScheduleUse struct {
@@ -224,6 +225,7 @@ func buildSemanticContext(doc Document, metadata SemanticYAMLMetadata) *semantic
 			})
 		}
 	}
+	ctx.hvacComponentOccurrencePaths = semanticHVACComponentOccurrencePaths(ctx.hvac)
 	return ctx
 }
 
@@ -1397,8 +1399,118 @@ func writeSemanticHVACComponent(builder *semanticYAMLBuilder, indent int, compon
 		builder.kvForObject(indent+1, "reason", "unresolved_component_reference", objectIndex, component.ObjectType, name)
 	}
 	if objectIndex >= 0 {
-		writeSemanticDuplicatedAs(builder, indent+1, objectIndex, component.ObjectType, name, roleHere, []string{"hvac/equipment_catalog/" + blankAs(name, component.ObjectType)})
+		writeSemanticDuplicatedAs(builder, indent+1, objectIndex, component.ObjectType, name, roleHere, semanticHVACComponentAlsoShownIn(builder, component))
 	}
+}
+
+func semanticHVACComponentAlsoShownIn(builder *semanticYAMLBuilder, component HVACComponent) []string {
+	if component.ObjectIndex < 0 {
+		return nil
+	}
+	var paths []string
+	if builder != nil && builder.ctx != nil {
+		paths = append(paths, builder.ctx.hvacComponentOccurrencePaths[component.ObjectIndex]...)
+	}
+	if len(paths) == 0 {
+		paths = append(paths, "hvac/equipment_catalog/"+blankAs(component.ObjectName, component.ObjectType))
+	}
+	return sortedUniqueStrings(paths)
+}
+
+func semanticHVACComponentOccurrencePaths(report HVACReport) map[int][]string {
+	paths := map[int][]string{}
+	addComponent := func(component HVACComponent, path string) {
+		if component.ObjectIndex < 0 || !component.Exists || strings.TrimSpace(path) == "" {
+			return
+		}
+		paths[component.ObjectIndex] = append(paths[component.ObjectIndex], path)
+	}
+	addDemandComponent := func(component AirLoopDemandPathComponent, path string) {
+		if component.ObjectIndex < 0 || strings.TrimSpace(path) == "" {
+			return
+		}
+		paths[component.ObjectIndex] = append(paths[component.ObjectIndex], path)
+	}
+	for _, loop := range report.Loops {
+		loopPath := "hvac/" + semanticHVACLoopCollectionKey(loop.Type) + "/" + semanticPathSegment(loop.Name, loop.Type)
+		for _, side := range []struct {
+			key  string
+			side HVACLoopSide
+		}{
+			{key: "supply_side", side: loop.SupplySide},
+			{key: "demand_side", side: loop.DemandSide},
+		} {
+			for _, branch := range side.side.Branches {
+				branchPath := loopPath + "/" + side.key + "/branches/" + semanticPathSegment(branch.Name, "unnamed_branch")
+				for _, component := range branch.Components {
+					addComponent(component, branchPath+"/components/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+				}
+			}
+		}
+		if strings.EqualFold(loop.Type, "AirLoopHVAC") {
+			if loop.DemandGraph.SupplyPath != nil {
+				for _, component := range loop.DemandGraph.SupplyPath.Components {
+					addDemandComponent(component, loopPath+"/demand_graph/supply_path/components/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+				}
+			}
+			if loop.DemandGraph.ReturnPath != nil {
+				for _, component := range loop.DemandGraph.ReturnPath.Components {
+					addDemandComponent(component, loopPath+"/demand_graph/return_path/components/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+				}
+			}
+		}
+	}
+	for _, relation := range report.ZoneRelations {
+		if !strings.EqualFold(relation.RelationScope, "") && !strings.EqualFold(relation.RelationScope, "zone") {
+			continue
+		}
+		zonePath := "zones/" + semanticPathSegment(relation.ZoneName, "unnamed_zone") + "/hvac"
+		for _, component := range relation.TerminalUnits {
+			addComponent(component, zonePath+"/terminals/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+		}
+		for _, component := range relation.ZoneEquipment {
+			addComponent(component, zonePath+"/equipment/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+		}
+	}
+	catalogComponents := map[int]HVACComponent{}
+	for _, loop := range report.Loops {
+		for _, component := range loopComponents(loop) {
+			if component.ObjectIndex >= 0 && component.Exists {
+				catalogComponents[component.ObjectIndex] = component
+			}
+		}
+	}
+	for _, relation := range report.ZoneRelations {
+		for _, component := range append(append([]HVACComponent{}, relation.TerminalUnits...), append(relation.ZoneEquipment, relation.PlantEquipment...)...) {
+			if component.ObjectIndex >= 0 && component.Exists {
+				catalogComponents[component.ObjectIndex] = component
+			}
+		}
+	}
+	for _, component := range catalogComponents {
+		addComponent(component, "hvac/equipment_catalog/"+semanticHVACEquipmentBucket(component.ObjectType)+"/"+semanticPathSegment(component.ObjectName, component.ObjectType))
+	}
+	for objectIndex, objectPaths := range paths {
+		paths[objectIndex] = sortedUniqueStrings(objectPaths)
+	}
+	return paths
+}
+
+func semanticHVACLoopCollectionKey(loopType string) string {
+	switch strings.ToLower(strings.TrimSpace(loopType)) {
+	case "airloophvac":
+		return "air_loops"
+	case "plantloop":
+		return "plant_loops"
+	case "condenserloop":
+		return "condenser_loops"
+	default:
+		return "loops"
+	}
+}
+
+func semanticPathSegment(value string, fallback string) string {
+	return blankAs(value, fallback)
 }
 
 func semanticHVACSummaryPath(loop HVACLoop) string {
