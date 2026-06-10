@@ -24,6 +24,7 @@ The release script infers bump size from these sections:
 - The analyzer workspace, HVAC relation view, and simulation graphs now provide denser layout presets, a zone-first relation table, and time-range controls for long SQL/CSV and heat-flow outputs.
 - HVAC component family and role labels now distinguish pipes, cooling towers, heat pumps, water heaters, controls, and condenser/plant/air-side context in both semantic exports and the UI.
 - Semantic YAML now defaults to a Basic outline, adds Detailed and Source/debug modes, and provides section jump buttons with narrower wrapping behavior for split-pane use.
+- Diagnose now groups issues into severity/workflow accordions, supports severity/source filters, and lets users hide noisy diagnostic codes while reviewing source evidence.
 
 ## Fixed
 

@@ -137,30 +137,40 @@ export function renderDiagnostics(diagnostics = state.report?.diagnostics) {
   }
   const items = diagnostics || [];
   const query = (elements.diagnosticFilter?.value || "").trim().toLowerCase();
-  const visible = items.filter((item) => diagnosticMatchesQuery(item, query));
-  const errorCount = items.filter((item) => item.severity === "error").length;
-  const warningCount = items.filter((item) => item.severity === "warning").length;
-  const noticeCount = items.filter((item) => item.severity === "notice").length;
-  elements.diagnosticCount.textContent = query
-    ? t("count.metricsOf", { shown: visible.length, total: items.length })
+  pruneDiagnosticReviewState(items);
+  const visible = items.filter((item) => diagnosticMatchesQuery(item, query) && diagnosticMatchesControls(item));
+  const severityCounts = countBy(items, (item) => item.severity || "warning");
+  const errorCount = severityCounts.get("error") || 0;
+  const warningCount = severityCounts.get("warning") || 0;
+  const noticeCount = severityCounts.get("notice") || 0;
+  const activeControls = query || state.diagnosticSeverityFilter !== "all" || state.diagnosticSourceFilter !== "all" || state.hiddenDiagnosticCodes.size > 0;
+  elements.diagnosticCount.textContent = activeControls
+    ? `${visible.length} of ${items.length} diagnostics`
     : `${errorCount} errors, ${warningCount} warnings, ${noticeCount} notices`;
-  elements.diagnosticList.innerHTML = visible.length
-    ? renderDiagnosticGroups(visible)
-    : `<div class="empty">${items.length ? t("diagnose.noMatching") : t("diagnose.noDiagnostics")}</div>`;
+  elements.diagnosticList.innerHTML = items.length
+    ? `${renderDiagnosticToolbar(items, visible.length)}${
+        visible.length ? renderDiagnosticGroups(visible) : `<div class="empty">${t("diagnose.noMatching")}</div>`
+      }`
+    : `<div class="empty">${t("diagnose.noDiagnostics")}</div>`;
+  bindDiagnosticControls();
 }
 
 function renderDiagnosticGroups(items) {
-  const groups = groupBy(items, (item) => item.source || "unspecified");
-  return [...groups.entries()]
+  const groups = groupBy(items, diagnosticGroupKey);
+  return diagnosticGroupDefinitions()
+    .filter((group) => groups.has(group.id))
     .map(
-      ([source, diagnostics]) => `
-        <section class="diagnostic-group">
-          <div class="diagnostic-group-head">
-            <strong>${escapeHTML(sourceLabel(source))}</strong>
+      (group) => {
+        const diagnostics = groups.get(group.id) || [];
+        return `
+        <details class="diagnostic-group diagnostic-group-${escapeHTML(group.id)}" open>
+          <summary class="diagnostic-group-head">
+            <strong>${escapeHTML(group.label)}</strong>
             <span class="badge">${escapeHTML(diagnostics.length)}</span>
-          </div>
+          </summary>
           <div class="diagnostic-group-list">${diagnostics.map(renderDiagnosticItem).join("")}</div>
-        </section>`,
+        </details>`;
+      },
     )
     .join("");
 }
@@ -173,21 +183,31 @@ function renderDiagnosticItem(item) {
     .filter((value) => String(value ?? "").trim() !== "")
     .map((value) => `<span>${escapeHTML(value)}</span>`)
     .join("");
+  const severity = item.severity || "warning";
+  const code = String(item.code || "").trim();
+  const source = item.source ? `<span class="diagnostic-source">${escapeHTML(sourceLabel(item.source))}</span>` : "";
+  const confidence = item.confidence ? `<span class="diagnostic-confidence">${escapeHTML(item.confidence)}</span>` : "";
+  const codeBadge = code ? `<span class="diagnostic-code">${escapeHTML(code)}</span>` : "";
+  const hideButton = code
+    ? `<button class="diagnostic-code-action" data-diagnostic-hide-code="${escapeHTML(code)}" type="button" title="Hide this diagnostic code">Hide code</button>`
+    : "";
   return `
-    <article class="diagnostic-item ${escapeHTML(item.severity || "warning")}">
-      <div class="diagnostic-main">
-        <div>
-          <span class="diagnostic-severity">${escapeHTML(item.severity || "warning")}</span>
+    <details class="diagnostic-item ${escapeHTML(severity)}">
+      <summary class="diagnostic-summary">
+        <span class="diagnostic-row-main">
+          <span class="diagnostic-severity">${escapeHTML(severity)}</span>
           <span class="diagnostic-category">${escapeHTML(item.category || "Diagnostic")}</span>
-          ${item.source ? `<span class="diagnostic-source">${escapeHTML(sourceLabel(item.source))}</span>` : ""}
-          ${item.confidence ? `<span class="diagnostic-confidence">${escapeHTML(item.confidence)}</span>` : ""}
-        </div>
-        <strong>${escapeHTML(item.message || "")}</strong>
-        <div class="diagnostic-context">${context}</div>
+          <strong>${escapeHTML(item.message || "")}</strong>
+        </span>
+        <span class="diagnostic-row-actions">${codeBadge}${hideButton}</span>
+      </summary>
+      <div class="diagnostic-main">
+        ${source || confidence ? `<div class="diagnostic-meta">${source}${confidence}</div>` : ""}
+        ${context ? `<div class="diagnostic-context">${context}</div>` : ""}
         ${item.evidence ? `<p class="diagnostic-evidence">${escapeHTML(item.evidence)}</p>` : ""}
+        ${target ? `<div>${target}</div>` : ""}
       </div>
-      ${target}
-    </article>`;
+    </details>`;
 }
 
 function diagnosticMatchesQuery(item, query) {
@@ -196,6 +216,160 @@ function diagnosticMatchesQuery(item, query) {
   }
   return [item.severity, item.category, item.code, item.source, item.confidence, item.evidence, item.message, item.objectType, item.objectName, item.field, item.value]
     .some((value) => String(value ?? "").toLowerCase().includes(query));
+}
+
+function diagnosticMatchesControls(item) {
+  const severity = item.severity || "warning";
+  if (state.diagnosticSeverityFilter !== "all" && severity !== state.diagnosticSeverityFilter) {
+    return false;
+  }
+  const source = item.source || "unspecified";
+  if (state.diagnosticSourceFilter !== "all" && source !== state.diagnosticSourceFilter) {
+    return false;
+  }
+  return !state.hiddenDiagnosticCodes.has(String(item.code || "").trim());
+}
+
+function renderDiagnosticToolbar(items, visibleCount) {
+  const severities = ["all", "error", "warning", "notice"];
+  const severityCounts = countBy(items, (item) => item.severity || "warning");
+  const sources = diagnosticSourceOptions(items);
+  const hiddenCodes = [...state.hiddenDiagnosticCodes].sort();
+  return `
+    <div class="diagnostic-toolbar">
+      <div class="diagnostic-filter-row" aria-label="Diagnostic severity filters">
+        ${severities
+          .map((severity) =>
+            renderDiagnosticFilterButton({
+              kind: "severity",
+              value: severity,
+              active: state.diagnosticSeverityFilter === severity,
+              label: severity === "all" ? "All severities" : sourceLabel(severity),
+              count: severity === "all" ? items.length : severityCounts.get(severity) || 0,
+            }),
+          )
+          .join("")}
+      </div>
+      <div class="diagnostic-filter-row" aria-label="Diagnostic source filters">
+        ${sources
+          .map((source) =>
+            renderDiagnosticFilterButton({
+              kind: "source",
+              value: source,
+              active: state.diagnosticSourceFilter === source,
+              label: source === "all" ? "All sources" : sourceLabel(source),
+              count: source === "all" ? items.length : items.filter((item) => (item.source || "unspecified") === source).length,
+            }),
+          )
+          .join("")}
+      </div>
+      <div class="diagnostic-toolbar-status">
+        <span>${escapeHTML(visibleCount)} visible</span>
+        ${
+          hiddenCodes.length
+            ? `<span>${escapeHTML(hiddenCodes.length)} hidden code${hiddenCodes.length === 1 ? "" : "s"}</span><button class="diagnostic-clear-hidden" data-diagnostic-clear-hidden type="button">Show hidden</button>`
+            : ""
+        }
+      </div>
+    </div>`;
+}
+
+function renderDiagnosticFilterButton({ kind, value, active, label, count }) {
+  return `
+    <button class="diagnostic-filter-button ${active ? "active" : ""}" data-diagnostic-filter-kind="${escapeHTML(kind)}" data-diagnostic-filter-value="${escapeHTML(value)}" type="button">
+      <span>${escapeHTML(label)}</span>
+      <small>${escapeHTML(count)}</small>
+    </button>`;
+}
+
+function bindDiagnosticControls() {
+  elements.diagnosticList.querySelectorAll("[data-diagnostic-filter-kind]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const kind = button.dataset.diagnosticFilterKind;
+      if (kind === "severity") {
+        state.diagnosticSeverityFilter = button.dataset.diagnosticFilterValue || "all";
+      }
+      if (kind === "source") {
+        state.diagnosticSourceFilter = button.dataset.diagnosticFilterValue || "all";
+      }
+      renderDiagnostics();
+    });
+  });
+  elements.diagnosticList.querySelectorAll("[data-diagnostic-hide-code]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const code = String(button.dataset.diagnosticHideCode || "").trim();
+      if (code) {
+        state.hiddenDiagnosticCodes.add(code);
+        renderDiagnostics();
+      }
+    });
+  });
+  elements.diagnosticList.querySelectorAll("[data-diagnostic-clear-hidden]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.hiddenDiagnosticCodes.clear();
+      renderDiagnostics();
+    });
+  });
+}
+
+function diagnosticSourceOptions(items) {
+  const priority = ["energyplus_rule", "analyzer_rule", "analyzer_limitation", "heuristic_inference", "user_quality_check", "schema_role_reference"];
+  const sources = new Set(items.map((item) => item.source || "unspecified"));
+  return [
+    "all",
+    ...priority.filter((source) => sources.has(source)),
+    ...[...sources].filter((source) => !priority.includes(source)).sort(),
+  ];
+}
+
+function diagnosticGroupDefinitions() {
+  return [
+    { id: "errors", label: "Errors" },
+    { id: "warnings", label: "Warnings" },
+    { id: "analyzer-limitations", label: "Analyzer limitations" },
+    { id: "cleanup-candidates", label: "Cleanup candidates" },
+    { id: "notices", label: "Notices" },
+  ];
+}
+
+function diagnosticGroupKey(item) {
+  if ((item.severity || "warning") === "error") {
+    return "errors";
+  }
+  if (item.source === "analyzer_limitation") {
+    return "analyzer-limitations";
+  }
+  if (item.source === "user_quality_check" || String(item.category || "").toLowerCase().includes("cleanup")) {
+    return "cleanup-candidates";
+  }
+  if ((item.severity || "warning") === "warning") {
+    return "warnings";
+  }
+  return "notices";
+}
+
+function pruneDiagnosticReviewState(items) {
+  const knownCodes = new Set(items.map((item) => String(item.code || "").trim()).filter(Boolean));
+  const knownSources = new Set(items.map((item) => item.source || "unspecified"));
+  if (state.diagnosticSourceFilter !== "all" && !knownSources.has(state.diagnosticSourceFilter)) {
+    state.diagnosticSourceFilter = "all";
+  }
+  for (const code of [...state.hiddenDiagnosticCodes]) {
+    if (!knownCodes.has(code)) {
+      state.hiddenDiagnosticCodes.delete(code);
+    }
+  }
+}
+
+function countBy(values, keyFn) {
+  const counts = new Map();
+  for (const value of values) {
+    const key = keyFn(value);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return counts;
 }
 
 function renderMetricRow(metric) {

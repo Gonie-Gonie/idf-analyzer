@@ -1468,37 +1468,101 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   gap: 10px;
 }
 
-.diagnostic-group {
+.diagnostic-toolbar {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px;
   display: grid;
+  gap: 8px;
+}
+
+.diagnostic-filter-row {
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
-.diagnostic-group-head {
+.diagnostic-filter-button {
   min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diagnostic-filter-button small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.diagnostic-filter-button.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.diagnostic-toolbar-status {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.diagnostic-clear-hidden,
+.diagnostic-code-action {
+  min-height: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--ink);
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.diagnostic-group {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.diagnostic-group-head {
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  color: var(--muted);
+  padding: 8px 10px;
+  color: var(--ink);
+  cursor: pointer;
   font-size: 12px;
   font-weight: 700;
 }
 
 .diagnostic-group-list {
+  border-top: 1px solid var(--line);
+  padding: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .diagnostic-item {
   border: 1px solid var(--surface-2);
   border-left: 4px solid var(--amber);
   border-radius: var(--radius);
-  background: var(--surface);
-  padding: 10px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: center;
+  background: var(--bg);
+  overflow: hidden;
 }
 
 .diagnostic-item.error {
@@ -1509,16 +1573,50 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   border-left-color: var(--teal);
 }
 
+.diagnostic-summary {
+  min-height: 40px;
+  padding: 8px 10px;
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.diagnostic-row-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diagnostic-row-main strong {
+  min-width: 180px;
+  flex: 1 1 240px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.diagnostic-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .diagnostic-main {
+  border-top: 1px solid var(--line);
+  padding: 9px 10px 10px;
   min-width: 0;
   display: grid;
-  gap: 5px;
+  gap: 7px;
 }
 
 .diagnostic-severity,
 .diagnostic-category,
 .diagnostic-source,
-.diagnostic-confidence {
+.diagnostic-confidence,
+.diagnostic-code {
   display: inline-flex;
   align-items: center;
   min-height: 22px;
@@ -1539,13 +1637,14 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .diagnostic-source,
-.diagnostic-confidence {
+.diagnostic-confidence,
+.diagnostic-code {
   background: var(--surface-3);
   color: var(--muted);
 }
 
-.diagnostic-main strong {
-  font-size: 13px;
+.diagnostic-code {
+  text-transform: none;
 }
 
 .diagnostic-context {
@@ -1559,10 +1658,17 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   font-size: 12px;
 }
 
+.diagnostic-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 .diagnostic-evidence {
   margin: 0;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
 .diagnostic-link {
