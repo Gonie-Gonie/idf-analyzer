@@ -522,6 +522,61 @@
   font-size: 13px;
 }
 
+.simulation-hvac-loop-results {
+  display: grid;
+  gap: 12px;
+}
+
+.simulation-hvac-loop-result {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.simulation-hvac-loop-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: baseline;
+}
+
+.simulation-hvac-loop-head h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.simulation-hvac-loop-head span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.simulation-completeness-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.simulation-completeness-row span {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.simulation-completeness-row .found {
+  color: var(--green);
+}
+
+.simulation-completeness-row .missing {
+  color: var(--amber);
+}
+
 .simulation-energy-bars {
   display: grid;
   gap: 6px;

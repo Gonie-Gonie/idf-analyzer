@@ -160,6 +160,7 @@ export function renderSimulation() {
   elements.simulationResultMeta.textContent = `${result.filename || "current input"} - ${formatDuration(result.durationMs || 0)} - ${sqlCount} SQL - ${csvCount} CSV - ${issueCount} ERR issues`;
   elements.simulationResultSummary.innerHTML = `${state.simulationRunning ? renderRunningNotice() : ""}${renderSimulationSummary(result, stale)}`;
   renderSimulationEnergyDashboard(result);
+  renderSimulationHVACLoops(result);
   renderSimulationHeatFlow();
   renderSimulationSeriesSelect(result);
   renderSimulationChart();
@@ -188,6 +189,7 @@ function renderSimulationEmpty() {
     elements.simulationChart.innerHTML = `<div class="simulation-running-empty">${renderMiniProgressSVG()}<span>${escapeHTML(t("simulation.graphAfterRun", {}, "The SQL/CSV graph will appear when the run finishes."))}</span></div>`;
     elements.simulationFiles.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.writingOutputs", {}, "EnergyPlus is writing output files"))}</div>`;
     renderSimulationEnergyEmpty(t("simulation.outputPending", {}, "Outputs are pending while EnergyPlus runs."));
+    renderSimulationHVACLoopEmpty(t("simulation.outputPending", {}, "Outputs are pending while EnergyPlus runs."));
     toggleSimulationResultSections();
     updateSimulationOutputAvailability(null, true);
     return;
@@ -206,6 +208,7 @@ function renderSimulationEmpty() {
     elements.simulationChart.innerHTML = `<div class="simulation-blocked-empty">${escapeHTML(t("simulation.blockedGraph", {}, "Graph output is unavailable until the run can start."))}</div>`;
     elements.simulationFiles.innerHTML = `<div class="simulation-blocked-empty">${escapeHTML(t("simulation.blockedFiles", {}, "No output files will be created while simulation is blocked."))}</div>`;
     renderSimulationEnergyEmpty(t("simulation.outputBlocked", {}, "Run requirements must be fixed before outputs are available."));
+    renderSimulationHVACLoopEmpty(t("simulation.outputBlocked", {}, "Run requirements must be fixed before outputs are available."));
     toggleSimulationResultSections();
     updateSimulationOutputAvailability(blockingIssue, false);
     return;
@@ -225,6 +228,7 @@ function renderSimulationEmpty() {
   elements.simulationResultSummary.innerHTML = `<div class="empty">${t("simulation.noResult", {}, "Run a simulation to inspect ERR and CSV outputs.")}</div>`;
   renderSimulationResultTabs(null);
   renderSimulationEnergyEmpty(t("simulation.noEnergyResult", {}, "Run Basic Energy to inspect monthly energy results."));
+  renderSimulationHVACLoopEmpty(t("simulation.noHVACLoopResult", {}, "Run HVAC Loop Check to inspect node state series."));
   renderSimulationHeatFlowEmpty(t("simulation.noHeatFlow", {}, "Run with standard outputs to inspect zone heat-flow ledger."));
   elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.noSeries", {}, "No SQL/CSV series"))}</option>`;
   elements.simulationChart.innerHTML = `<div class="empty">${t("simulation.noGraph", {}, "SQL/CSV graph will appear after a run with numeric output.")}</div>`;
@@ -342,17 +346,19 @@ function ensureActiveSimulationResultView(result) {
   if (availability[state.simulationActiveResultView]) {
     return;
   }
-  state.simulationActiveResultView = ["energy", "zone_heat_flow", "integrity", "series", "files"].find((view) => availability[view]) || "energy";
+  state.simulationActiveResultView = ["energy", "zone_heat_flow", "hvac_loops", "integrity", "series", "files"].find((view) => availability[view]) || "energy";
 }
 
 function simulationResultViewAvailability(result) {
   if (!result) {
-    return { energy: true, zone_heat_flow: true, integrity: true, series: true, files: true };
+    return { energy: true, zone_heat_flow: true, hvac_loops: true, integrity: true, series: true, files: true };
   }
   const energy = result.purposeResults?.energy || {};
+  const hvacLoops = result.purposeResults?.hvacLoops || [];
   return {
     energy: Boolean((energy.facilityMonthly || []).length || (energy.endUseMonthly || []).length || (energy.zoneMonthly || []).length),
     zone_heat_flow: Boolean((result.heatFlow?.zones || []).length),
+    hvac_loops: Boolean(hvacLoops.some((loop) => (loop.series || []).length)),
     integrity: true,
     series: Boolean((result.series || []).length),
     files: Boolean((result.files || []).length),
@@ -408,6 +414,70 @@ function renderSimulationEnergyDashboard(result) {
     ${renderEnergyBarSection(t("simulation.facilityEnergy", {}, "Facility energy"), facility)}
     ${renderEnergyBarSection(t("simulation.endUseEnergy", {}, "End-use energy"), endUse)}
     ${renderZoneEnergyTable(zones)}`;
+}
+
+function renderSimulationHVACLoopEmpty(message) {
+  if (elements.simulationHVACLoopStats) {
+    elements.simulationHVACLoopStats.textContent = t("simulation.noHVACLoopResult", {}, "No HVAC loop result");
+  }
+  if (elements.simulationHVACLoopResults) {
+    elements.simulationHVACLoopResults.innerHTML = `<div class="empty">${escapeHTML(message)}</div>`;
+  }
+}
+
+function renderSimulationHVACLoops(result) {
+  const loops = result?.purposeResults?.hvacLoops || [];
+  const seriesCount = loops.reduce((sum, loop) => sum + (loop.series || []).length, 0);
+  if (!seriesCount) {
+    renderSimulationHVACLoopEmpty(t("simulation.noHVACLoopResult", {}, "Run HVAC Loop Check to inspect node state series."));
+    return;
+  }
+  if (elements.simulationHVACLoopStats) {
+    elements.simulationHVACLoopStats.textContent = t(
+      "simulation.hvacLoopStats",
+      { loops: loops.length, series: seriesCount },
+      `${loops.length} loop group, ${seriesCount} node series`,
+    );
+  }
+  elements.simulationHVACLoopResults.innerHTML = loops.map(renderSimulationHVACLoopResult).join("");
+}
+
+function renderSimulationHVACLoopResult(loop) {
+  const completeness = loop.completeness || [];
+  const completenessHTML = completeness.length
+    ? `<div class="simulation-completeness-row">${completeness
+        .map((item) => `<span class="${item.found ? "found" : "missing"}">${escapeHTML(item.requiredOutput || "")}</span>`)
+        .join("")}</div>`
+    : "";
+  const rows = (loop.series || [])
+    .slice(0, 80)
+    .map(
+      (series) => `
+        <tr>
+          <td>${escapeHTML(seriesNodeKey(series.column))}</td>
+          <td>${escapeHTML(seriesVariableName(series.column))}</td>
+          <td>${escapeHTML(series.file || "")}</td>
+          <td>${escapeHTML(formatNumber(series.min))}</td>
+          <td>${escapeHTML(formatNumber(series.max))}</td>
+          <td>${escapeHTML(formatNumber(series.average))}</td>
+          <td>${escapeHTML(series.points?.length || 0)}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <section class="simulation-hvac-loop-result">
+      <div class="simulation-hvac-loop-head">
+        <h4>${escapeHTML(loop.name || t("simulation.hvacLoops", {}, "HVAC Loops"))}</h4>
+        <span>${escapeHTML(loop.loopType || t("simulation.nodeStateSeries", {}, "Node state series"))}</span>
+      </div>
+      ${completenessHTML}
+      <div class="output-table-wrap">
+        <table class="output-table">
+          <thead><tr><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="7">${escapeHTML(t("simulation.noSeries", {}, "No SQL/CSV series"))}</td></tr>`}</tbody>
+        </table>
+      </div>
+    </section>`;
 }
 
 function renderEnergyBarSection(title, series) {
@@ -2476,6 +2546,17 @@ function preferredSimulationSeries(series) {
   return preferred
     .map((name) => series.find((item) => String(item.column || "").includes(name)))
     .find(Boolean) || null;
+}
+
+function seriesNodeKey(column) {
+  const [key] = String(column || "").split(":");
+  return key?.trim() || "";
+}
+
+function seriesVariableName(column) {
+  const value = String(column || "");
+  const variable = value.includes(":") ? value.slice(value.indexOf(":") + 1) : value;
+  return variable.replace(/\s*\[[^\]]+\]\s*$/, "").trim();
 }
 
 function statusText(status) {

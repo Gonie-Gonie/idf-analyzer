@@ -277,6 +277,36 @@ func TestPurposeResultBundleUsesSQLIntegrityResult(t *testing.T) {
 	}
 }
 
+func TestPurposeResultBundleBuildsHVACLoopSeries(t *testing.T) {
+	result := &SimulationRunResult{
+		Status: "succeeded",
+		Series: []SimulationSeries{
+			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Temperature [C]", Min: 20, Max: 22, Average: 21, Points: []SimulationPoint{{X: 1, Value: 20}}},
+			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Mass Flow Rate [kg/s]", Min: 0.2, Max: 0.4, Average: 0.3, Points: []SimulationPoint{{X: 1, Value: 0.3}}},
+			{File: "eplusout.sql", Column: "Office:Zone Mean Air Temperature [C]", Min: 21, Max: 21, Average: 21, Points: []SimulationPoint{{X: 1, Value: 21}}},
+		},
+	}
+	bundle := BuildPurposeResultBundle(result, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeHVACLoopCheck},
+		Scope: SimulationPurposeScope{
+			AirLoopNames: []string{"Main Air Loop"},
+		},
+	})
+
+	if len(bundle.HVACLoops) != 1 || bundle.HVACLoops[0].Name != "Main Air Loop" {
+		t.Fatalf("hvac loop result = %#v", bundle.HVACLoops)
+	}
+	if len(bundle.HVACLoops[0].Series) != 2 {
+		t.Fatalf("hvac series = %#v", bundle.HVACLoops[0].Series)
+	}
+	if len(bundle.Completeness) != 1 || !bundle.Completeness[0].Found || bundle.Completeness[0].Source != "sql" {
+		t.Fatalf("hvac completeness = %#v", bundle.Completeness)
+	}
+	if len(bundle.HVACLoops[0].Completeness) != len(hvacLoopCheckNodeVariables()) {
+		t.Fatalf("node completeness = %#v", bundle.HVACLoops[0].Completeness)
+	}
+}
+
 func TestWriteSimulationRunManifest(t *testing.T) {
 	dir := t.TempDir()
 	inputPath := filepath.Join(dir, "in.idf")

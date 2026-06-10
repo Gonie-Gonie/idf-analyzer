@@ -309,6 +309,14 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 				len(result.HeatFlow.Zones) > 0,
 				source,
 			))
+		case SimulationPurposeHVACLoopCheck:
+			bundle.HVACLoops = buildHVACLoopRunResults(result.Series, request)
+			bundle.Completeness = append(bundle.Completeness, purposeCompleteness(
+				SimulationPurposeHVACLoopCheck,
+				"HVAC node state series",
+				len(bundle.HVACLoops) > 0 && len(bundle.HVACLoops[0].Series) > 0,
+				hvacLoopResultSource(bundle.HVACLoops),
+			))
 		case SimulationPurposeIntegrity:
 			sqlIntegrity := buildIntegritySQLResultFromFiles(result.Files)
 			bundle.Integrity = IntegrityResult{
@@ -340,6 +348,81 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 		}
 	}
 	return bundle
+}
+
+func buildHVACLoopRunResults(series []SimulationSeries, request SimulationPurposeRequest) []HVACLoopRunResult {
+	nodeSeries := []SimulationSeries{}
+	foundVariables := map[string]bool{}
+	for _, item := range series {
+		if !purposeSeriesMatchesVariables(item.Column, hvacLoopCheckNodeVariables()) {
+			continue
+		}
+		nodeSeries = append(nodeSeries, item)
+		_, variableName := splitPurposeSeriesColumn(item.Column)
+		if variableName != "" {
+			foundVariables[normalizePurposeToken(variableName)] = true
+		}
+	}
+	if len(nodeSeries) == 0 {
+		return nil
+	}
+	result := HVACLoopRunResult{
+		Name:         hvacLoopResultName(request.Scope),
+		LoopType:     hvacLoopResultType(request.Scope),
+		Series:       nodeSeries,
+		Completeness: hvacNodeSeriesCompleteness(foundVariables, seriesSource(nodeSeries)),
+	}
+	return []HVACLoopRunResult{result}
+}
+
+func hvacNodeSeriesCompleteness(found map[string]bool, source string) []PurposeCompletenessItem {
+	items := make([]PurposeCompletenessItem, 0, len(hvacLoopCheckNodeVariables()))
+	for _, variable := range hvacLoopCheckNodeVariables() {
+		items = append(items, purposeCompleteness(
+			SimulationPurposeHVACLoopCheck,
+			variable,
+			found[normalizePurposeToken(variable)],
+			source,
+		))
+	}
+	return items
+}
+
+func hvacLoopResultName(scope SimulationPurposeScope) string {
+	names := append([]string{}, scope.AirLoopNames...)
+	names = append(names, scope.PlantLoopNames...)
+	names = append(names, scope.CondenserLoopNames...)
+	switch len(names) {
+	case 0:
+		return "HVAC Loop Check"
+	case 1:
+		return names[0]
+	default:
+		return fmt.Sprintf("%d selected HVAC loops", len(names))
+	}
+}
+
+func hvacLoopResultType(scope SimulationPurposeScope) string {
+	types := []string{}
+	if len(scope.AirLoopNames) > 0 {
+		types = append(types, "AirLoopHVAC")
+	}
+	if len(scope.PlantLoopNames) > 0 {
+		types = append(types, "PlantLoop")
+	}
+	if len(scope.CondenserLoopNames) > 0 {
+		types = append(types, "CondenserLoop")
+	}
+	return strings.Join(types, ", ")
+}
+
+func hvacLoopResultSource(results []HVACLoopRunResult) string {
+	for _, result := range results {
+		if source := seriesSource(result.Series); source != "missing" {
+			return source
+		}
+	}
+	return "missing"
 }
 
 func buildEnergyDashboardResultFromFiles(files []SimulationFileInfo) EnergyDashboardResult {
@@ -1097,6 +1180,33 @@ func splitZoneEnergySeriesName(value string) (string, string, bool) {
 		return "", "", false
 	}
 	return strings.TrimSpace(before), metric, true
+}
+
+func splitPurposeSeriesColumn(value string) (string, string) {
+	key, variable, ok := strings.Cut(value, ":")
+	if !ok {
+		return "", strings.TrimSpace(seriesColumnWithoutUnit(value))
+	}
+	return strings.TrimSpace(key), strings.TrimSpace(seriesColumnWithoutUnit(variable))
+}
+
+func seriesColumnWithoutUnit(value string) string {
+	value = strings.TrimSpace(value)
+	if index := strings.LastIndex(value, "["); index > 0 {
+		value = strings.TrimSpace(value[:index])
+	}
+	return value
+}
+
+func purposeSeriesMatchesVariables(column string, variables []string) bool {
+	_, variableName := splitPurposeSeriesColumn(column)
+	wanted := normalizePurposeToken(variableName)
+	for _, variable := range variables {
+		if wanted == normalizePurposeToken(variable) {
+			return true
+		}
+	}
+	return false
 }
 
 func unitFromSeriesColumn(value string) string {
