@@ -3241,6 +3241,7 @@ ${renderPurposeHTMLTable(
   ["Purpose", "Required Output", "Found", "Source"],
   completeness.map((item) => [item.purposeId || "", item.requiredOutput || "", item.found ? "Yes" : "No", item.source || ""]),
 )}
+${renderPurposeHTMLResultSections(payload.purposeResults || {})}
 <h2>Files</h2>
 ${renderPurposeHTMLTable(
   ["Name", "Type", "Path"],
@@ -3251,6 +3252,131 @@ ${renderPurposeHTMLTable(
 </main>
 </body>
 </html>`;
+}
+
+function renderPurposeHTMLResultSections(results) {
+  return [
+    renderPurposeHTMLEnergy(results.energy || {}),
+    renderPurposeHTMLHeatFlow(results.zoneHeatFlow || {}),
+    renderPurposeHTMLHVAC(results.hvacLoops || []),
+    renderPurposeHTMLComfort(results.comfort || {}),
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function renderPurposeHTMLEnergy(energy) {
+  const totals = energy.totals || [];
+  const rows = totals.length
+    ? totals.map((item) => [item.name || "", item.unit || "", formatNumber(item.value), item.source || ""])
+    : [...(energy.facilityMonthly || []), ...(energy.endUseMonthly || []), ...(energy.zoneMonthly || [])].map((item) => [
+        item.name || [item.zoneName, item.metric].filter(Boolean).join(" / "),
+        item.unit || "",
+        formatNumber(item.total),
+        item.source || "",
+      ]);
+  if (!rows.length) {
+    return "";
+  }
+  return `<h2>Energy Results</h2>${renderPurposeHTMLTable(["Metric", "Unit", "Total", "Source"], rows.slice(0, 120))}`;
+}
+
+function renderPurposeHTMLHeatFlow(heatFlow) {
+  const zones = heatFlow.zones || [];
+  if (!zones.length) {
+    return "";
+  }
+  const rows = zones.map((zone) => [
+    zone.name || "",
+    heatFlow.frameCount || "",
+    formatValueWithUnit(maxAbsNestedValues(zone.values || []), heatFlow.unit || "W"),
+    formatValueWithUnit(maxNumber(zone.temperature || []), heatFlow.temperatureUnit || "C"),
+  ]);
+  return `<h2>Zone Heat Flow Results</h2>${renderPurposeHTMLTable(["Zone", "Frames", "Peak abs heat flow", "Max temperature"], rows.slice(0, 120))}`;
+}
+
+function renderPurposeHTMLHVAC(loops) {
+  if (!loops.length) {
+    return "";
+  }
+  const nodeRows = loops
+    .flatMap((loop) =>
+      (loop.nodeSummaries || []).map((node) => [
+        loop.name || "",
+        node.nodeName || "",
+        formatValueWithUnit(node.temperatureAverage, node.temperatureUnit || "C"),
+        formatValueWithUnit(node.massFlowMax, node.massFlowUnit || "kg/s"),
+        formatValueWithUnit(node.temperatureSetpointDelta, node.temperatureUnit || "C"),
+        node.source || "",
+      ]),
+    )
+    .slice(0, 160);
+  const componentRows = loops
+    .flatMap((loop) =>
+      (loop.components || []).flatMap((component) =>
+        (component.metrics || []).map((metric) => [
+          loop.name || "",
+          component.componentName || "",
+          component.componentType || "",
+          metric.name || "",
+          formatValueWithUnit(metric.max, metric.unit),
+          formatValueWithUnit(metric.total, metric.unit),
+          metric.source || component.source || "",
+        ]),
+      ),
+    )
+    .slice(0, 160);
+  return [
+    nodeRows.length ? `<h2>HVAC Node Results</h2>${renderPurposeHTMLTable(["Loop", "Node", "Avg temp", "Peak flow", "Avg delta", "Source"], nodeRows)}` : "",
+    componentRows.length
+      ? `<h2>HVAC Component Results</h2>${renderPurposeHTMLTable(["Loop", "Component", "Type", "Metric", "Peak", "Total", "Source"], componentRows)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function renderPurposeHTMLComfort(comfort) {
+  const rows = (comfort.zones || [])
+    .flatMap((zone) =>
+      (zone.metrics || []).map((metric) => [
+        zone.zoneName || "",
+        metric.name || "",
+        formatValueWithUnit(metric.min, metric.unit),
+        formatValueWithUnit(metric.max, metric.unit),
+        formatValueWithUnit(metric.average, metric.unit),
+        metric.source || "",
+      ]),
+    )
+    .slice(0, 160);
+  if (!rows.length) {
+    return "";
+  }
+  return `<h2>Comfort Results</h2>${renderPurposeHTMLTable(["Zone", "Metric", "Min", "Max", "Avg", "Source"], rows)}`;
+}
+
+function maxAbsNestedValues(rows) {
+  let peak = 0;
+  for (const row of rows || []) {
+    for (const value of row || []) {
+      const number = Math.abs(Number(value));
+      if (Number.isFinite(number)) {
+        peak = Math.max(peak, number);
+      }
+    }
+  }
+  return peak;
+}
+
+function maxNumber(values) {
+  let maximum = Number.NEGATIVE_INFINITY;
+  for (const value of values || []) {
+    const number = Number(value);
+    if (Number.isFinite(number)) {
+      maximum = Math.max(maximum, number);
+    }
+  }
+  return Number.isFinite(maximum) ? maximum : NaN;
 }
 
 function renderPurposeHTMLTable(headers, rows) {
