@@ -639,6 +639,75 @@ People,
 	}
 }
 
+func TestSemanticYAMLGoldenSnapshotExactMatch(t *testing.T) {
+	projection := BuildSemanticYAMLProjection(Document{}, SemanticYAMLMetadata{})
+	const want = `semantic_energyplus_model:
+  schema: eplus-semantic/0.2
+  energyplus_version: unknown
+  compatibility:
+    energyplus_version: unknown
+    adapter_version: manual-catalog-fallback/0.3
+    schema_source: manual_fallback_catalog
+  yaml_profile: strict-yaml-1.2-json-compatible
+  project:
+    source_format: unknown
+    object_count: 0
+    semantic_policy: semantic_view_over_idf_object_registry
+  simulation: {}
+  site: {}
+  building: {}
+  schedules: {}
+  materials: {}
+  constructions: {}
+  shading: {}
+  zone_lists: []
+  space_lists: []
+  zone_groups: []
+  zones: []
+  airflows: {}
+  hvac: {}
+  outputs:
+    files:
+      csv:
+        enabled: false
+        requested: true
+        disabled: true
+        state: default
+        source: "OutputControl:Files"
+        request_source: default
+      sqlite:
+        enabled: false
+        requested: false
+        disabled: false
+        state: default
+        source: "OutputControl:Files"
+        request_source: "Output:SQLite"
+      json:
+        enabled: false
+        requested: false
+        disabled: false
+        state: default
+        source: "OutputControl:Files"
+        request_source: "Output:JSON"
+  source_name_conflicts: []
+  miscellaneous:
+    other: []
+  source_preservation:
+    object_order: preserved
+    field_order: preserved
+    comments: best_effort_from_current_parser
+    mode: internal_projection
+    editable_scope: visible_raw_fields_only
+    roundtrip_scope: app_state_patch_not_standalone_yaml_import
+    source_registry: internal_idf_document
+    unmapped_policy: miscellaneous_preserve_exactly
+    mapped_object_unshown_fields: []
+`
+	if projection.Text != want {
+		t.Fatalf("semantic YAML golden mismatch\nwant:\n%s\ngot:\n%s", want, projection.Text)
+	}
+}
+
 func TestSemanticYAMLGoldenFilesExistAndParse(t *testing.T) {
 	dir := filepath.Join("testdata", "semantic_yaml")
 	for index := 1; index <= 10; index++ {

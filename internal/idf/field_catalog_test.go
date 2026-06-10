@@ -1,6 +1,10 @@
 package idf
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestFieldCatalogFindsFieldsWithoutComments(t *testing.T) {
 	obj := Object{
@@ -21,6 +25,62 @@ func TestFieldCatalogFindsFieldsWithoutComments(t *testing.T) {
 	}
 	if got := catalogFieldRole(obj, 6); got != fieldRoleNodeRef {
 		t.Fatalf("field role = %q, want node ref", got)
+	}
+}
+
+func TestFieldCatalogCarriesReferenceTargetMetadata(t *testing.T) {
+	spec, ok := fieldSpecAt("BuildingSurface:Detailed", 2)
+	if !ok {
+		t.Fatal("BuildingSurface:Detailed construction field spec missing")
+	}
+	if spec.Role != fieldRoleConstructionRef || spec.TargetClass != "construction" || spec.TargetCollection != "constructions" || spec.RelationshipType != "uses" {
+		t.Fatalf("construction field metadata = %#v", spec)
+	}
+	spec, ok = fieldSpecAt("Space", 1)
+	if !ok {
+		t.Fatal("Space zone field spec missing")
+	}
+	if spec.Role != fieldRoleZoneRef || spec.TargetClass != "zone" || spec.TargetCollection != "zones" {
+		t.Fatalf("space zone metadata = %#v", spec)
+	}
+}
+
+func TestLoadEnergyPlusSchemaAdapterFile(t *testing.T) {
+	root := t.TempDir()
+	schemaPath := filepath.Join(root, "Energy+.schema.epJSON")
+	if err := os.WriteFile(schemaPath, []byte(`{
+  "properties": {
+    "Custom:Object": {
+      "required": ["name"],
+      "properties": {
+        "name": {"type": "string"},
+        "flow_rate": {"type": "number", "units": "m3/s", "autosizable": true},
+        "mode": {"type": "string", "enum": ["A", "B"]}
+      }
+    }
+  }
+}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := loadEnergyPlusSchemaAdapterFile("26.1", schemaPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := adapter.Objects[normalizeFieldCatalogKey("Custom:Object")]
+	if spec.Type != "Custom:Object" || adapter.AdapterVersion != "epjson-schema/1" {
+		t.Fatalf("adapter/spec = %#v / %#v", adapter, spec)
+	}
+	if len(spec.Fields) != 3 {
+		t.Fatalf("field count = %d, want 3", len(spec.Fields))
+	}
+	var flow FieldSpec
+	for _, field := range spec.Fields {
+		if field.Name == "Flow Rate" {
+			flow = field
+		}
+	}
+	if !flow.Numeric || !flow.AllowAutosize || flow.Units != "m3/s" {
+		t.Fatalf("flow metadata = %#v", flow)
 	}
 }
 
