@@ -37,6 +37,21 @@ export function initializeSimulationControls() {
   elements.simulationPurposeZoneNames?.addEventListener("input", () => scheduleSimulationRunPlan());
   elements.simulationPurposeFrequencyPolicy?.addEventListener("change", () => scheduleSimulationRunPlan());
   elements.simulationCustomOutputs?.addEventListener("input", () => scheduleSimulationRunPlan());
+  elements.simulationOutputDiscoveryFilter?.addEventListener("input", () => {
+    state.simulationOutputDiscoveryQuery = elements.simulationOutputDiscoveryFilter.value || "";
+    renderSimulationOutputDiscovery();
+  });
+  elements.simulationOutputDiscoveryRefresh?.addEventListener("click", () => refreshSimulationOutputDiscovery({ force: true }));
+  elements.simulationOutputDiscoveryList?.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) {
+      return;
+    }
+    const button = event.target.closest("[data-simulation-discovery-add]");
+    if (!button) {
+      return;
+    }
+    appendDiscoveredCustomOutput(Number(button.dataset.simulationDiscoveryAdd));
+  });
   elements.simulationPersistOutputs?.addEventListener("change", () => scheduleSimulationRunPlan());
   elements.simulationRefreshPlan?.addEventListener("click", () => refreshSimulationRunPlan({ force: true }));
   elements.simulationApplyPurposeOutputs?.addEventListener("click", () => applyPurposeOutputsToCurrentIDF());
@@ -259,7 +274,11 @@ function renderSimulationPurposeSetup() {
     const customSelected = selected.includes("custom_outputs");
     elements.simulationCustomOutputs.disabled = !customSelected;
     elements.simulationCustomOutputs.closest("label")?.classList.toggle("disabled", !customSelected);
+    elements.simulationOutputDiscoveryFilter?.toggleAttribute("disabled", !customSelected);
+    elements.simulationOutputDiscoveryRefresh?.toggleAttribute("disabled", !customSelected);
+    elements.simulationOutputDiscoveryList?.classList.toggle("disabled", !customSelected);
   }
+  renderSimulationOutputDiscovery();
   renderSimulationRunPlanPreview();
 }
 
@@ -663,6 +682,164 @@ async function refreshSimulationRunPlan({ force = false } = {}) {
       renderSimulationRunPlanPreview();
     }
   }
+}
+
+async function refreshSimulationOutputDiscovery({ force = false } = {}) {
+  if (!elements.simulationOutputDiscoveryList) {
+    return null;
+  }
+  const text = elements.idfInput?.value || "";
+  const outputDirectory = state.simulationResult?.outputDirectory || "";
+  if (!text.trim() && !outputDirectory) {
+    state.simulationOutputDiscovery = null;
+    state.simulationOutputDiscoveryKey = "";
+    state.simulationOutputDiscoveryError = "";
+    state.simulationOutputDiscoveryLoading = false;
+    renderSimulationOutputDiscovery();
+    return null;
+  }
+  const purposeRequest = { ...buildSimulationPurposeRequest(), discoveryAllowed: true };
+  const key = `${hashString(text)}:${outputDirectory}:${JSON.stringify(purposeRequest)}`;
+  if (!force && key === state.simulationOutputDiscoveryKey && (state.simulationOutputDiscovery || state.simulationOutputDiscoveryLoading)) {
+    return state.simulationOutputDiscovery;
+  }
+  state.simulationOutputDiscoveryKey = key;
+  state.simulationOutputDiscoveryLoading = true;
+  state.simulationOutputDiscoveryError = "";
+  renderSimulationOutputDiscovery();
+  try {
+    const result = await callSimulationAPI("DiscoverAvailableOutputs", "/api/simulation-output-discovery", {
+      text,
+      outputDirectory,
+      purposeRequest,
+    });
+    state.simulationOutputDiscovery = result;
+    state.simulationOutputDiscoveryError = "";
+    return result;
+  } catch (error) {
+    state.simulationOutputDiscovery = null;
+    state.simulationOutputDiscoveryError = error?.message || String(error);
+    return null;
+  } finally {
+    state.simulationOutputDiscoveryLoading = false;
+    renderSimulationOutputDiscovery();
+  }
+}
+
+function renderSimulationOutputDiscovery() {
+  if (!elements.simulationOutputDiscoveryList) {
+    return;
+  }
+  const customSelected = selectedSimulationPurposes().includes("custom_outputs");
+  const result = state.simulationOutputDiscovery;
+  const items = Array.isArray(result?.items) ? result.items : [];
+  const query = (elements.simulationOutputDiscoveryFilter?.value || state.simulationOutputDiscoveryQuery || "").trim().toLowerCase();
+  const filtered = items
+    .map((item, index) => ({ item, index }))
+    .filter(({ item }) => discoveryItemMatchesQuery(item, query));
+  const shown = filtered.slice(0, 40);
+  if (elements.simulationOutputDiscoveryStats) {
+    if (state.simulationOutputDiscoveryLoading) {
+      elements.simulationOutputDiscoveryStats.textContent = t("simulation.outputDiscoveryLoading", {}, "Loading catalog");
+    } else if (state.simulationOutputDiscoveryError) {
+      elements.simulationOutputDiscoveryStats.textContent = t("simulation.outputDiscoveryError", {}, "Catalog unavailable");
+    } else if (result) {
+      elements.simulationOutputDiscoveryStats.textContent = t(
+        "simulation.outputDiscoveryStats",
+        { shown: filtered.length, total: items.length },
+        `${filtered.length} of ${items.length} outputs`,
+      );
+    } else {
+      elements.simulationOutputDiscoveryStats.textContent = t("simulation.outputDiscoveryNone", {}, "No catalog");
+    }
+  }
+  if (!customSelected) {
+    elements.simulationOutputDiscoveryList.innerHTML = "";
+    return;
+  }
+  if (state.simulationOutputDiscoveryLoading) {
+    elements.simulationOutputDiscoveryList.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.outputDiscoveryLoading", {}, "Loading catalog"))}</div>`;
+    return;
+  }
+  if (state.simulationOutputDiscoveryError) {
+    elements.simulationOutputDiscoveryList.innerHTML = `<div class="simulation-error">${escapeHTML(state.simulationOutputDiscoveryError)}</div>`;
+    return;
+  }
+  if (!result) {
+    elements.simulationOutputDiscoveryList.innerHTML = "";
+    return;
+  }
+  elements.simulationOutputDiscoveryList.innerHTML =
+    shown.map(({ item, index }) => renderSimulationOutputDiscoveryItem(item, index)).join("") ||
+    `<div class="empty">${escapeHTML(t("simulation.outputDiscoveryEmpty", {}, "No matching outputs"))}</div>`;
+}
+
+function discoveryItemMatchesQuery(item, query) {
+  if (!query) {
+    return true;
+  }
+  const haystack = [
+    item.objectType,
+    item.keyValue,
+    item.name,
+    item.units,
+    item.reportingFrequency,
+    item.source,
+    item.status,
+    ...(item.purposeIds || []),
+  ]
+    .join(" ")
+    .toLowerCase();
+  return haystack.includes(query);
+}
+
+function renderSimulationOutputDiscoveryItem(item, index) {
+  const isMeter = String(item.objectType || "").toLowerCase() === "output:meter";
+  const title = isMeter ? item.name || item.keyValue || "" : item.name || "";
+  const detail = isMeter ? item.objectType || "Output:Meter" : `${item.keyValue || "*"} / ${item.objectType || "Output:Variable"}`;
+  const meta = [item.reportingFrequency, item.units, item.source].filter(Boolean).join(" - ");
+  return `
+    <div class="simulation-output-discovery-item">
+      <span>
+        <strong title="${escapeHTML(title)}">${escapeHTML(title)}</strong>
+        <small title="${escapeHTML(detail)}">${escapeHTML(detail)}</small>
+        <em>${escapeHTML(meta || item.status || "")}</em>
+      </span>
+      <b class="simulation-discovery-badge ${escapeHTML(item.status || "")}">${escapeHTML(item.status || "")}</b>
+      <button type="button" data-simulation-discovery-add="${index}">${escapeHTML(t("action.add", {}, "Add"))}</button>
+    </div>`;
+}
+
+function appendDiscoveredCustomOutput(index) {
+  const item = state.simulationOutputDiscovery?.items?.[index];
+  const line = customOutputLineFromDiscoveryItem(item);
+  if (!line || !elements.simulationCustomOutputs) {
+    return;
+  }
+  const lines = String(elements.simulationCustomOutputs.value || "")
+    .split(/\r?\n/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const lineKey = line.toLowerCase();
+  if (!lines.some((value) => value.toLowerCase() === lineKey)) {
+    lines.push(line);
+  }
+  elements.simulationCustomOutputs.value = lines.join("\n");
+  scheduleSimulationRunPlan(0);
+}
+
+function customOutputLineFromDiscoveryItem(item) {
+  if (!item) {
+    return "";
+  }
+  const objectType = String(item.objectType || "").trim();
+  const frequency = item.reportingFrequency || "Hourly";
+  if (objectType.toLowerCase() === "output:meter") {
+    const meterName = item.name || item.keyValue || "";
+    return meterName ? `Output:Meter | ${meterName} | ${frequency}` : "";
+  }
+  const variableName = item.name || "";
+  return variableName ? `Output:Variable | ${item.keyValue || "*"} | ${variableName} | ${frequency}` : "";
 }
 
 async function applyPurposeOutputsToCurrentIDF() {

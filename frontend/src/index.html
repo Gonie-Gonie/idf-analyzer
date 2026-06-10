@@ -387,6 +387,14 @@
                       data-i18n-placeholder="simulation.customOutputsPlaceholder"
                     ></textarea>
                   </label>
+                  <div class="simulation-output-discovery" aria-label="Custom output discovery">
+                    <div class="simulation-output-discovery-tools">
+                      <input id="simulationOutputDiscoveryFilter" type="search" placeholder="Filter discovered outputs" data-i18n-placeholder="simulation.outputDiscoveryFilter" />
+                      <button id="simulationOutputDiscoveryRefresh" type="button" data-i18n="simulation.discoverOutputs">Discover outputs</button>
+                      <span id="simulationOutputDiscoveryStats" class="tool-muted">No catalog</span>
+                    </div>
+                    <div id="simulationOutputDiscoveryList" class="simulation-output-discovery-list"></div>
+                  </div>
                   <div class="simulation-plan-actions">
                     <button id="simulationRefreshPlan" type="button" data-i18n="simulation.refreshPlan">Refresh plan</button>
                     <button id="simulationApplyPurposeOutputs" type="button" data-i18n="simulation.makePurposeOutputsPermanent">Make outputs permanent</button>

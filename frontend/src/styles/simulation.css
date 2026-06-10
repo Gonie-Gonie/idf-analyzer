@@ -164,6 +164,85 @@
   resize: vertical;
 }
 
+.simulation-output-discovery {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.simulation-output-discovery-tools {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.simulation-output-discovery-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.simulation-output-discovery-list.disabled {
+  display: none;
+}
+
+.simulation-output-discovery-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  padding: 7px;
+}
+
+.simulation-output-discovery-item span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.simulation-output-discovery-item strong,
+.simulation-output-discovery-item small,
+.simulation-output-discovery-item em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.simulation-output-discovery-item strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.simulation-output-discovery-item small,
+.simulation-output-discovery-item em {
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
+.simulation-discovery-badge {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.simulation-discovery-badge.available {
+  color: var(--green);
+}
+
+.simulation-discovery-badge.fallback {
+  color: var(--amber);
+}
+
 .simulation-plan-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1400,6 +1479,8 @@
   .simulation-controls,
   .simulation-purpose-grid,
   .simulation-scope-controls,
+  .simulation-output-discovery-tools,
+  .simulation-output-discovery-item,
   .simulation-energy-kpis,
   .simulation-energy-bar-row,
   .settings-path-card,

@@ -63,6 +63,7 @@ The release script infers bump size from these sections:
 - Comfort Check now has purpose-scoped zone outputs, a comfort result bundle, and a dedicated Comfort tab for temperature, setpoint, PMV, and PPD series summaries.
 - Simulation output discovery now exposes a SQL/RDD/MDD-backed catalog API with purpose-plan fallback entries for future custom output picking.
 - Custom Outputs purpose runs can now include user-entered Output:Variable and Output:Meter requests in the run-plan preview and simulation request.
+- Custom Outputs setup now includes a discovery catalog picker for adding SQL/RDD/MDD-backed output variables and meters to the run plan.
 
 ## Fixed
 
