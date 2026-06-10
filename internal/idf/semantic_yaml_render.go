@@ -88,7 +88,7 @@ func (builder *semanticYAMLBuilder) kvForObject(indent int, key string, value st
 }
 
 func (builder *semanticYAMLBuilder) objectKV(indent int, key string, value string, objectIndex int, objectType string, objectName string) {
-	builder.objectValue(indent, strings.TrimPrefix(key, "- "), value, objectIndex, objectType, objectName, "derived", "readonly")
+	builder.objectValue(indent, key, value, objectIndex, objectType, objectName, "derived", "readonly")
 }
 
 func (builder *semanticYAMLBuilder) fieldKV(indent int, key string, value string, objectIndex int, objectType string, objectName string, fieldIndex int) {

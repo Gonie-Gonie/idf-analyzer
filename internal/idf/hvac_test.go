@@ -203,6 +203,111 @@ func TestAnalyzeHVACReadsZoneEquipmentListWithLoadDistributionScheme(t *testing.
 	}
 }
 
+func TestAnalyzeHVACReadsZoneEquipmentListSixFieldGroup(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "NodeList", Fields: []Field{{Value: "Office Inlets"}, {Value: "Office Supply Inlet"}}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Inlets"},
+			{Value: "Office Exhaust"},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat"},
+			{Value: "Office Terminal"},
+			{Value: "1"},
+			{Value: "2"},
+			{Value: "CoolFrac"},
+			{Value: "HeatFrac"},
+		}},
+		{Index: 4, Type: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Fields: []Field{
+			{Value: "Office Terminal", Comment: "Name"},
+			{Value: "Air Demand Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Supply Inlet", Comment: "Air Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	if len(report.ZoneRelations) != 1 || len(report.ZoneRelations[0].ZoneEquipment) != 1 {
+		t.Fatalf("zone equipment not parsed: %#v", report.ZoneRelations)
+	}
+	equipment := report.ZoneRelations[0].ZoneEquipment[0]
+	if equipment.CoolingSequence != "1" || equipment.HeatingSequence != "2" || equipment.CoolingFractionSchedule != "CoolFrac" || equipment.HeatingFractionSchedule != "HeatFrac" {
+		t.Fatalf("six-field ZoneHVAC metadata = %#v", equipment)
+	}
+	if got := report.ZoneRelations[0].Nodes.ExhaustNodes; !stringSliceContainsFold(got, "Office Exhaust") {
+		t.Fatalf("exhaust nodes = %#v, want Office Exhaust", got)
+	}
+}
+
+func TestAnalyzeHVACCondenserLoopAndLoopRuleWarnings(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "CondenserLoop", Fields: []Field{
+			{Value: "Condenser Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: "Condenser Operation"},
+			{Value: "Cnd Setpoint"},
+			{Value: "35"},
+			{Value: "5"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "Cnd Supply Inlet"},
+			{Value: "Cnd Supply Outlet"},
+			{Value: "Cnd Branches"},
+			{Value: "Cnd Connectors"},
+			{Value: "Cnd Demand Inlet"},
+			{Value: "Cnd Demand Outlet"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 1, Type: "BranchList", Fields: []Field{
+			{Value: "Cnd Branches"},
+			{Value: "Outlet Branch"},
+			{Value: "Outlet Branch"},
+		}},
+		{Index: 2, Type: "Branch", Fields: []Field{
+			{Value: "Outlet Branch"},
+			{Value: ""},
+			{Value: "Connector:Splitter"},
+			{Value: "Bad Splitter"},
+			{Value: "Wrong Inlet"},
+			{Value: "Wrong Outlet"},
+		}},
+		{Index: 3, Type: "ConnectorList", Fields: []Field{
+			{Value: "Cnd Connectors"},
+			{Value: "Connector:Splitter"},
+			{Value: "Split 1"},
+			{Value: "Connector:Splitter"},
+			{Value: "Split 2"},
+		}},
+		{Index: 4, Type: "Connector:Splitter", Fields: []Field{{Value: "Split 1"}, {Value: "Not First Branch"}, {Value: "Outlet Branch"}}},
+		{Index: 5, Type: "Connector:Splitter", Fields: []Field{{Value: "Split 2"}, {Value: "Outlet Branch"}, {Value: "Outlet Branch"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	if report.CondenserLoopCount != 1 {
+		t.Fatalf("condenser loop count = %d, want 1", report.CondenserLoopCount)
+	}
+	for _, code := range []string{
+		"duplicate_branch_in_branch_list",
+		"branch_list_order_mismatch",
+		"connector_inside_branch_component_list",
+		"connector_list_invalid_composition",
+		"splitter_inlet_not_loop_inlet_branch",
+	} {
+		if !hasHVACWarningCode(report.Warnings, code) {
+			t.Fatalf("warnings = %#v, want %s", report.Warnings, code)
+		}
+	}
+}
+
 func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	text, err := os.ReadFile("../../frontend/src/samples/RefBldgLargeOfficeNew2004_Chicago.idf")
 	if err != nil {

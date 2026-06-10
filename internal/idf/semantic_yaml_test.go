@@ -67,9 +67,12 @@ People,
   People,
   3;
 
-Schedule:Constant,
+Schedule:Compact,
   AlwaysOn,
   Fraction,
+  Through: 12/31,
+  For: AllDays,
+  Until: 24:00,
   1;
 `)
 	if err != nil {
@@ -79,6 +82,9 @@ Schedule:Constant,
 	var parsed map[string]any
 	if err := yaml.Unmarshal([]byte(projection.Text), &parsed); err != nil {
 		t.Fatalf("semantic YAML is not parseable:\n%s\n%v", projection.Text, err)
+	}
+	if problems := validateSemanticYAMLContract(parsed); len(problems) > 0 {
+		t.Fatalf("semantic YAML contract problems: %v\n%s", problems, projection.Text)
 	}
 }
 
@@ -110,6 +116,57 @@ People,
 		}
 	}
 	t.Fatalf("people level line not found in %#v", projection.Lines)
+}
+
+func TestSemanticYAMLCompactQuantitiesAreReadonlyBeyondPeople(t *testing.T) {
+	doc, err := Parse(`
+Zone,
+  Office;
+
+Lights,
+  Office Lights,
+  Office,
+  AlwaysOn,
+  LightingLevel,
+  500;
+
+ElectricEquipment,
+  Office Plug Loads,
+  Office,
+  AlwaysOn,
+  EquipmentLevel,
+  750;
+
+ZoneInfiltration:DesignFlowRate,
+  Office Infiltration,
+  Office,
+  AlwaysOn,
+  Flow/Zone,
+  0.2;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	want := map[string]string{
+		"Lights":                          "500 W",
+		"ElectricEquipment":               "750 W",
+		"ZoneInfiltration:DesignFlowRate": "0.2 m3/s",
+	}
+	for objectType, display := range want {
+		found := false
+		for _, line := range projection.Lines {
+			if line.Key == "level" && line.ObjectType == objectType {
+				found = true
+				if line.DisplayValue != display || line.Editable {
+					t.Fatalf("%s level line = %#v, want display %q readonly", objectType, line, display)
+				}
+			}
+		}
+		if !found {
+			t.Fatalf("%s readonly level line not found:\n%s", objectType, projection.Text)
+		}
+	}
 }
 
 func TestSemanticYAMLGroupsZoneLoadsAndOutputs(t *testing.T) {
@@ -444,6 +501,144 @@ Lights,
 	}
 }
 
+func TestSemanticYAMLShowsSpacesAndDoesNotExpandSpaceListAsZones(t *testing.T) {
+	doc, err := Parse(`
+Zone,
+  Office;
+
+Space,
+  Open Office,
+  Office,
+  OfficeType,
+  45,
+  135;
+
+SpaceList,
+  Office Spaces,
+  Open Office;
+
+People,
+  Space People,
+  Office Spaces,
+  AlwaysOn,
+  People,
+  7;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{EnergyPlusVersion: "26.1"})
+	for _, expected := range []string{
+		"space_lists:",
+		"- name: Office Spaces",
+		"spaces:",
+		"- name: Open Office",
+		"zone_name: Office",
+		"loads:",
+		"people:",
+		"space: Office Spaces",
+	} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic Space YAML missing %q:\n%s", expected, projection.Text)
+		}
+	}
+	if strings.Contains(projection.Text, "zones:\n    - name: Office Spaces") {
+		t.Fatalf("SpaceList must not be emitted as a zone:\n%s", projection.Text)
+	}
+}
+
+func TestSemanticYAMLOutputResolutionEnvironmentWildcardsAndFileDefaults(t *testing.T) {
+	doc, err := Parse(`
+Zone,
+  Office;
+
+Output:Variable,
+  Environment,
+  Site Outdoor Air Drybulb Temperature,
+  Hourly;
+
+Output:Variable,
+  *,
+  System Node Temperature,
+  Hourly;
+
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Hourly;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{
+		"attachment_resolution: environment",
+		"scope: node_wildcard",
+		"scope: zone_wildcard",
+		"sqlite:",
+		"state: default",
+		"requested: false",
+		"disabled: false",
+	} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic output YAML missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
+func TestSemanticYAMLContractValidationFixture(t *testing.T) {
+	doc, err := Parse(`
+Version,
+  26.1;
+
+Zone,
+  Office;
+
+ScheduleTypeLimits,
+  Fraction,
+  0,
+  1,
+  Continuous;
+
+Schedule:Compact,
+  AlwaysOn,
+  Fraction,
+  Through: 12/31,
+  For: AllDays,
+  Until: 24:00,
+  1;
+
+People,
+  Office People,
+  Office,
+  AlwaysOn,
+  People,
+  3;
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{EnergyPlusVersion: "26.1", SourceFormat: "idf"})
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(projection.Text), &parsed); err != nil {
+		t.Fatalf("semantic YAML is not parseable:\n%s\n%v", projection.Text, err)
+	}
+	if problems := validateSemanticYAMLContract(parsed); len(problems) > 0 {
+		t.Fatalf("semantic YAML contract problems: %v\n%s", problems, projection.Text)
+	}
+	for _, expected := range []string{
+		"compatibility:",
+		"adapter_version:",
+		"type_limits:",
+		"definitions:",
+		"parse_status:",
+	} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic contract fixture missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
 func TestSemanticYAMLGoldenFilesExistAndParse(t *testing.T) {
 	dir := filepath.Join("testdata", "semantic_yaml")
 	for index := 1; index <= 10; index++ {
@@ -476,4 +671,25 @@ func semanticGoldenFilename(index int) string {
 		"10_zonelist_spacelist.golden.yaml",
 	}
 	return names[index-1]
+}
+
+func validateSemanticYAMLContract(parsed map[string]any) []string {
+	var problems []string
+	root, ok := parsed["semantic_energyplus_model"].(map[string]any)
+	if !ok {
+		return []string{"missing semantic_energyplus_model root"}
+	}
+	for _, key := range []string{"schema", "compatibility", "project", "zones", "outputs", "source_preservation"} {
+		if _, ok := root[key]; !ok {
+			problems = append(problems, "missing "+key)
+		}
+	}
+	if compatibility, ok := root["compatibility"].(map[string]any); ok {
+		for _, key := range []string{"energyplus_version", "adapter_version", "schema_source"} {
+			if _, ok := compatibility[key]; !ok {
+				problems = append(problems, "missing compatibility."+key)
+			}
+		}
+	}
+	return problems
 }
