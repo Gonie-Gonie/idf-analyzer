@@ -78,6 +78,8 @@ export function initializeSimulationControls() {
   elements.simulationEnergyDashboard?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationEnergyDashboard?.addEventListener("change", handleSimulationEnergyDashboardChange);
   elements.simulationHVACLoopResults?.addEventListener("click", handleSimulationSeriesInspectClick);
+  elements.simulationHVACLoopResults?.addEventListener("input", handleSimulationHVACResultsInput);
+  elements.simulationHVACLoopResults?.addEventListener("change", handleSimulationHVACResultsInput);
   elements.simulationComfortResults?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationComfortResults?.addEventListener("change", handleSimulationComfortResultsChange);
   elements.simulationExportPurposeJSON?.addEventListener("click", () => exportPurposeResultJSON());
@@ -555,6 +557,7 @@ function renderSimulationHVACLoopResult(loop) {
         <h4>${escapeHTML(loop.name || t("simulation.hvacLoops", {}, "HVAC Loops"))}</h4>
         <span>${escapeHTML(loop.loopType || t("simulation.nodeStateSeries", {}, "Node state series"))}</span>
       </div>
+      ${renderSimulationHVACLoopSnapshot(loop)}
       ${renderSimulationHVACLoopDerivedMetrics(loop.derivedMetrics || [])}
       ${renderSimulationHVACLoopAlerts(loop.alerts || [])}
       ${renderPurposeCompletenessRow(loop.completeness || [])}
@@ -567,6 +570,151 @@ function renderSimulationHVACLoopResult(loop) {
         </table>
       </div>
     </section>`;
+}
+
+function renderSimulationHVACLoopSnapshot(loop) {
+  const frameCount = hvacLoopFrameCount(loop);
+  if (frameCount <= 0) {
+    return "";
+  }
+  const frameIndex = Math.round(clampNumber(state.simulationHVACFrameIndex, 0, frameCount - 1));
+  state.simulationHVACFrameIndex = frameIndex;
+  const nodes = hvacNodeFrameSnapshots(loop, frameIndex);
+  if (!nodes.length) {
+    return "";
+  }
+  const maxFlow = Math.max(...nodes.map((node) => Math.abs(Number(node.flow?.value) || 0)), 1);
+  const components = hvacComponentFrameSnapshots(loop, frameIndex);
+  return `
+    <section class="simulation-hvac-snapshot">
+      <div class="simulation-hvac-snapshot-head">
+        <h5>${escapeHTML(t("simulation.hvacFrameSnapshot", {}, "Frame snapshot"))}</h5>
+        <label>
+          <span>${escapeHTML(hvacLoopFrameLabel(loop, frameIndex))}</span>
+          <input type="range" min="0" max="${frameCount - 1}" value="${frameIndex}" data-simulation-hvac-frame />
+        </label>
+      </div>
+      <div class="simulation-hvac-node-strip">
+        ${nodes.map((node) => renderSimulationHVACNodeSnapshot(node, maxFlow)).join("")}
+      </div>
+      ${components.length ? `<div class="simulation-hvac-component-strip">${components.map(renderSimulationHVACComponentSnapshot).join("")}</div>` : ""}
+    </section>`;
+}
+
+function hvacLoopFrameCount(loop) {
+  return Math.max(0, ...(loop.series || []).map((series) => series.points?.length || 0));
+}
+
+function hvacLoopFrameLabel(loop, frameIndex) {
+  const series = (loop.series || []).find((item) => item.points?.[frameIndex]);
+  const point = series?.points?.[frameIndex];
+  if (!point) {
+    return `Frame ${frameIndex + 1}`;
+  }
+  return String(point.label || point.x || `Frame ${frameIndex + 1}`);
+}
+
+function hvacNodeFrameSnapshots(loop, frameIndex) {
+  const nodes = new Map();
+  for (const series of loop.series || []) {
+    const nodeName = seriesNodeKey(series.column) || t("common.unknown", {}, "Unknown");
+    const metricName = seriesVariableName(series.column);
+    const point = series.points?.[Math.min(frameIndex, Math.max(0, (series.points?.length || 1) - 1))];
+    if (!point) {
+      continue;
+    }
+    const key = normalizeOutputMatchToken(nodeName);
+    const node = nodes.get(key) || { nodeName, source: series.file || "" };
+    const metric = {
+      name: metricName,
+      value: Number(point.value),
+      unit: seriesColumnUnit(series.column),
+      source: series.file || "",
+    };
+    switch (normalizeOutputMatchToken(metricName)) {
+      case "system node temperature":
+        node.temperature = metric;
+        break;
+      case "system node setpoint temperature":
+        node.setpoint = metric;
+        break;
+      case "system node mass flow rate":
+        node.flow = metric;
+        break;
+      case "system node humidity ratio":
+        node.humidity = metric;
+        break;
+      case "system node enthalpy":
+        node.enthalpy = metric;
+        break;
+      default:
+        break;
+    }
+    nodes.set(key, node);
+  }
+  return [...nodes.values()].sort((a, b) => String(a.nodeName).localeCompare(String(b.nodeName))).slice(0, 48);
+}
+
+function renderSimulationHVACNodeSnapshot(node, maxFlow) {
+  const flowValue = Number(node.flow?.value) || 0;
+  const activeFlow = Math.abs(flowValue) > 0.001;
+  const flowPercent = clampNumber(Math.abs(flowValue) / Math.max(maxFlow, 0.001), 0, 1) * 100;
+  return `
+    <article class="simulation-hvac-node-card ${activeFlow ? "active" : ""}">
+      <header>
+        <strong title="${escapeHTML(node.nodeName || "")}">${escapeHTML(node.nodeName || "")}</strong>
+        <span>${escapeHTML(activeFlow ? t("simulation.activeFlow", {}, "Active flow") : t("simulation.lowFlow", {}, "Low flow"))}</span>
+      </header>
+      <div class="simulation-hvac-node-values">
+        ${renderHVACSnapshotMetric(t("common.temperature", {}, "Temp"), node.temperature)}
+        ${renderHVACSnapshotMetric(t("simulation.setpoint", {}, "Setpoint"), node.setpoint)}
+        ${renderHVACSnapshotMetric(t("simulation.massFlow", {}, "Flow"), node.flow)}
+        ${renderHVACSnapshotMetric(t("simulation.humidityRatio", {}, "Humidity"), node.humidity)}
+      </div>
+      <div class="simulation-hvac-flow-track" title="${escapeHTML(renderHVACSnapshotMetricText(node.flow))}">
+        <i style="width:${flowPercent.toFixed(1)}%"></i>
+      </div>
+    </article>`;
+}
+
+function renderHVACSnapshotMetric(label, metric) {
+  return `<span><b>${escapeHTML(label)}</b>${escapeHTML(renderHVACSnapshotMetricText(metric))}</span>`;
+}
+
+function renderHVACSnapshotMetricText(metric) {
+  if (!metric || !Number.isFinite(Number(metric.value))) {
+    return "-";
+  }
+  return formatValueWithUnit(metric.value, metric.unit || "");
+}
+
+function hvacComponentFrameSnapshots(loop, frameIndex) {
+  const out = [];
+  for (const component of loop.components || []) {
+    for (const series of component.series || []) {
+      const point = series.points?.[Math.min(frameIndex, Math.max(0, (series.points?.length || 1) - 1))];
+      if (!point) {
+        continue;
+      }
+      out.push({
+        componentName: component.componentName || seriesNodeKey(series.column),
+        componentType: component.componentType || "",
+        metricName: seriesVariableName(series.column),
+        value: Number(point.value),
+        unit: seriesColumnUnit(series.column),
+      });
+    }
+  }
+  return out.slice(0, 16);
+}
+
+function renderSimulationHVACComponentSnapshot(item) {
+  return `
+    <article class="simulation-hvac-component-chip" title="${escapeHTML([item.componentName, item.metricName].filter(Boolean).join(" / "))}">
+      <span>${escapeHTML(item.componentName || "")}</span>
+      <b>${escapeHTML(formatValueWithUnit(item.value, item.unit))}</b>
+      <small>${escapeHTML(item.metricName || item.componentType || "")}</small>
+    </article>`;
 }
 
 function hvacComponentSeriesCount(components) {
@@ -1330,6 +1478,18 @@ function handleSimulationEnergyDashboardChange(event) {
   }
   state.simulationZoneEnergyMetric = select.value || "__total";
   renderSimulationEnergyDashboard(state.simulationResult);
+}
+
+function handleSimulationHVACResultsInput(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const input = event.target.closest("[data-simulation-hvac-frame]");
+  if (!input) {
+    return;
+  }
+  state.simulationHVACFrameIndex = Number(input.value) || 0;
+  renderSimulationHVACLoops(state.simulationResult);
 }
 
 function handleSimulationComfortResultsChange(event) {
@@ -4410,6 +4570,11 @@ function seriesVariableName(column) {
   const value = String(column || "");
   const variable = value.includes(":") ? value.slice(value.indexOf(":") + 1) : value;
   return variable.replace(/\s*\[[^\]]+\]\s*$/, "").trim();
+}
+
+function seriesColumnUnit(column) {
+  const match = String(column || "").match(/\[([^\]]+)\]\s*$/);
+  return match ? match[1].trim() : "";
 }
 
 function statusText(status) {

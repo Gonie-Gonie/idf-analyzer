@@ -43,6 +43,7 @@ export const state = {
   simulationSeriesRangeStart: 0,
   simulationSeriesRangeEnd: -1,
   simulationHeatFlowFrameIndex: 0,
+  simulationHVACFrameIndex: 0,
   simulationHeatFlowSelectedZone: "",
   simulationHeatFlowStory: "all",
   simulationHeatFlowRangeStart: 0,
