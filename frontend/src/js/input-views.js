@@ -125,14 +125,17 @@ function renderSemanticView() {
   setInputFilterStats(visibleObjectIndexes.size || (state.report?.objects?.length || 0), state.report?.objects?.length || 0);
 
   const sourceNameConflicts = projection.sourceNameConflicts || [];
+  const compact = state.semanticProjectionMode !== "full";
   elements.semanticEditor.innerHTML = `
     <div class="semantic-toolbar">
       <div class="json-meta">
         <span class="badge">${escapeHTML(projection.schema || "eplus-semantic/0.1")}</span>
         <span class="badge">Version ${escapeHTML(projection.energyplusVersion || "unknown")}</span>
         <span class="badge">${escapeHTML(t("count.objects", { count: projection.objectCount || 0 }))}</span>
+        <span class="badge">${escapeHTML(compact ? "Compact" : "Full")}</span>
       </div>
       <div class="semantic-actions">
+        <button id="semanticProjectionModeButton" type="button">${escapeHTML(compact ? "Show full" : "Compact")}</button>
         <button id="semanticFocusObjectButton" type="button">${escapeHTML(t("input.focusObject"))}</button>
         <button id="semanticFixDuplicatesButton" type="button" ${sourceNameConflicts.length ? "" : "disabled"}>
           ${escapeHTML(t("semantic.fixSourceNameConflicts", { count: sourceNameConflicts.length }, `Fix source name conflicts (${sourceNameConflicts.length})`))}
@@ -162,12 +165,13 @@ function semanticKeyWidths(lines) {
 }
 
 function semanticVisibleLines(lines, terms) {
+  const compactLines = state.semanticProjectionMode === "full" || terms.length ? lines : compactSemanticLines(lines);
   if (!terms.length) {
-    return lines;
+    return compactLines;
   }
   const matchingObjects = new Set();
   const objectText = new Map();
-  for (const line of lines) {
+  for (const line of compactLines) {
     if (line.objectIndex === undefined || line.objectIndex === null) {
       continue;
     }
@@ -179,12 +183,32 @@ function semanticVisibleLines(lines, terms) {
       matchingObjects.add(objectIndex);
     }
   }
-  return lines.filter((line) => {
+  return compactLines.filter((line) => {
     if (line.objectIndex === undefined || line.objectIndex === null) {
       return true;
     }
     return matchingObjects.has(String(line.objectIndex));
   });
+}
+
+function compactSemanticLines(lines) {
+  const hiddenKeys = new Set(["duplicated_as", "also_shown_in", "sync_policy", "source_relations"]);
+  const out = [];
+  let hideUntilIndent = null;
+  for (const line of lines) {
+    const indent = Number(line.indent || 0);
+    if (hideUntilIndent !== null && indent > hideUntilIndent) {
+      continue;
+    }
+    hideUntilIndent = null;
+    const key = String(line.key || "").trim();
+    if (hiddenKeys.has(key)) {
+      hideUntilIndent = indent;
+      continue;
+    }
+    out.push(line);
+  }
+  return out;
 }
 
 function renderSemanticWarnings(projection) {
@@ -277,6 +301,10 @@ function semanticDisplayKey(line) {
 }
 
 function bindSemanticControls() {
+  elements.semanticEditor.querySelector("#semanticProjectionModeButton")?.addEventListener("click", () => {
+    state.semanticProjectionMode = state.semanticProjectionMode === "full" ? "grouped" : "full";
+    renderSemanticView();
+  });
   elements.semanticEditor.querySelector("#semanticFocusObjectButton")?.addEventListener("click", () => focusSelectedSemanticObject());
   elements.semanticEditor.querySelector("#semanticFixDuplicatesButton")?.addEventListener("click", () => applySemanticDuplicateFixes());
   elements.semanticEditor.querySelectorAll(".semantic-line[data-object-index]").forEach((line) => {

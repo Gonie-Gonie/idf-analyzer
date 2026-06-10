@@ -140,12 +140,29 @@ export function renderDiagnostics(diagnostics = state.report?.diagnostics) {
   const visible = items.filter((item) => diagnosticMatchesQuery(item, query));
   const errorCount = items.filter((item) => item.severity === "error").length;
   const warningCount = items.filter((item) => item.severity === "warning").length;
+  const noticeCount = items.filter((item) => item.severity === "notice").length;
   elements.diagnosticCount.textContent = query
     ? t("count.metricsOf", { shown: visible.length, total: items.length })
-    : t("count.errorsWarnings", { errors: errorCount, warnings: warningCount });
+    : `${errorCount} errors, ${warningCount} warnings, ${noticeCount} notices`;
   elements.diagnosticList.innerHTML = visible.length
-    ? visible.map(renderDiagnosticItem).join("")
+    ? renderDiagnosticGroups(visible)
     : `<div class="empty">${items.length ? t("diagnose.noMatching") : t("diagnose.noDiagnostics")}</div>`;
+}
+
+function renderDiagnosticGroups(items) {
+  const groups = groupBy(items, (item) => item.source || "unspecified");
+  return [...groups.entries()]
+    .map(
+      ([source, diagnostics]) => `
+        <section class="diagnostic-group">
+          <div class="diagnostic-group-head">
+            <strong>${escapeHTML(sourceLabel(source))}</strong>
+            <span class="badge">${escapeHTML(diagnostics.length)}</span>
+          </div>
+          <div class="diagnostic-group-list">${diagnostics.map(renderDiagnosticItem).join("")}</div>
+        </section>`,
+    )
+    .join("");
 }
 
 function renderDiagnosticItem(item) {
@@ -162,9 +179,12 @@ function renderDiagnosticItem(item) {
         <div>
           <span class="diagnostic-severity">${escapeHTML(item.severity || "warning")}</span>
           <span class="diagnostic-category">${escapeHTML(item.category || "Diagnostic")}</span>
+          ${item.source ? `<span class="diagnostic-source">${escapeHTML(sourceLabel(item.source))}</span>` : ""}
+          ${item.confidence ? `<span class="diagnostic-confidence">${escapeHTML(item.confidence)}</span>` : ""}
         </div>
         <strong>${escapeHTML(item.message || "")}</strong>
         <div class="diagnostic-context">${context}</div>
+        ${item.evidence ? `<p class="diagnostic-evidence">${escapeHTML(item.evidence)}</p>` : ""}
       </div>
       ${target}
     </article>`;
@@ -174,17 +194,19 @@ function diagnosticMatchesQuery(item, query) {
   if (!query) {
     return true;
   }
-  return [item.severity, item.category, item.code, item.message, item.objectType, item.objectName, item.field, item.value]
+  return [item.severity, item.category, item.code, item.source, item.confidence, item.evidence, item.message, item.objectType, item.objectName, item.field, item.value]
     .some((value) => String(value ?? "").toLowerCase().includes(query));
 }
 
 function renderMetricRow(metric) {
   const unit = metric.unit ? `<span class="summary-unit">${escapeHTML(metric.unit)}</span>` : "";
+  const meta = renderMetricMeta(metric);
   return `
     <div class="summary-row" role="row">
       <div class="summary-name" role="cell">
         <strong title="${escapeHTML(metric.name)}">${escapeHTML(metric.name)}</strong>
         <span>${escapeHTML(metric.id)}</span>
+        ${meta}
       </div>
       <div class="summary-value" role="cell">
         <strong>${escapeHTML(metric.displayValue ?? "N/A")}</strong>
@@ -194,12 +216,46 @@ function renderMetricRow(metric) {
     </div>`;
 }
 
+function renderMetricMeta(metric) {
+  const badges = [
+    metric.source ? sourceLabel(metric.source) : "",
+    metric.confidence || "",
+    metric.visibility === "advanced" ? "advanced" : "",
+    ...(metric.badges || []),
+  ].filter(Boolean);
+  if (!badges.length && !metric.evidence) {
+    return "";
+  }
+  return `
+    <div class="summary-meta" title="${escapeHTML(metric.evidence || "")}">
+      ${[...new Set(badges)].map((badge) => `<small>${escapeHTML(badge)}</small>`).join("")}
+    </div>`;
+}
+
 function metricMatchesQuery(metric, category, query) {
   if (!query) {
     return true;
   }
-  return [metric.name, metric.id, metric.unit, metric.status, metric.displayValue, category.name]
+  return [metric.name, metric.id, metric.unit, metric.status, metric.displayValue, metric.source, metric.confidence, metric.visibility, metric.evidence, ...(metric.badges || []), category.name]
     .some((value) => String(value ?? "").toLowerCase().includes(query));
+}
+
+function groupBy(values, keyFn) {
+  const groups = new Map();
+  for (const value of values) {
+    const key = keyFn(value);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+    groups.get(key).push(value);
+  }
+  return groups;
+}
+
+function sourceLabel(source) {
+  return String(source || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function statusClass(status) {

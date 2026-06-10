@@ -256,6 +256,34 @@
   color: var(--amber);
 }
 
+.simulation-issue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.simulation-issue-summary span {
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.simulation-issue-summary .warning {
+  color: var(--amber);
+}
+
+.simulation-issue-summary .severe,
+.simulation-issue-summary .fatal {
+  color: var(--red);
+}
+
 .simulation-error {
   border-left: 3px solid var(--red);
   padding: 8px 10px;

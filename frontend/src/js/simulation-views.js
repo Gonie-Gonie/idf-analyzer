@@ -464,6 +464,7 @@ function renderSimulationSummary(result, stale) {
   const err = result.err || {};
   const staleBadge = stale ? `<span class="simulation-badge stale">${escapeHTML(t("simulation.stale", {}, "Stale"))}</span>` : "";
   const statusBadge = `<span class="simulation-badge ${escapeHTML(result.status || "unknown")}">${escapeHTML(statusText(result.status))}</span>`;
+  const issueSummary = simulationIssueSummary(err.issues || []);
   const issueRows = (err.issues || [])
     .slice(0, 16)
     .map(
@@ -493,6 +494,9 @@ function renderSimulationSummary(result, stale) {
       <div><span>${escapeHTML(t("simulation.errSevere", {}, "Severe/Fatal"))}</span><strong>${escapeHTML((err.severe || 0) + (err.fatal || 0))}</strong></div>
       <div><span>${escapeHTML(t("simulation.csvFiles", {}, "CSV files"))}</span><strong>${escapeHTML(result.csvs?.length || 0)}</strong></div>
     </div>
+    <div class="simulation-issue-summary">
+      ${issueSummary.map((item) => `<span class="${escapeHTML(item.key)}">${escapeHTML(item.label)} ${escapeHTML(item.count)}</span>`).join("")}
+    </div>
     ${result.error ? `<div class="simulation-error">${escapeHTML(result.error)}</div>` : ""}
     <div class="simulation-tables">
       <section>
@@ -514,6 +518,21 @@ function renderSimulationSummary(result, stale) {
         </div>
       </section>
     </div>`;
+}
+
+function simulationIssueSummary(issues = []) {
+  const counts = { warning: 0, severe: 0, fatal: 0 };
+  for (const issue of issues) {
+    const key = String(issue.severity || "").toLowerCase();
+    if (Object.prototype.hasOwnProperty.call(counts, key)) {
+      counts[key]++;
+    }
+  }
+  return [
+    { key: "warning", label: t("simulation.errWarnings", {}, "Warnings"), count: counts.warning },
+    { key: "severe", label: t("simulation.errSevere", {}, "Severe"), count: counts.severe },
+    { key: "fatal", label: "Fatal", count: counts.fatal },
+  ];
 }
 
 function renderSimulationSeriesSelect(result) {
