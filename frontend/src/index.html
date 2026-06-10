@@ -271,12 +271,12 @@
           <div class="result-pane" id="simulationPane">
             <div class="summary-head simulation-head">
               <div>
-                <h2 data-i18n="tab.simulation">Simulation</h2>
+                <h2 data-i18n="simulation.runInspect">Run & Inspect</h2>
                 <span id="simulationStats">No run yet</span>
               </div>
               <div class="summary-tools">
                 <button id="simulationRefreshEnv" type="button" data-i18n="action.refresh">Refresh</button>
-                <button id="simulationRunButton" type="button" data-i18n="action.runSimulation">Run Simulation</button>
+                <button id="simulationRunButton" type="button" data-i18n="action.runSimulation">Run & Inspect</button>
               </div>
             </div>
             <div class="simulation-pane">
@@ -289,17 +289,107 @@
                   <span data-i18n="simulation.weather">Weather</span>
                   <select id="simulationWeatherSelect"></select>
                 </label>
-                <div class="simulation-run-options" aria-label="Run options">
-                  <span data-i18n="simulation.runOptions">Run options</span>
-                  <label class="simulation-checkbox">
-                    <input id="simulationStandardOutput" type="checkbox" checked />
-                    <span data-i18n="simulation.standardOutputRun">Use standard outputs for this run</span>
-                  </label>
+                <details class="simulation-run-options" aria-label="Advanced run options">
+                  <summary data-i18n="simulation.advancedRunOptions">Advanced run options</summary>
                   <label class="simulation-checkbox">
                     <input id="simulationAutoRunOnOpen" type="checkbox" />
                     <span data-i18n="simulation.autoRunOnOpen">Auto-run after opening an input when weather is selected</span>
                   </label>
                   <button id="simulationApplyStandardOutput" type="button" data-i18n="action.applyStandardOutput">Apply Standard Output to IDF</button>
+                </details>
+              </section>
+              <section class="simulation-purpose-panel" aria-label="Purpose setup">
+                <div class="profile-section-head">
+                  <h3 data-i18n="simulation.setup">Setup</h3>
+                  <span id="simulationPurposeStats" class="tool-muted">Basic Energy + Zone Heat Flow</span>
+                </div>
+                <div id="simulationPurposeGrid" class="simulation-purpose-grid">
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="basic_energy" checked />
+                    <span>
+                      <strong data-i18n="simulation.purposeBasicEnergy">Basic Energy</strong>
+                      <small data-i18n="simulation.purposeBasicEnergyDesc">Monthly meters, end uses, and zone reported energy.</small>
+                    </span>
+                    <em>Light</em>
+                  </label>
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="zone_heat_flow" checked />
+                    <span>
+                      <strong data-i18n="simulation.purposeZoneHeatFlow">Zone Heat Flow</strong>
+                      <small data-i18n="simulation.purposeZoneHeatFlowDesc">Hourly zone heat-balance ledger and temperature overlay.</small>
+                    </span>
+                    <em>Medium</em>
+                  </label>
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="hvac_loop_check" />
+                    <span>
+                      <strong data-i18n="simulation.purposeHVACLoop">HVAC Loop Check</strong>
+                      <small data-i18n="simulation.purposeHVACLoopDesc">System node trends for loop operation review.</small>
+                    </span>
+                    <em>Heavy</em>
+                  </label>
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="integrity_check" />
+                    <span>
+                      <strong data-i18n="simulation.purposeIntegrity">Integrity</strong>
+                      <small data-i18n="simulation.purposeIntegrityDesc">ERR, dictionaries, tabular reports, and diagnostic hints.</small>
+                    </span>
+                    <em>Light</em>
+                  </label>
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="comfort_check" />
+                    <span>
+                      <strong data-i18n="simulation.purposeComfort">Comfort</strong>
+                      <small data-i18n="simulation.purposeComfortDesc">Zone temperature, setpoint, PMV, and PPD trends.</small>
+                    </span>
+                    <em>Medium</em>
+                  </label>
+                  <label class="simulation-purpose-card">
+                    <input type="checkbox" data-simulation-purpose="custom_outputs" />
+                    <span>
+                      <strong data-i18n="simulation.purposeCustom">Custom Outputs</strong>
+                      <small data-i18n="simulation.purposeCustomDesc">Use selected custom output objects when provided.</small>
+                    </span>
+                    <em>Variable</em>
+                  </label>
+                </div>
+                <div class="simulation-scope-controls" aria-label="Purpose scope">
+                  <label>
+                    <span data-i18n="simulation.zoneScope">Zone scope</span>
+                    <select id="simulationPurposeZoneMode">
+                      <option value="all" selected data-i18n="common.all">All</option>
+                      <option value="selected" data-i18n="common.selected">Selected</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span data-i18n="simulation.selectedZones">Selected zones</span>
+                    <input id="simulationPurposeZoneNames" type="text" placeholder="Office, Lab" data-i18n-placeholder="simulation.selectedZonesPlaceholder" />
+                  </label>
+                  <label>
+                    <span data-i18n="simulation.frequencyPolicy">Frequency policy</span>
+                    <select id="simulationPurposeFrequencyPolicy">
+                      <option value="purpose_default" selected data-i18n="simulation.frequencyPurposeDefault">Purpose default</option>
+                      <option value="preserve" data-i18n="simulation.frequencyPreserve">Preserve existing</option>
+                      <option value="highest_resolution" data-i18n="simulation.frequencyHighestResolution">Highest resolution</option>
+                    </select>
+                  </label>
+                  <label class="simulation-checkbox">
+                    <input id="simulationPersistOutputs" type="checkbox" />
+                    <span data-i18n="simulation.persistOutputs">Plan as permanent output edits</span>
+                  </label>
+                  <div class="simulation-plan-actions">
+                    <button id="simulationRefreshPlan" type="button" data-i18n="simulation.refreshPlan">Refresh plan</button>
+                    <button id="simulationApplyPurposeOutputs" type="button" data-i18n="simulation.makePurposeOutputsPermanent">Make outputs permanent</button>
+                  </div>
+                </div>
+              </section>
+              <section class="simulation-plan-panel" aria-label="Run plan">
+                <div class="profile-section-head">
+                  <h3 data-i18n="simulation.runPlan">Run Plan</h3>
+                  <span id="simulationRunPlanStats" class="tool-muted">Plan pending</span>
+                </div>
+                <div id="simulationRunPlan" class="simulation-run-plan">
+                  <div class="empty">Run plan will appear after an input is available.</div>
                 </div>
               </section>
               <section class="simulation-progress-card" aria-label="Simulation progress">

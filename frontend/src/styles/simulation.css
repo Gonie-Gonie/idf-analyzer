@@ -49,7 +49,8 @@
   background: var(--surface);
 }
 
-.simulation-run-options > span {
+.simulation-run-options summary {
+  cursor: pointer;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
@@ -57,6 +58,161 @@
 
 .simulation-run-options button {
   justify-self: start;
+}
+
+.simulation-purpose-panel,
+.simulation-plan-panel {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px;
+}
+
+.simulation-purpose-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.simulation-purpose-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: start;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 9px;
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.simulation-purpose-card.selected {
+  border-color: color-mix(in srgb, var(--teal) 42%, var(--line));
+  background: color-mix(in srgb, var(--teal) 8%, var(--surface));
+}
+
+.simulation-purpose-card input {
+  margin-top: 2px;
+}
+
+.simulation-purpose-card span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.simulation-purpose-card strong,
+.simulation-purpose-card small {
+  overflow-wrap: anywhere;
+}
+
+.simulation-purpose-card strong {
+  font-size: 13px;
+}
+
+.simulation-purpose-card small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.simulation-purpose-card em {
+  align-self: start;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.simulation-scope-controls {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(160px, 1.2fr) minmax(160px, 1fr) minmax(180px, auto) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.simulation-scope-controls label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-scope-controls label.disabled {
+  opacity: 0.62;
+}
+
+.simulation-scope-controls input,
+.simulation-scope-controls select {
+  min-width: 0;
+}
+
+.simulation-plan-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.simulation-run-plan {
+  display: grid;
+  gap: 9px;
+}
+
+.simulation-plan-summary,
+.simulation-plan-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.simulation-plan-summary span,
+.simulation-plan-warnings span,
+.simulation-output-state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.simulation-plan-warnings span.warning,
+.simulation-output-state.conflict {
+  border-color: color-mix(in srgb, var(--amber) 38%, var(--line));
+  color: var(--amber);
+}
+
+.simulation-plan-warnings span.info {
+  border-color: color-mix(in srgb, var(--teal) 32%, var(--line));
+  color: var(--teal);
+}
+
+.simulation-output-state.existing {
+  color: var(--green);
+}
+
+.simulation-output-state.temporary {
+  color: var(--teal);
+}
+
+.simulation-output-state.will_be_persisted {
+  color: var(--amber);
+}
+
+.simulation-plan-table td {
+  vertical-align: top;
 }
 
 .simulation-blocker {
@@ -1028,6 +1184,9 @@
 }
 
 @media (max-width: 780px) {
+  .simulation-controls,
+  .simulation-purpose-grid,
+  .simulation-scope-controls,
   .settings-path-card,
   .settings-path-row,
   .tool-simulation-controls,
@@ -1035,8 +1194,13 @@
     grid-template-columns: 1fr;
   }
 
+  .simulation-plan-actions,
   .settings-path-card button,
   .settings-path-row button {
     justify-self: stretch;
+  }
+
+  .simulation-plan-actions button {
+    flex: 1 1 160px;
   }
 }

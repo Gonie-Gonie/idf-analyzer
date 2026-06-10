@@ -4,6 +4,17 @@ import { openStandardOutputApplyDialog } from "./output-views.js";
 
 let progressListenerRegistered = false;
 let heatFlowPlayTimer = 0;
+let simulationRunPlanTimer = 0;
+let simulationRunPlanSequence = 0;
+
+const simulationPurposeDefinitions = [
+  { id: "basic_energy", label: "Basic Energy" },
+  { id: "zone_heat_flow", label: "Zone Heat Flow" },
+  { id: "hvac_loop_check", label: "HVAC Loop Check" },
+  { id: "integrity_check", label: "Integrity" },
+  { id: "comfort_check", label: "Comfort" },
+  { id: "custom_outputs", label: "Custom Outputs" },
+];
 
 export function initializeSimulationControls() {
   state.simulationHeatFlowInspectorCollapsed = readHeatFlowInspectorCollapsed();
@@ -11,6 +22,23 @@ export function initializeSimulationControls() {
     elements.simulationStandardOutput.checked = state.simulationStandardOutput !== false;
   }
   elements.simulationApplyStandardOutput?.addEventListener("click", () => openStandardOutputApplyDialog());
+  elements.simulationPurposeInputs?.forEach((input) => {
+    input.checked = state.simulationSelectedPurposes.includes(input.dataset.simulationPurpose);
+    input.addEventListener("change", () => {
+      syncSimulationPurposeStateFromControls();
+      scheduleSimulationRunPlan();
+      renderSimulation();
+    });
+  });
+  elements.simulationPurposeZoneMode?.addEventListener("change", () => {
+    scheduleSimulationRunPlan();
+    renderSimulation();
+  });
+  elements.simulationPurposeZoneNames?.addEventListener("input", () => scheduleSimulationRunPlan());
+  elements.simulationPurposeFrequencyPolicy?.addEventListener("change", () => scheduleSimulationRunPlan());
+  elements.simulationPersistOutputs?.addEventListener("change", () => scheduleSimulationRunPlan());
+  elements.simulationRefreshPlan?.addEventListener("click", () => refreshSimulationRunPlan({ force: true }));
+  elements.simulationApplyPurposeOutputs?.addEventListener("click", () => applyPurposeOutputsToCurrentIDF());
   elements.simulationRefreshEnv?.addEventListener("click", () => loadSimulationEnvironment());
   elements.simulationRunButton?.addEventListener("click", () => runCurrentSimulation({ silent: false }));
   elements.simulationEnergyPlusSelect?.addEventListener("change", () => renderSimulation());
@@ -62,9 +90,11 @@ export function initializeSimulationControls() {
     if (state.simulationResult && state.simulationRunText !== elements.idfInput.value) {
       state.simulationStale = true;
     }
+    scheduleSimulationRunPlan();
     updateSimulationControls();
     renderSimulation();
   });
+  window.addEventListener("idfAnalyzer:outputApplied", () => scheduleSimulationRunPlan(0));
   window.addEventListener("idfAnalyzer:analysisComplete", () => maybeAutoRunSimulation());
   window.addEventListener("idfAnalyzer:settingsChanged", (event) => {
     state.simulationAutoRunOnOpen = event.detail?.settings?.simulation?.autoRunOnOpen ?? state.simulationAutoRunOnOpen;
@@ -72,6 +102,7 @@ export function initializeSimulationControls() {
   });
   waitForProgressRuntime();
   loadSimulationEnvironment();
+  scheduleSimulationRunPlan();
   renderSimulationEmpty();
 }
 
@@ -97,6 +128,7 @@ export async function loadSimulationEnvironment() {
 export function renderSimulation() {
   setSimulationPreviewMode(false);
   renderSimulationEnvironment();
+  renderSimulationPurposeSetup();
   renderSimulationProgress();
   updateSimulationControls();
   if (!state.simulationResult) {
@@ -128,6 +160,7 @@ function renderSimulationEmpty() {
   if (!elements.simulationStats) {
     return;
   }
+  renderSimulationPurposeSetup();
   updateSimulationControls();
   setSimulationPreviewMode(!state.simulationRunning);
   const installCount = state.simulationEnvironment?.installations?.length || 0;
@@ -180,12 +213,289 @@ function renderSimulationEmpty() {
   updateSimulationOutputAvailability(null, false);
 }
 
+function renderSimulationPurposeSetup() {
+  syncSimulationPurposeInputsFromState();
+  const selected = selectedSimulationPurposes();
+  if (elements.simulationPurposeStats) {
+    elements.simulationPurposeStats.textContent = selected.length
+      ? selected.map(purposeLabel).join(" + ")
+      : t("simulation.noPurposeSelected", {}, "No purposes selected");
+  }
+  if (elements.simulationPurposeZoneNames) {
+    const selectedMode = elements.simulationPurposeZoneMode?.value === "selected";
+    elements.simulationPurposeZoneNames.disabled = !selectedMode;
+    elements.simulationPurposeZoneNames.closest("label")?.classList.toggle("disabled", !selectedMode);
+  }
+  renderSimulationRunPlanPreview();
+}
+
+function renderSimulationRunPlanPreview() {
+  if (!elements.simulationRunPlan) {
+    return;
+  }
+  const plan = state.simulationPurposePlan;
+  const hasText = Boolean((elements.idfInput?.value || "").trim());
+  if (state.simulationPurposePlanLoading) {
+    elements.simulationRunPlanStats.textContent = t("simulation.planLoading", {}, "Building plan");
+    elements.simulationRunPlan.innerHTML = `<div class="empty status-loading">${escapeHTML(t("simulation.planLoadingDetail", {}, "Checking current IDF outputs and purpose presets."))}</div>`;
+    updatePurposeApplyButton();
+    return;
+  }
+  if (state.simulationPurposePlanError) {
+    elements.simulationRunPlanStats.textContent = t("simulation.planError", {}, "Plan unavailable");
+    elements.simulationRunPlan.innerHTML = `<div class="simulation-error">${escapeHTML(state.simulationPurposePlanError)}</div>`;
+    updatePurposeApplyButton();
+    return;
+  }
+  if (!hasText) {
+    elements.simulationRunPlanStats.textContent = t("simulation.planPending", {}, "Plan pending");
+    elements.simulationRunPlan.innerHTML = `<div class="empty">${escapeHTML(t("simulation.planNeedsInput", {}, "Run plan will appear after an input is available."))}</div>`;
+    updatePurposeApplyButton();
+    return;
+  }
+  if (!plan) {
+    elements.simulationRunPlanStats.textContent = t("simulation.planPending", {}, "Plan pending");
+    elements.simulationRunPlan.innerHTML = `<div class="empty">${escapeHTML(t("simulation.planWillBuild", {}, "Run plan will build automatically."))}</div>`;
+    updatePurposeApplyButton();
+    return;
+  }
+  const objects = plan.outputObjects || [];
+  const warnings = plan.warnings || [];
+  elements.simulationRunPlanStats.textContent = t(
+    "simulation.planStats",
+    { count: objects.length, weight: plan.estimatedWeight || "Light" },
+    `${objects.length} outputs - ${plan.estimatedWeight || "Light"}`,
+  );
+  const warningHTML = warnings.length
+    ? `<div class="simulation-plan-warnings">${warnings
+        .map((warning) => `<span class="${escapeHTML(warning.severity || "info")}">${escapeHTML(warning.message || warning.code || "")}</span>`)
+        .join("")}</div>`
+    : "";
+  const rows = objects
+    .slice(0, 80)
+    .map((object) => {
+      const key = object.keyValue || outputFieldValue(object.fields, "Option Type", "Report 1 Name", "Key 1", "Column Separator") || "-";
+      return `
+        <tr>
+          <td>${escapeHTML(object.objectType || "")}</td>
+          <td>${escapeHTML(key)}</td>
+          <td>${escapeHTML(object.variableName || "")}</td>
+          <td>${escapeHTML(object.reportingFrequency || "")}</td>
+          <td>${escapeHTML((object.purposeIds || []).map(purposeLabel).join(", "))}</td>
+          <td><span class="simulation-output-state ${escapeHTML(object.state || "")}">${escapeHTML(outputStateLabel(object.state))}</span></td>
+          <td>${escapeHTML(object.weight || "light")}</td>
+        </tr>`;
+    })
+    .join("");
+  const truncated = objects.length > 80 ? `<div class="tool-muted">${escapeHTML(t("simulation.planTruncated", { count: objects.length - 80 }, `${objects.length - 80} more outputs hidden.`))}</div>` : "";
+  elements.simulationRunPlan.innerHTML = `
+    <div class="simulation-plan-summary">
+      <span>${escapeHTML(t("simulation.estimatedSeries", { count: plan.estimatedSeries || 0 }, `${plan.estimatedSeries || 0} series`))}</span>
+      <span>${escapeHTML(t("simulation.estimatedFrames", { count: plan.estimatedFrames || 0 }, `${plan.estimatedFrames || 0} frames`))}</span>
+      <span>${escapeHTML(plan.requiresSQL ? t("simulation.sqlPrimary", {}, "SQL primary") : t("simulation.sqlOptional", {}, "SQL optional"))}</span>
+    </div>
+    ${warningHTML}
+    <div class="output-table-wrap">
+      <table class="output-table simulation-plan-table">
+        <thead><tr><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.frequency", {}, "Frequency"))}</th><th>${escapeHTML(t("simulation.purpose", {}, "Purpose"))}</th><th>${escapeHTML(t("common.status", {}, "Status"))}</th><th>${escapeHTML(t("simulation.weight", {}, "Weight"))}</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="7">${escapeHTML(t("simulation.noPlanOutputs", {}, "No output objects selected."))}</td></tr>`}</tbody>
+      </table>
+    </div>
+    ${truncated}`;
+  updatePurposeApplyButton();
+}
+
+function scheduleSimulationRunPlan(delay = 260) {
+  window.clearTimeout(simulationRunPlanTimer);
+  simulationRunPlanTimer = window.setTimeout(() => refreshSimulationRunPlan(), delay);
+}
+
+async function refreshSimulationRunPlan({ force = false } = {}) {
+  if (!elements.simulationRunPlan) {
+    return null;
+  }
+  const text = elements.idfInput?.value || "";
+  if (!text.trim()) {
+    state.simulationPurposePlan = null;
+    state.simulationPurposePlanKey = "";
+    state.simulationPurposePlanError = "";
+    state.simulationPurposePlanLoading = false;
+    renderSimulationRunPlanPreview();
+    return null;
+  }
+  const purposeRequest = buildSimulationPurposeRequest();
+  const key = `${hashString(text)}:${JSON.stringify(purposeRequest)}`;
+  if (!force && key === state.simulationPurposePlanKey && (state.simulationPurposePlan || state.simulationPurposePlanLoading)) {
+    return state.simulationPurposePlan;
+  }
+  const sequence = ++simulationRunPlanSequence;
+  state.simulationPurposePlanKey = key;
+  state.simulationPurposePlanLoading = true;
+  state.simulationPurposePlanError = "";
+  renderSimulationRunPlanPreview();
+  try {
+    const plan = await callSimulationAPI("BuildSimulationRunPlan", "/api/simulation-run-plan", {
+      text,
+      inputPath: state.currentFilePath || "",
+      filename: state.currentFilename || "current-input.idf",
+      purposeRequest,
+    });
+    if (sequence !== simulationRunPlanSequence) {
+      return plan;
+    }
+    state.simulationPurposePlan = plan;
+    state.simulationPurposePlanError = "";
+    return plan;
+  } catch (error) {
+    if (sequence === simulationRunPlanSequence) {
+      state.simulationPurposePlan = null;
+      state.simulationPurposePlanError = error?.message || String(error);
+    }
+    return null;
+  } finally {
+    if (sequence === simulationRunPlanSequence) {
+      state.simulationPurposePlanLoading = false;
+      renderSimulationRunPlanPreview();
+    }
+  }
+}
+
+async function applyPurposeOutputsToCurrentIDF() {
+  const text = elements.idfInput?.value || "";
+  if (!text.trim() || state.simulationRunning) {
+    return;
+  }
+  try {
+    elements.simulationApplyPurposeOutputs.disabled = true;
+    setStatus(t("simulation.applyingPurposeOutputs", {}, "Applying purpose outputs"), "loading");
+    const purposeRequest = buildSimulationPurposeRequest();
+    const api = backend();
+    let result;
+    if (api && typeof api.ApplyPurposeOutputsText === "function") {
+      result = await api.ApplyPurposeOutputsText(text, purposeRequest);
+    } else {
+      const response = await fetch("/api/simulation-purpose-outputs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, purpose: purposeRequest }),
+      });
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+      result = await response.json();
+    }
+    window.dispatchEvent(new CustomEvent("idfAnalyzer:outputApplied", { detail: result }));
+    scheduleSimulationRunPlan(0);
+  } catch (error) {
+    setStatus(error?.message || String(error), "error");
+  } finally {
+    updatePurposeApplyButton();
+  }
+}
+
+function updatePurposeApplyButton() {
+  if (!elements.simulationApplyPurposeOutputs) {
+    return;
+  }
+  const hasText = Boolean((elements.idfInput?.value || "").trim());
+  const plan = state.simulationPurposePlan;
+  const hasTemporaryOutputs = (plan?.outputObjects || []).some((object) => object.state !== "existing");
+  elements.simulationApplyPurposeOutputs.disabled = state.simulationRunning || state.simulationPurposePlanLoading || !hasText || !plan || !hasTemporaryOutputs;
+  elements.simulationApplyPurposeOutputs.title = hasTemporaryOutputs
+    ? t("simulation.makePurposeOutputsPermanent", {}, "Make outputs permanent")
+    : t("simulation.noTemporaryOutputs", {}, "No temporary purpose outputs need to be applied.");
+}
+
+function buildSimulationPurposeRequest() {
+  return {
+    purposes: selectedSimulationPurposes(),
+    scope: {
+      zoneMode: elements.simulationPurposeZoneMode?.value || "all",
+      zoneNames: parseCommaList(elements.simulationPurposeZoneNames?.value || ""),
+    },
+    frequencyPolicy: elements.simulationPurposeFrequencyPolicy?.value || "purpose_default",
+    sqlMode: "sql_first",
+    persistOutputs: Boolean(elements.simulationPersistOutputs?.checked),
+    discoveryAllowed: false,
+  };
+}
+
+function selectedSimulationPurposes() {
+  if (elements.simulationPurposeInputs?.length) {
+    syncSimulationPurposeStateFromControls();
+  }
+  return state.simulationSelectedPurposes.length ? [...state.simulationSelectedPurposes] : ["basic_energy"];
+}
+
+function syncSimulationPurposeStateFromControls() {
+  const selected = [];
+  elements.simulationPurposeInputs?.forEach((input) => {
+    if (input.checked) {
+      selected.push(input.dataset.simulationPurpose);
+    }
+  });
+  state.simulationSelectedPurposes = selected.length ? selected : ["basic_energy"];
+}
+
+function syncSimulationPurposeInputsFromState() {
+  elements.simulationPurposeInputs?.forEach((input) => {
+    input.checked = state.simulationSelectedPurposes.includes(input.dataset.simulationPurpose);
+    input.closest(".simulation-purpose-card")?.classList.toggle("selected", input.checked);
+  });
+}
+
+function parseCommaList(value) {
+  const seen = new Set();
+  const out = [];
+  String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .forEach((item) => {
+      const key = item.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    });
+  return out;
+}
+
+function purposeLabel(value) {
+  const id = String(value || "");
+  const found = simulationPurposeDefinitions.find((item) => item.id === id);
+  return found ? found.label : id;
+}
+
+function outputStateLabel(value) {
+  switch (value) {
+    case "existing":
+      return t("simulation.outputExisting", {}, "Already in IDF");
+    case "temporary":
+      return t("simulation.outputTemporary", {}, "Temporary");
+    case "will_be_persisted":
+      return t("simulation.outputWillPersist", {}, "Will persist");
+    case "conflict":
+      return t("simulation.outputConflict", {}, "Conflict");
+    default:
+      return value || "";
+  }
+}
+
+function outputFieldValue(fields = [], ...names) {
+  const wanted = new Set(names.map((name) => String(name || "").toLowerCase()));
+  const found = fields.find((field) => wanted.has(String(field.name || "").toLowerCase()));
+  return found?.value || "";
+}
+
 function setSimulationPreviewMode(preview) {
   elements.simulationResultSummary?.closest(".simulation-pane")?.classList.toggle("preview", Boolean(preview));
 }
 
 function updateSimulationOutputAvailability(blockingIssue, running) {
-  const standardOn = state.simulationStandardOutput !== false && Boolean(elements.simulationStandardOutput?.checked);
+  const purposes = selectedSimulationPurposes();
+  const heatFlowOn = purposes.includes("zone_heat_flow");
+  const seriesOn = purposes.length > 0;
   const blocked = Boolean(blockingIssue);
   if (elements.simulationResultMeta) {
     elements.simulationResultMeta.textContent = running
@@ -197,16 +507,16 @@ function updateSimulationOutputAvailability(blockingIssue, running) {
   if (elements.simulationHeatFlowStats) {
     elements.simulationHeatFlowStats.textContent = blocked
       ? t("simulation.outputBlockedShort", {}, "Unavailable until run is possible")
-      : standardOn
-        ? t("simulation.heatFlowAvailable", {}, "Standard outputs ON: SQL heat-flow ledger will be available after this run.")
-        : t("simulation.heatFlowUnavailableStandardOff", {}, "Standard outputs OFF: running now will not show the heat-flow ledger.");
+      : heatFlowOn
+        ? t("simulation.heatFlowAvailable", {}, "Zone Heat Flow selected: SQL heat-flow ledger will be available after this run.")
+        : t("simulation.heatFlowUnavailableStandardOff", {}, "Zone Heat Flow is not selected for this run.");
   }
   if (elements.simulationSeriesStats) {
     elements.simulationSeriesStats.textContent = blocked
       ? t("simulation.outputBlockedShort", {}, "Unavailable until run is possible")
-      : standardOn
-        ? t("simulation.seriesAvailable", {}, "Standard outputs ON: SQL/CSV time-series graph will be available after this run.")
-        : t("simulation.seriesMaybeUnavailableStandardOff", {}, "Standard outputs OFF: graph depends on existing output requests.");
+      : seriesOn
+        ? t("simulation.seriesAvailable", {}, "Purpose outputs selected: SQL/CSV time-series graph will be available after this run.")
+        : t("simulation.seriesMaybeUnavailableStandardOff", {}, "No purpose outputs are selected; graph depends on existing output requests.");
   }
   if (elements.simulationFilesStats) {
     elements.simulationFilesStats.textContent = blocked
@@ -295,7 +605,7 @@ function updateSimulationControls() {
           ? t("simulation.noInputText", {}, "Open or paste an IDF before running simulation")
           : "";
     elements.simulationRunButton.disabled = state.simulationRunning || !hasText || !hasInstall || Boolean(blockingIssue);
-    elements.simulationRunButton.textContent = state.simulationRunning ? t("simulation.runningShort", {}, "Running") : t("action.runSimulation", {}, "Run Simulation");
+    elements.simulationRunButton.textContent = state.simulationRunning ? t("simulation.runningShort", {}, "Running") : t("action.runSimulation", {}, "Run & Inspect");
     elements.simulationRunButton.classList.toggle("status-loading", state.simulationRunning);
     elements.simulationRunButton.title = state.simulationRunning
       ? t("simulation.backgroundRun", {}, "EnergyPlus is running in the background")
@@ -313,6 +623,15 @@ function updateSimulationControls() {
   if (elements.simulationWeatherSelect) {
     elements.simulationWeatherSelect.disabled = state.simulationRunning;
   }
+  if (elements.simulationRefreshPlan) {
+    elements.simulationRefreshPlan.disabled = state.simulationRunning || !hasText;
+  }
+  if (elements.simulationPurposeInputs?.length) {
+    elements.simulationPurposeInputs.forEach((input) => {
+      input.disabled = state.simulationRunning;
+    });
+  }
+  updatePurposeApplyButton();
 }
 
 function simulationVersionIssue() {
@@ -1773,6 +2092,7 @@ async function runCurrentSimulation({ silent = false, auto = false } = {}) {
   if (!silent) {
     setStatus(t("simulation.running", {}, "EnergyPlus simulation is running"), "loading");
   }
+  const purposeRequest = buildSimulationPurposeRequest();
   const request = {
     runId: runID,
     text,
@@ -1780,17 +2100,20 @@ async function runCurrentSimulation({ silent = false, auto = false } = {}) {
     filename: state.currentFilename || "current-input.idf",
     energyPlusExecutablePath: installPath,
     weatherPath: elements.simulationWeatherSelect?.value || "",
-    standardOutput: Boolean(elements.simulationStandardOutput?.checked),
-    standardOutputMode: "replace",
+    standardOutput: false,
+    purposeRequest,
+    resultMode: "sql_first",
+    useReadVarsESO: false,
     silent,
     auto,
   };
   try {
-    const result = await callSimulationAPI("RunSimulationText", "/api/simulation-run", request);
+    const result = await callSimulationAPI("RunPurposeSimulationText", "/api/simulation-run", request);
     if (state.simulationActiveRunID !== runID) {
       return result;
     }
     state.simulationResult = result;
+    state.simulationPurposePlan = result?.purposeRunPlan || state.simulationPurposePlan;
     state.simulationRunning = false;
     state.simulationStale = state.simulationRunText !== (elements.idfInput?.value || "");
     state.simulationSeriesRangeStart = 0;
