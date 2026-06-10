@@ -405,9 +405,35 @@ func TestWritePurposeRunArtifacts(t *testing.T) {
 	}
 }
 
+func TestReadSimulationOutputsEmitsDetailedProgressPhases(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "eplusout.err"), []byte("EnergyPlus Completed Successfully"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var phases []string
+	result := &SimulationRunResult{OutputDirectory: dir}
+
+	readSimulationOutputsWithProgress(result, "sim-progress", func(progress SimulationProgress) {
+		phases = append(phases, progress.Phase)
+	}, "")
+
+	if !stringSliceContains(phases, "parse_sql") || !stringSliceContains(phases, "parse_fallback") {
+		t.Fatalf("progress phases = %#v", phases)
+	}
+}
+
 func simulationResultHasFileKind(files []SimulationFileInfo, kind string) bool {
 	for _, file := range files {
 		if file.Kind == kind {
+			return true
+		}
+	}
+	return false
+}
+
+func stringSliceContains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
 			return true
 		}
 	}

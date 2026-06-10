@@ -28,6 +28,7 @@ const (
 	maxCSVSeriesColumns             = 16
 	maxCSVSeriesPoints              = 1200
 	maxCapturedOutputBytes          = 16000
+	simulationProgressTotal         = 9
 )
 
 type SimulationEnvironment struct {
@@ -659,7 +660,7 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		StartedAt:                started.Format(time.RFC3339),
 		ExitCode:                 -1,
 	}
-	emitSimulationProgress(progress, request.RunID, "prepare", "running", "Preparing EnergyPlus run", 0, 4, result.InputPath)
+	emitSimulationProgress(progress, request.RunID, "prepare", "running", "Preparing EnergyPlus run", 0, simulationProgressTotal, result.InputPath)
 
 	if result.EnergyPlusExecutablePath == "" {
 		installations := AutoDetectEnergyPlusInstallations()
@@ -671,14 +672,14 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		result.Status = "missing_energyplus"
 		result.Error = "EnergyPlus executable is not configured."
 		finishSimulationResult(result, started)
-		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, 4, 4, result.InputPath)
+		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, simulationProgressTotal, simulationProgressTotal, result.InputPath)
 		return result, nil
 	}
 	if _, err := os.Stat(result.EnergyPlusExecutablePath); err != nil {
 		result.Status = "missing_energyplus"
 		result.Error = fmt.Sprintf("EnergyPlus executable was not found: %s", result.EnergyPlusExecutablePath)
 		finishSimulationResult(result, started)
-		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, 4, 4, result.InputPath)
+		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, simulationProgressTotal, simulationProgressTotal, result.InputPath)
 		return result, nil
 	}
 
@@ -691,6 +692,10 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		return nil, err
 	}
 	writePurposeRunArtifacts(outputDir, request)
+	if request.PurposeRunPlan != nil {
+		emitSimulationProgress(progress, request.RunID, "discovery", "running", "Checking purpose output discovery", 1, simulationProgressTotal, result.InputPath)
+		emitSimulationProgress(progress, request.RunID, "plan", "running", "Purpose output plan ready", 2, simulationProgressTotal, result.InputPath)
+	}
 
 	inputPath := strings.TrimSpace(request.InputPath)
 	if strings.TrimSpace(request.Text) != "" {
@@ -703,14 +708,17 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		result.Status = "failed"
 		result.Error = "Simulation needs either input text or an input path."
 		finishSimulationResult(result, started)
-		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, 4, 4, result.InputPath)
+		emitSimulationProgress(progress, request.RunID, "complete", result.Status, result.Error, simulationProgressTotal, simulationProgressTotal, result.InputPath)
 		return result, nil
 	}
 	if result.Filename == "" {
 		result.Filename = filepath.Base(inputPath)
 	}
+	if request.PurposeRunPlan != nil {
+		emitSimulationProgress(progress, request.RunID, "apply_temporary_outputs", "running", "Temporary purpose outputs applied to run copy", 3, simulationProgressTotal, result.InputPath)
+	}
 
-	emitSimulationProgress(progress, request.RunID, "execute", "running", "EnergyPlus is running", 1, 4, result.InputPath)
+	emitSimulationProgress(progress, request.RunID, "execute", "running", "EnergyPlus is running", 4, simulationProgressTotal, result.InputPath)
 	args := []string{"-d", outputDir, "-p", "eplus"}
 	if simulationUsesReadVarsESO(request) {
 		args = append(args, "-r")
@@ -729,12 +737,12 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 		result.Error = runErr.Error()
 	}
 
-	emitSimulationProgress(progress, request.RunID, "parse", "running", "Reading simulation output", 3, 4, result.InputPath)
-	readSimulationOutputs(result)
+	readSimulationOutputsWithProgress(result, request.RunID, progress, result.InputPath)
 	if request.PurposeRunPlan != nil {
 		result.PurposeRunPlan = request.PurposeRunPlan
 	}
 	if request.PurposeRequest != nil {
+		emitSimulationProgress(progress, request.RunID, "build_purpose_results", "running", "Building purpose result bundle", 8, simulationProgressTotal, result.InputPath)
 		bundle := BuildPurposeResultBundle(result, *request.PurposeRequest)
 		result.PurposeResults = &bundle
 	}
@@ -745,7 +753,7 @@ func RunSimulation(request SimulationRunRequest, progress func(SimulationProgres
 	}
 	finishSimulationResult(result, started)
 	writeSimulationRunManifest(result, request)
-	emitSimulationProgress(progress, request.RunID, "complete", result.Status, simulationCompletionMessage(result), 4, 4, result.InputPath)
+	emitSimulationProgress(progress, request.RunID, "complete", result.Status, simulationCompletionMessage(result), simulationProgressTotal, simulationProgressTotal, result.InputPath)
 	return result, nil
 }
 
@@ -1012,12 +1020,18 @@ func copyLimited(builder *strings.Builder, reader io.Reader, limit int) {
 }
 
 func readSimulationOutputs(result *SimulationRunResult) {
+	readSimulationOutputsWithProgress(result, "", nil, "")
+}
+
+func readSimulationOutputsWithProgress(result *SimulationRunResult, runID string, progress func(SimulationProgress), path string) {
 	result.Files = collectSimulationFiles(result.OutputDirectory)
 	parseERR(result)
 	sort.Slice(result.Files, func(i, j int) bool {
 		return strings.ToLower(result.Files[i].Name) < strings.ToLower(result.Files[j].Name)
 	})
+	emitSimulationProgress(progress, runID, "parse_sql", "running", "Reading SQL results", 6, simulationProgressTotal, path)
 	parseSQLResults(result)
+	emitSimulationProgress(progress, runID, "parse_fallback", "running", "Reading CSV and ESO fallback results", 7, simulationProgressTotal, path)
 	parseCSVResults(result)
 	parseHeatFlowFallback(result)
 }
