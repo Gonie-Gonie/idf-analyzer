@@ -10,13 +10,14 @@ if (status) {
   status.textContent = t("status.loadingInterface");
 }
 
-function boot() {
-  import("./js/main.js").catch((error) => {
-    if (status) {
-      status.textContent = error?.message || String(error);
-      status.style.color = "#b3261e";
-    }
-  });
+function showStartupError(error) {
+  if (!status) {
+    return;
+  }
+  status.textContent = error?.message || String(error);
+  status.style.color = "#b3261e";
+  status.classList.remove("status-loading");
 }
 
-window.setTimeout(boot, 0);
+window.addEventListener("error", (event) => showStartupError(event.error || event.message));
+window.addEventListener("unhandledrejection", (event) => showStartupError(event.reason || event));
