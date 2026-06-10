@@ -70,6 +70,7 @@ export function initializeSimulationControls() {
     });
   });
   elements.simulationEnergyDashboard?.addEventListener("click", handleSimulationSeriesInspectClick);
+  elements.simulationEnergyDashboard?.addEventListener("change", handleSimulationEnergyDashboardChange);
   elements.simulationHVACLoopResults?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationComfortResults?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationExportPurposeJSON?.addEventListener("click", () => exportPurposeResultJSON());
@@ -906,27 +907,44 @@ function renderZoneEnergyMatrix(zones) {
   if (!zones.length || !frames.length) {
     return "";
   }
-  const rows = zones
+  const metricOptions = zoneEnergyMetricOptions(zones);
+  const selectedMetric = metricOptions.some((option) => option.value === state.simulationZoneEnergyMetric)
+    ? state.simulationZoneEnergyMetric
+    : metricOptions[0]?.value || "__total";
+  state.simulationZoneEnergyMetric = selectedMetric;
+  const rows = zoneEnergyMatrixRows(zones, frames, selectedMetric)
     .slice()
     .sort((a, b) => Math.abs(Number(b.total) || 0) - Math.abs(Number(a.total) || 0))
     .slice(0, 24);
-  const maxValue = Math.max(...rows.flatMap((row) => frames.map((frame) => Math.abs(energyPointValue(row, frame.key)))), 1);
+  if (!rows.length) {
+    return "";
+  }
+  const maxValue = Math.max(...rows.flatMap((row) => frames.map((frame) => Math.abs(row.values.get(frame.key) || 0))), 1);
   const header = frames.map((frame) => `<th>${escapeHTML(frame.label)}</th>`).join("");
+  const options = metricOptions
+    .map((option) => `<option value="${escapeHTML(option.value)}" ${option.value === selectedMetric ? "selected" : ""}>${escapeHTML(option.label)}</option>`)
+    .join("");
   const body = rows
     .map((row) => {
       const cells = frames
         .map((frame) => {
-          const value = energyPointValue(row, frame.key);
+          const value = row.values.get(frame.key) || 0;
           const alpha = Math.min(0.82, Math.max(0.08, Math.abs(value) / maxValue));
-          return `<td><span style="background:rgba(15,118,110,${alpha})" title="${escapeHTML(formatEnergyValue(value, row.unit || ""))}"></span></td>`;
+          return `<td><span style="background:rgba(15,118,110,${alpha})" title="${escapeHTML(zoneEnergyCellTitle(row, frame, value))}"></span></td>`;
         })
         .join("");
-      return `<tr><th>${escapeHTML(`${row.zoneName || ""} / ${row.metric || ""}`)}</th>${cells}</tr>`;
+      return `<tr><th title="${escapeHTML(zoneEnergyRowTitle(row))}">${escapeHTML(row.zoneName || "")}</th>${cells}</tr>`;
     })
     .join("");
   return `
     <section class="simulation-energy-block">
-      <h4>${escapeHTML(t("simulation.zoneEnergyMatrix", {}, "Zone energy matrix"))}</h4>
+      <div class="simulation-energy-block-head">
+        <h4>${escapeHTML(t("simulation.zoneReportedEnergyMatrix", {}, "Zone reported energy matrix"))}</h4>
+        <label>
+          <span>${escapeHTML(t("common.metric", {}, "Metric"))}</span>
+          <select data-simulation-zone-energy-metric>${options}</select>
+        </label>
+      </div>
       <div class="simulation-zone-energy-matrix">
         <table>
           <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th>${header}</tr></thead>
@@ -945,7 +963,7 @@ function renderZoneEnergyTable(zones) {
       (item) => `
         <tr>
           <td>${escapeHTML(item.zoneName || "")}</td>
-          <td>${escapeHTML(item.metric || "")}</td>
+          <td title="${escapeHTML(zoneEnergySourceTitle(item))}">${escapeHTML(item.metric || "")}</td>
           <td>${escapeHTML(formatEnergyValue(Number(item.total) || 0, item.unit || ""))}</td>
           <td>${escapeHTML(item.source || "")}</td>
           <td>${renderSourceInspectorCell(sourceOutputForVariable(item.zoneName, item.metric), { keyValue: item.zoneName, variableName: item.metric })}</td>
@@ -962,6 +980,78 @@ function renderZoneEnergyTable(zones) {
         </table>
       </div>
     </section>`;
+}
+
+function zoneEnergyMetricOptions(zones) {
+  const metrics = [...new Set((zones || []).map((zone) => String(zone.metric || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  return [
+    { value: "__total", label: t("simulation.totalReportedEnergy", {}, "Total reported") },
+    ...metrics.map((metric) => ({ value: metric, label: metric })),
+  ];
+}
+
+function zoneEnergyMatrixRows(zones, frames, selectedMetric) {
+  const byZone = new Map();
+  for (const item of zones || []) {
+    const metric = String(item.metric || "").trim();
+    if (!metric || (selectedMetric !== "__total" && metric !== selectedMetric)) {
+      continue;
+    }
+    const zoneName = String(item.zoneName || t("common.unknown", {}, "Unknown")).trim();
+    const row = byZone.get(zoneName) || {
+      zoneName,
+      metricLabel: selectedMetric === "__total" ? t("simulation.totalReportedEnergy", {}, "Total reported") : selectedMetric,
+      variables: new Set(),
+      sources: new Set(),
+      units: new Set(),
+      values: new Map(frames.map((frame) => [frame.key, 0])),
+      total: 0,
+    };
+    row.variables.add(metric);
+    if (item.source) {
+      row.sources.add(item.source);
+    }
+    if (item.unit) {
+      row.units.add(item.unit);
+    }
+    row.total += Number(item.total) || 0;
+    for (const frame of frames) {
+      row.values.set(frame.key, (row.values.get(frame.key) || 0) + energyPointValue(item, frame.key));
+    }
+    byZone.set(zoneName, row);
+  }
+  return [...byZone.values()].map((row) => ({
+    ...row,
+    variables: [...row.variables].sort((a, b) => a.localeCompare(b)),
+    sources: [...row.sources].sort((a, b) => a.localeCompare(b)),
+    unit: row.units.size === 1 ? [...row.units][0] : "",
+  }));
+}
+
+function zoneEnergyCellTitle(row, frame, value) {
+  return [
+    `${row.zoneName || ""} - ${row.metricLabel || ""}`,
+    `${frame.label}: ${formatEnergyValue(value, row.unit || "")}`,
+    zoneEnergySourceLine(row.variables),
+    row.sources.length ? `${t("common.source", {}, "Source")}: ${row.sources.join(", ")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function zoneEnergyRowTitle(row) {
+  return [row.metricLabel || "", zoneEnergySourceLine(row.variables), row.sources.length ? `${t("common.source", {}, "Source")}: ${row.sources.join(", ")}` : ""]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function zoneEnergySourceTitle(item) {
+  return [zoneEnergySourceLine([item.metric]), item.source ? `${t("common.source", {}, "Source")}: ${item.source}` : ""].filter(Boolean).join("\n");
+}
+
+function zoneEnergySourceLine(variables) {
+  const names = (variables || []).map((value) => String(value || "").trim()).filter(Boolean);
+  return names.length ? `${t("simulation.sourceVariables", {}, "Source variables")}: ${names.join(", ")}` : "";
 }
 
 function formatEnergyValue(value, unit) {
@@ -1069,6 +1159,18 @@ function handleSimulationSeriesInspectClick(event) {
     return;
   }
   selectSimulationSeries(series);
+}
+
+function handleSimulationEnergyDashboardChange(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const select = event.target.closest("[data-simulation-zone-energy-metric]");
+  if (!select) {
+    return;
+  }
+  state.simulationZoneEnergyMetric = select.value || "__total";
+  renderSimulationEnergyDashboard(state.simulationResult);
 }
 
 function selectSimulationSeries(series) {

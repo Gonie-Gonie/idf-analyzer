@@ -65,6 +65,7 @@ export const state = {
   simulationOutputDiscoveryError: "",
   simulationOutputDiscoveryQuery: "",
   simulationActiveResultView: "energy",
+  simulationZoneEnergyMetric: "__total",
   simulationAutoStartedKey: "",
   profileGraphViewMode: "",
   profileGraphScaleMode: "auto",

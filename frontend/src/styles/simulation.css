@@ -789,9 +789,36 @@
   gap: 7px;
 }
 
+.simulation-energy-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
 .simulation-energy-block h4 {
   margin: 0;
   font-size: 13px;
+}
+
+.simulation-energy-block-head label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.simulation-energy-block-head select {
+  max-width: min(360px, 62vw);
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
 }
 
 .simulation-hvac-loop-results {
