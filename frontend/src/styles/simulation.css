@@ -1024,6 +1024,10 @@
   font-size: 11px;
 }
 
+#simulationIntegrityFilter {
+  max-width: min(360px, 42vw);
+}
+
 .simulation-severity {
   text-transform: capitalize;
 }

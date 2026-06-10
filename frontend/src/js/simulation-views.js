@@ -69,6 +69,12 @@ export function initializeSimulationControls() {
       toggleSimulationResultSections();
     });
   });
+  elements.simulationIntegrityFilter?.addEventListener("input", () => {
+    state.simulationIntegrityQuery = elements.simulationIntegrityFilter.value || "";
+    if (state.simulationResult && elements.simulationResultSummary) {
+      elements.simulationResultSummary.innerHTML = `${state.simulationRunning ? renderRunningNotice() : ""}${renderSimulationSummary(state.simulationResult, state.simulationStale)}`;
+    }
+  });
   elements.simulationEnergyDashboard?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationEnergyDashboard?.addEventListener("change", handleSimulationEnergyDashboardChange);
   elements.simulationHVACLoopResults?.addEventListener("click", handleSimulationSeriesInspectClick);
@@ -206,6 +212,9 @@ export function renderSimulation() {
     elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
   }
   elements.simulationResultMeta.textContent = `${result.filename || "current input"} - ${formatDuration(result.durationMs || 0)} - ${sqlCount} SQL - ${csvCount} CSV - ${issueCount} ERR issues`;
+  if (elements.simulationIntegrityFilter && elements.simulationIntegrityFilter.value !== state.simulationIntegrityQuery) {
+    elements.simulationIntegrityFilter.value = state.simulationIntegrityQuery || "";
+  }
   elements.simulationResultSummary.innerHTML = `${state.simulationRunning ? renderRunningNotice() : ""}${renderSimulationSummary(result, stale)}`;
   renderSimulationEnergyDashboard(result);
   renderSimulationHVACLoops(result);
@@ -2214,7 +2223,12 @@ function renderIntegritySQLDetails(sqlIssues = [], tabularReports = []) {
   if (!sqlIssues.length && !tabularReports.length) {
     return "";
   }
-  const sqlRows = sqlIssues
+  const query = normalizeOutputMatchToken(state.simulationIntegrityQuery);
+  const filteredSQLIssues = query ? sqlIssues.filter((issue) => integritySQLIssueMatches(issue, query)) : sqlIssues;
+  const filteredReports = query
+    ? tabularReports.map((report) => filterIntegrityTabularReport(report, query)).filter(Boolean)
+    : tabularReports;
+  const sqlRows = filteredSQLIssues
     .slice(0, 24)
     .map(
       (issue) => `
@@ -2228,7 +2242,7 @@ function renderIntegritySQLDetails(sqlIssues = [], tabularReports = []) {
     .join("");
   const issueSection = `
     <section>
-      <h4>${escapeHTML(t("simulation.sqlDiagnostics", {}, "SQL diagnostics"))}</h4>
+      <h4>${escapeHTML(integrityFilteredTitle(t("simulation.sqlDiagnostics", {}, "SQL diagnostics"), filteredSQLIssues.length, sqlIssues.length, query))}</h4>
       <div class="output-table-wrap">
         <table class="output-table">
           <thead><tr><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.message", {}, "Message"))}</th><th>${escapeHTML(t("common.count", {}, "Count"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr></thead>
@@ -2236,17 +2250,41 @@ function renderIntegritySQLDetails(sqlIssues = [], tabularReports = []) {
         </table>
       </div>
     </section>`;
-  const reportSections = tabularReports.length
-    ? `<div class="simulation-tabular-reports">${tabularReports.slice(0, 6).map(renderIntegrityTabularReport).join("")}</div>`
+  const reportSections = filteredReports.length
+    ? `<div class="simulation-tabular-reports">${filteredReports.slice(0, 6).map(renderIntegrityTabularReport).join("")}</div>`
     : `<div class="empty">${escapeHTML(t("simulation.noTabularReports", {}, "No SQL tabular reports were found."))}</div>`;
   return `
     <div class="simulation-integrity-sql">
       ${issueSection}
       <section>
-        <h4>${escapeHTML(t("simulation.tabularReports", {}, "Tabular reports"))}</h4>
+        <h4>${escapeHTML(integrityFilteredTitle(t("simulation.tabularReports", {}, "Tabular reports"), filteredReports.length, tabularReports.length, query))}</h4>
         ${reportSections}
       </section>
     </div>`;
+}
+
+function integrityFilteredTitle(title, shown, total, query) {
+  return query ? `${title} (${shown}/${total})` : title;
+}
+
+function integritySQLIssueMatches(issue, query) {
+  return normalizeOutputMatchToken([issue.severity, issue.message, issue.count, issue.source].filter(Boolean).join(" ")).includes(query);
+}
+
+function filterIntegrityTabularReport(report, query) {
+  const reportText = normalizeOutputMatchToken([report.reportName, report.for, report.tableName, report.source, ...(report.columns || [])].filter(Boolean).join(" "));
+  if (reportText.includes(query)) {
+    return report;
+  }
+  const rows = (report.rows || []).filter((row) => integrityTabularRowMatches(row, query));
+  if (!rows.length) {
+    return null;
+  }
+  return { ...report, rows };
+}
+
+function integrityTabularRowMatches(row, query) {
+  return normalizeOutputMatchToken([row.name, ...Object.values(row.values || {})].filter(Boolean).join(" ")).includes(query);
 }
 
 function renderIntegrityTabularReport(report) {

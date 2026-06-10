@@ -60,6 +60,7 @@ The release script infers bump size from these sections:
 - Purpose run planning now applies `preserve`, `highest_resolution`, and `purpose_default` frequency conflict policies instead of only flagging conflicts.
 - Purpose run-plan estimates now use IDF `RunPeriod` and `Timestep` objects so short-run and timestep-heavy simulations show more realistic frame counts.
 - Integrity purpose results now read SQL `Errors` and `TabularDataWithStrings` diagnostics and preview key tabular reports alongside ERR output.
+- Integrity results now include a filter for SQL diagnostics and tabular report names, columns, rows, and values.
 - HVAC Loop Check planning now uses selected air/plant/condenser loop names to request node-specific outputs instead of wildcard node variables when loop scope is available.
 - HVAC Loop Check results now group SQL/CSV system-node state series into a dedicated HVAC Loops tab with per-variable completeness badges.
 - Comfort Check now has purpose-scoped zone outputs, a comfort result bundle, and a dedicated Comfort tab for temperature, setpoint, PMV, and PPD series summaries.
