@@ -131,6 +131,18 @@ func TestAnalyzeHVACBuildsLoopAndZoneRelations(t *testing.T) {
 	if !stringSliceContainsFold(relation.PlantLoopNames, "Chilled Water Loop") {
 		t.Fatalf("plant loop names = %#v, want Chilled Water Loop", relation.PlantLoopNames)
 	}
+	if relation.RelationSource != "cross_confirmed" || relation.Confidence != "high" {
+		t.Fatalf("relation evidence = source %q confidence %q, want cross_confirmed/high", relation.RelationSource, relation.Confidence)
+	}
+	if len(relation.AirLoopRelations) != 1 || relation.AirLoopRelations[0].Confidence != "high" {
+		t.Fatalf("air loop relations = %#v, want high-confidence relation", relation.AirLoopRelations)
+	}
+	if len(relation.TerminalUnits) != 1 || !relation.TerminalUnits[0].InletOnAirLoopDemand || !relation.TerminalUnits[0].OutletMatchesZoneInlet {
+		t.Fatalf("terminal evidence = %#v, want demand path and zone inlet match", relation.TerminalUnits)
+	}
+	if relation.TerminalUnits[0].Family != "terminal" {
+		t.Fatalf("terminal family = %q, want terminal", relation.TerminalUnits[0].Family)
+	}
 	if hasHVACWarningCode(report.Warnings, "water_coil_missing_plant_loop") {
 		t.Fatalf("unexpected water coil warning: %#v", report.Warnings)
 	}
@@ -243,6 +255,9 @@ func TestAnalyzeHVACReadsZoneEquipmentListSixFieldGroup(t *testing.T) {
 	if got := report.ZoneRelations[0].Nodes.ExhaustNodes; !stringSliceContainsFold(got, "Office Exhaust") {
 		t.Fatalf("exhaust nodes = %#v, want Office Exhaust", got)
 	}
+	if len(report.ZoneRelations[0].Nodes.Sources) == 0 {
+		t.Fatalf("node source expansion is empty: %#v", report.ZoneRelations[0].Nodes)
+	}
 }
 
 func TestAnalyzeHVACCondenserLoopAndLoopRuleWarnings(t *testing.T) {
@@ -334,6 +349,9 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	}
 	if !componentSliceContainsName(relation.TerminalUnits, "Basement VAV Box Component") {
 		t.Fatalf("Basement terminals = %#v, want resolved VAV terminal", relation.TerminalUnits)
+	}
+	if relation.Confidence == "" || relation.RelationSource == "" {
+		t.Fatalf("Basement relation missing confidence/source: %#v", relation)
 	}
 	if !stringSliceContainsFold(relation.PlantLoopNames, "HeatSys1") || !stringSliceContainsFold(relation.PlantLoopNames, "CoolSys1") {
 		t.Fatalf("Basement plant loops = %#v, want HeatSys1 and CoolSys1", relation.PlantLoopNames)

@@ -561,6 +561,14 @@ func fieldValueByCatalogName(obj Object, names ...string) string {
 	return strings.TrimSpace(field.Value)
 }
 
+func fieldValueIndexByCatalogName(obj Object, names ...string) (string, int, bool) {
+	field, index, ok := fieldByCatalogName(obj, names...)
+	if !ok {
+		return "", -1, false
+	}
+	return strings.TrimSpace(field.Value), index, true
+}
+
 func catalogFieldName(obj Object, fieldIndex int) string {
 	if spec, ok := fieldSpecAt(obj.Type, fieldIndex); ok && spec.Name != "" {
 		return spec.Name
@@ -629,6 +637,8 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 			Severity:    DiagnosticWarning,
 			Category:    "Field Value",
 			Code:        "invalid_choice",
+			Source:      "energyplus_rule",
+			Confidence:  "high",
 			Message:     fmt.Sprintf("%s expects one of: %s.", fieldName, strings.Join(spec.Choices, ", ")),
 			ObjectIndex: obj.Index,
 			ObjectType:  obj.Type,
@@ -636,6 +646,7 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 			FieldIndex:  fieldIndex,
 			Field:       fieldName,
 			Value:       value,
+			Evidence:    "Field catalog enumerated choice list.",
 		}}
 	}
 	if spec.Numeric && !(spec.AllowAutosize && isFlexibleSizingValue(value)) {
@@ -644,6 +655,8 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 				Severity:    DiagnosticError,
 				Category:    "Field Value",
 				Code:        "invalid_number",
+				Source:      "energyplus_rule",
+				Confidence:  "high",
 				Message:     fmt.Sprintf("%s expects a numeric value.", fieldName),
 				ObjectIndex: obj.Index,
 				ObjectType:  obj.Type,
@@ -651,6 +664,7 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 				FieldIndex:  fieldIndex,
 				Field:       fieldName,
 				Value:       value,
+				Evidence:    "Field catalog numeric type.",
 			}}
 		}
 	}
@@ -665,6 +679,8 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 			Severity:    DiagnosticError,
 			Category:    "Reference",
 			Code:        "missing_catalog_reference",
+			Source:      "energyplus_rule",
+			Confidence:  "high",
 			Message:     fmt.Sprintf("%s references missing value %q.", fieldName, value),
 			ObjectIndex: obj.Index,
 			ObjectType:  obj.Type,
@@ -672,6 +688,7 @@ func validateCatalogField(doc Document, obj Object, fieldIndex int, field Field,
 			FieldIndex:  fieldIndex,
 			Field:       fieldName,
 			Value:       value,
+			Evidence:    "Field catalog role " + spec.Role,
 		}}
 	}
 	return nil

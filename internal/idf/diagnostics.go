@@ -9,12 +9,15 @@ import (
 const (
 	DiagnosticError   = "error"
 	DiagnosticWarning = "warning"
+	DiagnosticNotice  = "notice"
 )
 
 type Diagnostic struct {
 	Severity    string `json:"severity"`
 	Category    string `json:"category"`
 	Code        string `json:"code"`
+	Source      string `json:"source,omitempty"`
+	Confidence  string `json:"confidence,omitempty"`
 	Message     string `json:"message"`
 	ObjectIndex int    `json:"objectIndex,omitempty"`
 	ObjectType  string `json:"objectType,omitempty"`
@@ -22,6 +25,7 @@ type Diagnostic struct {
 	FieldIndex  int    `json:"fieldIndex,omitempty"`
 	Field       string `json:"field,omitempty"`
 	Value       string `json:"value,omitempty"`
+	Evidence    string `json:"evidence,omitempty"`
 }
 
 type diagnosticRefKind struct {
@@ -76,10 +80,14 @@ func AnalyzeDiagnostics(doc Document) []Diagnostic {
 	diagnostics = append(diagnostics, scheduleDiagnostics(doc)...)
 	diagnostics = append(diagnostics, hvacNodeDiagnostics(doc)...)
 	diagnostics = append(diagnostics, hvacConnectionDiagnostics(doc)...)
+	diagnostics = mergeDiagnostics(diagnostics)
 
 	sort.SliceStable(diagnostics, func(i, j int) bool {
 		if diagnostics[i].Severity != diagnostics[j].Severity {
-			return diagnostics[i].Severity == DiagnosticError
+			return diagnosticSeverityRank(diagnostics[i].Severity) < diagnosticSeverityRank(diagnostics[j].Severity)
+		}
+		if diagnostics[i].Source != diagnostics[j].Source {
+			return diagnostics[i].Source < diagnostics[j].Source
 		}
 		if diagnostics[i].Category != diagnostics[j].Category {
 			return diagnostics[i].Category < diagnostics[j].Category
@@ -102,10 +110,20 @@ func requiredObjectDiagnostics(doc Document) []Diagnostic {
 	var diagnostics []Diagnostic
 	for _, objectType := range required {
 		if !present[strings.ToLower(objectType)] {
+			severity := DiagnosticError
+			source := "energyplus_rule"
+			evidence := "Required for a weather-file simulation run."
+			if objectType == "RunPeriod" && hasSizingPeriodOnlyContext(doc) {
+				severity = DiagnosticNotice
+				source = "simulation_context"
+				evidence = "Design-day or sizing-period objects are present, so the model may intentionally omit RunPeriod."
+			}
 			diagnostics = append(diagnostics, Diagnostic{
-				Severity: DiagnosticError,
+				Severity: severity,
 				Category: "Required Object",
 				Code:     "missing_required_object",
+				Source:   source,
+				Evidence: evidence,
 				Message:  fmt.Sprintf("Missing required %s object.", objectType),
 				Value:    objectType,
 			})
@@ -132,7 +150,7 @@ func duplicateNameDiagnostics(doc Document) []Diagnostic {
 		}
 		for _, obj := range objects {
 			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticError, "Duplicate Name", "duplicate_name", obj,
-				fmt.Sprintf("Duplicate %s name %q.", obj.Type, objectName(obj))))
+				fmt.Sprintf("Duplicate %s name %q.", obj.Type, objectName(obj))).withSource("energyplus_rule", "Object names must be unique within the same object type."))
 		}
 	}
 	return diagnostics
@@ -164,7 +182,7 @@ func referenceDiagnostics(doc Document) []Diagnostic {
 				continue
 			}
 			for _, kind := range diagnosticReferenceKinds {
-				if !kind.fieldMatch(field.Comment) || kind.ownerTypes(obj.Type) {
+				if kind.ownerTypes(obj.Type) || diagnosticFieldReferenceKind(obj, fieldIndex, field) != kind.code {
 					continue
 				}
 				if !owners[kind.code][normalizeName(value)] {
@@ -172,13 +190,16 @@ func referenceDiagnostics(doc Document) []Diagnostic {
 						Severity:    DiagnosticError,
 						Category:    kind.category,
 						Code:        kind.code,
+						Source:      "energyplus_rule",
+						Confidence:  "high",
 						Message:     fmt.Sprintf("Missing %s reference %q.", kind.label, value),
 						ObjectIndex: obj.Index,
 						ObjectType:  obj.Type,
 						ObjectName:  objectName(obj),
 						FieldIndex:  fieldIndex,
-						Field:       field.Comment,
+						Field:       catalogFieldName(obj, fieldIndex),
 						Value:       value,
+						Evidence:    "Field catalog role " + catalogFieldRole(obj, fieldIndex),
 					})
 				}
 			}
@@ -192,13 +213,16 @@ func orphanDiagnostics(doc Document) []Diagnostic {
 	diagnostics := make([]Diagnostic, 0, len(unused))
 	for _, obj := range unused {
 		diagnostics = append(diagnostics, Diagnostic{
-			Severity:    DiagnosticWarning,
-			Category:    "Orphan Object",
+			Severity:    DiagnosticNotice,
+			Category:    "Model Cleanup",
 			Code:        "orphan_object",
+			Source:      "user_quality_check",
+			Confidence:  "medium",
 			Message:     fmt.Sprintf("%s %q is not referenced by other objects.", obj.Type, obj.Name),
 			ObjectIndex: obj.Index,
 			ObjectType:  obj.Type,
 			ObjectName:  obj.Name,
+			Evidence:    "No inbound references were found in parsed object fields.",
 		})
 	}
 	return diagnostics
@@ -221,20 +245,25 @@ func geometryDiagnostics(doc Document) []Diagnostic {
 		}
 		vertices, hasVertices := detailedVertices(obj)
 		if !hasVertices {
-			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticWarning, "Geometry", "invalid_vertices", obj,
-				fmt.Sprintf("%s %q does not have enough detailed vertices.", obj.Type, objectLabel(obj))))
+			diagnostic := diagnosticForObject(DiagnosticNotice, "Geometry", "unsupported_geometry_object", obj,
+				fmt.Sprintf("%s %q does not have detailed vertices; geometry checks are limited for this object.", obj.Type, objectLabel(obj)))
+			diagnostic = diagnostic.withSource("analyzer_limitation", "Simple geometry objects are preserved but not treated as detailed polygon errors.")
+			diagnostics = append(diagnostics, diagnostic)
 			continue
 		}
 		area, ok := polygonArea(vertices)
 		if !ok || area <= 0 {
 			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticWarning, "Geometry", "zero_area", obj,
-				fmt.Sprintf("%s %q has zero or invalid area.", obj.Type, objectLabel(obj))))
+				fmt.Sprintf("%s %q has zero or invalid area.", obj.Type, objectLabel(obj))).withSource("energyplus_rule", "Detailed surfaces require a valid polygon area."))
 		}
 		if isBuildingSurfaceType(obj.Type) {
-			zoneName := findFieldByCommentWords(obj, "zone", "name")
+			zoneName := fieldValueByCatalogName(obj, "Zone Name")
+			if zoneName == "" {
+				zoneName = findFieldByCommentWords(obj, "zone", "name")
+			}
 			if zoneName == "" || !zoneNames[normalizeName(zoneName)] {
 				diagnostics = append(diagnostics, diagnosticForObject(DiagnosticWarning, "Geometry", "surface_unconnected_zone", obj,
-					fmt.Sprintf("Surface %q references missing zone %q.", objectLabel(obj), zoneName)))
+					fmt.Sprintf("Surface %q references missing zone %q.", objectLabel(obj), zoneName)).withSource("energyplus_rule", "BuildingSurface:Detailed Zone Name must resolve to a Zone or Space."))
 			}
 		}
 	}
@@ -265,27 +294,23 @@ func scheduleDiagnostics(doc Document) []Diagnostic {
 			continue
 		}
 		if _, supported := annualScheduleHours(schedule); !supported {
-			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticWarning, "Schedule", "unsupported_annual_hours", schedule,
-				fmt.Sprintf("Referenced schedule %q cannot be evaluated for annual operating hours.", objectName(schedule))))
+			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticNotice, "Schedule", "unsupported_annual_hours", schedule,
+				fmt.Sprintf("Referenced schedule %q cannot be evaluated for annual operating hours.", objectName(schedule))).withSource("analyzer_limitation", "Annual-hour parser currently supports Schedule:Constant and common Schedule:Compact forms."))
 		}
 	}
 	return diagnostics
 }
 
 func hvacNodeDiagnostics(doc Document) []Diagnostic {
-	nodeRefs := map[string][]Object{}
+	report := AnalyzeHVAC(doc)
+	nodeRefs := map[string][]HVACNodeUsage{}
 	degree := map[string]int{}
 	graph := map[string]map[string]bool{}
 
+	for _, usage := range report.NodeUsages {
+		nodeRefs[normalizeName(usage.NodeName)] = append(nodeRefs[normalizeName(usage.NodeName)], usage)
+	}
 	for _, obj := range doc.Objects {
-		for _, field := range obj.Fields {
-			comment := strings.ToLower(field.Comment)
-			value := strings.TrimSpace(field.Value)
-			if value == "" || !strings.Contains(comment, "node") || !strings.Contains(comment, "name") {
-				continue
-			}
-			nodeRefs[normalizeName(value)] = append(nodeRefs[normalizeName(value)], obj)
-		}
 		for _, connection := range extractHVACConnections(obj) {
 			from := normalizeName(connection.FromNode)
 			to := normalizeName(connection.ToNode)
@@ -306,20 +331,36 @@ func hvacNodeDiagnostics(doc Document) []Diagnostic {
 	}
 
 	var diagnostics []Diagnostic
-	for node, objects := range nodeRefs {
-		if degree[node] == 0 && len(objects) == 1 {
-			obj := objects[0]
-			diagnostics = append(diagnostics, diagnosticForObject(DiagnosticWarning, "HVAC Node", "unconnected_node", obj,
-				fmt.Sprintf("Node %q appears only once and is not connected by inferred inlet/outlet links.", node)))
+	for node, usages := range nodeRefs {
+		if degree[node] == 0 && len(usages) == 1 && !isTerminalHVACBoundaryNode(usages[0]) {
+			usage := usages[0]
+			diagnostics = append(diagnostics, Diagnostic{
+				Severity:    DiagnosticNotice,
+				Category:    "HVAC Node",
+				Code:        "unconnected_node",
+				Source:      "heuristic_inference",
+				Confidence:  "medium",
+				Message:     fmt.Sprintf("Node %q appears only once and is not connected by inferred inlet/outlet links.", usage.NodeName),
+				ObjectIndex: usage.ObjectIndex,
+				ObjectType:  usage.ObjectType,
+				ObjectName:  usage.ObjectName,
+				FieldIndex:  usage.FieldIndex,
+				Field:       usage.FieldName,
+				Value:       usage.NodeName,
+				Evidence:    "Single node usage with no inferred HVAC connection edge.",
+			})
 		}
 	}
 
 	if components := graphComponentCount(graph); components > 1 {
 		diagnostics = append(diagnostics, Diagnostic{
-			Severity: DiagnosticWarning,
-			Category: "HVAC Node",
-			Code:     "disconnected_node_graph",
-			Message:  fmt.Sprintf("Inferred HVAC node graph has %d disconnected components.", components),
+			Severity:   DiagnosticNotice,
+			Category:   "HVAC Node",
+			Code:       "disconnected_node_graph",
+			Source:     "heuristic_inference",
+			Confidence: "low",
+			Message:    fmt.Sprintf("Inferred HVAC node graph has %d disconnected components.", components),
+			Evidence:   "Computed from inlet/outlet field pairs, not a full EnergyPlus topology solve.",
 		})
 	}
 	return diagnostics
@@ -360,6 +401,107 @@ func diagnosticForObject(severity, category, code string, obj Object, message st
 		ObjectType:  obj.Type,
 		ObjectName:  objectName(obj),
 	}
+}
+
+func (diagnostic Diagnostic) withSource(source string, evidence string) Diagnostic {
+	diagnostic.Source = source
+	if diagnostic.Confidence == "" {
+		diagnostic.Confidence = diagnosticConfidenceForSource(source)
+	}
+	if diagnostic.Evidence == "" {
+		diagnostic.Evidence = evidence
+	}
+	return diagnostic
+}
+
+func diagnosticConfidenceForSource(source string) string {
+	switch source {
+	case "energyplus_rule":
+		return "high"
+	case "simulation_context":
+		return "medium"
+	case "heuristic_inference":
+		return "low"
+	default:
+		return "medium"
+	}
+}
+
+func diagnosticSeverityRank(severity string) int {
+	switch severity {
+	case DiagnosticError:
+		return 0
+	case DiagnosticWarning:
+		return 1
+	case DiagnosticNotice:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func mergeDiagnostics(diagnostics []Diagnostic) []Diagnostic {
+	seen := map[string]int{}
+	var out []Diagnostic
+	for _, diagnostic := range diagnostics {
+		key := strings.Join([]string{
+			diagnostic.Code,
+			fmt.Sprint(diagnostic.ObjectIndex),
+			fmt.Sprint(diagnostic.FieldIndex),
+			normalizeName(diagnostic.Value),
+		}, "|")
+		if index, ok := seen[key]; ok {
+			existing := out[index]
+			if diagnosticSeverityRank(diagnostic.Severity) < diagnosticSeverityRank(existing.Severity) ||
+				(existing.Source != "energyplus_rule" && diagnostic.Source == "energyplus_rule") {
+				out[index] = diagnostic
+			}
+			continue
+		}
+		seen[key] = len(out)
+		out = append(out, diagnostic)
+	}
+	return out
+}
+
+func hasSizingPeriodOnlyContext(doc Document) bool {
+	for _, obj := range doc.Objects {
+		lower := normalizeFieldCatalogKey(obj.Type)
+		if strings.HasPrefix(lower, "sizingperiod:") || strings.Contains(lower, "designday") {
+			return true
+		}
+	}
+	return false
+}
+
+func diagnosticFieldReferenceKind(obj Object, fieldIndex int, field Field) string {
+	role := catalogFieldRole(obj, fieldIndex)
+	switch role {
+	case fieldRoleScheduleRef:
+		return "missing_schedule_reference"
+	case fieldRoleConstructionRef:
+		return "missing_construction_reference"
+	case fieldRoleZoneRef, fieldRoleSpaceRef:
+		return "missing_zone_reference"
+	}
+	if role != "" {
+		return ""
+	}
+	for _, kind := range diagnosticReferenceKinds {
+		if kind.fieldMatch(field.Comment) {
+			return kind.code
+		}
+	}
+	return ""
+}
+
+func isTerminalHVACBoundaryNode(usage HVACNodeUsage) bool {
+	role := strings.ToLower(usage.Role)
+	return strings.Contains(role, "outdoor") ||
+		strings.Contains(role, "relief") ||
+		strings.Contains(role, "exhaust") ||
+		strings.Contains(role, "zone_air") ||
+		strings.Contains(role, "setpoint")
 }
 
 func commentHasWords(words ...string) func(string) bool {

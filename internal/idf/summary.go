@@ -30,14 +30,19 @@ type SummaryCategory struct {
 }
 
 type SummaryMetric struct {
-	ID           string `json:"id"`
-	CategoryID   string `json:"categoryId"`
-	Category     string `json:"category"`
-	Name         string `json:"name"`
-	Value        any    `json:"value,omitempty"`
-	DisplayValue string `json:"displayValue"`
-	Unit         string `json:"unit,omitempty"`
-	Status       string `json:"status"`
+	ID           string   `json:"id"`
+	CategoryID   string   `json:"categoryId"`
+	Category     string   `json:"category"`
+	Name         string   `json:"name"`
+	Value        any      `json:"value,omitempty"`
+	DisplayValue string   `json:"displayValue"`
+	Unit         string   `json:"unit,omitempty"`
+	Status       string   `json:"status"`
+	Source       string   `json:"source,omitempty"`
+	Confidence   string   `json:"confidence,omitempty"`
+	Visibility   string   `json:"visibility,omitempty"`
+	Badges       []string `json:"badges,omitempty"`
+	Evidence     string   `json:"evidence,omitempty"`
 }
 
 type SummaryDefinition struct {
@@ -126,7 +131,7 @@ var summaryDefinitions = []SummaryDefinition{
 	def("referenced_schedule_count", "schedules_operation", "Referenced schedule count", "", 0, "Fields whose comments include Schedule Name.", "Counts distinct schedule names referenced by non-schedule objects.", "Schedule names are matched case-insensitively after trimming.", "Always available; zero means no schedule references were found."),
 	def("supported_schedule_count", "schedules_operation", "Supported annual schedule count", "", 0, "Schedule:Constant and Schedule:Compact objects.", "Counts schedules whose annual active hours can be evaluated by the v1 parser.", "Schedule value greater than zero is treated as active.", "Always available; zero means no supported annual schedules were found."),
 	def("unsupported_schedule_count", "schedules_operation", "Unsupported schedule count", "", 0, "Schedule objects.", "Subtracts supported schedules from total schedule objects.", "Unsupported schedules remain visible so operating-hour results can be interpreted.", "Always available; zero means every schedule was supported or no schedules exist."),
-	def("model_operating_hours_h", "schedules_operation", "Total operating hours", "h", 1, "Referenced supported schedules.", "Uses the maximum active annual hours among referenced supported schedules; falls back to all supported schedules.", "A non-leap 8760-hour year is used. Compact weekday/weekend rules use a fixed Monday-start annual calendar.", "N/A when no supported schedule hours are available."),
+	def("model_operating_hours_h", "schedules_operation", "Representative operating hours", "h", 1, "Referenced supported schedules.", "Uses the maximum active annual hours among referenced supported schedules; falls back to all supported schedules.", "A non-leap 8760-hour year is used. Compact weekday/weekend rules use a fixed Monday-start annual calendar.", "N/A when no supported schedule hours are available."),
 	def("average_schedule_operating_hours_h", "schedules_operation", "Average schedule operating hours", "h", 1, "Supported schedules.", "Averages annual active hours across supported schedules.", "A non-leap 8760-hour year is used. Schedule value greater than zero is active.", "N/A when no supported schedule hours are available."),
 
 	def("hvac_object_count", "hvac_conditioning", "HVAC object count", "", 0, "HVAC-related object types.", "Counts objects whose types indicate HVAC, air loops, plant loops, coils, fans, pumps, boilers, chillers, or setpoint managers.", "This is a broad inventory count, not a system simulation result.", "Always available; zero means no recognized HVAC objects were found."),
@@ -134,6 +139,11 @@ var summaryDefinitions = []SummaryDefinition{
 	def("thermostat_count", "hvac_conditioning", "Thermostat count", "", 0, "ZoneControl:Thermostat and ThermostatSetpoint:* objects.", "Counts thermostat control and setpoint objects.", "Both controllers and setpoint definitions are included.", "Always available; zero means no thermostat objects were found."),
 	def("conditioned_zone_count", "hvac_conditioning", "Conditioned zone count", "", 0, "ZoneHVAC and thermostat zone references.", "Counts distinct zones referenced by ZoneHVAC, ZoneHVAC:EquipmentConnections, or ZoneControl:Thermostat objects.", "ZoneList references are expanded when a matching ZoneList object exists.", "Always available; zero means no conditioned-zone references were found."),
 	def("hvac_node_connection_count", "hvac_conditioning", "HVAC node connection count", "", 0, "Node-name fields on HVAC objects.", "Reuses the analyzer node extraction logic to count inlet-to-outlet or sequential node connections.", "The result is a simple input graph count, not a validated EnergyPlus branch topology.", "Always available; zero means no node-to-node connections were inferred."),
+	def("geometry_coverage_percent", "model_inventory", "Geometry coverage", "%", 1, "Detailed geometry inputs.", "Compares surfaces/fenestration with usable detailed vertices against geometry-bearing objects.", "Simple geometry objects are counted as uncovered because detailed polygon checks cannot verify them.", "Always available; zero means no detailed geometry was available."),
+	def("profile_coverage_percent", "model_inventory", "Profile coverage", "%", 1, "Schedule references and supported annual-hour parser.", "Divides referenced schedules that can be evaluated for annual hours by all referenced schedules.", "Unreferenced schedules are excluded from this readiness metric.", "N/A when no schedule references are present."),
+	def("hvac_relation_confidence", "hvac_conditioning", "HVAC relation confidence", "", 0, "HVAC zone relation evidence.", "Reports high, medium, low, or none based on ZoneHVAC equipment lists, terminal nodes, and loop demand-path evidence.", "This is an evidence label, not an EnergyPlus simulation validation result.", "N/A when no HVAC zone relations are present."),
+	def("diagnostics_by_source", "model_inventory", "Diagnostics by source", "", 0, "Analyzer diagnostics.", "Counts diagnostics grouped by source such as energyplus_rule, analyzer_limitation, user_quality_check, or heuristic_inference.", "Counts depend on the analyzer diagnostic rules enabled in this build.", "Always available; empty means no diagnostics were emitted."),
+	def("output_readiness_percent", "model_inventory", "Output readiness", "%", 1, "Output:* requests.", "Compares requested simulation outputs against the standard output groups recognized by the analyzer.", "This is a reporting-readiness metric and does not guarantee a successful simulation.", "Always available; zero means no recognized output requests were present."),
 }
 
 func def(id, categoryID, name, unit string, precision int, source, method, assumptions, missing string) SummaryDefinition {
@@ -209,6 +219,11 @@ func AnalyzeSummary(doc Document) SummaryReport {
 			DisplayValue: value.DisplayValue,
 			Unit:         definition.Unit,
 			Status:       value.Status,
+			Source:       summaryMetricSource(definition.ID, definition.Source),
+			Confidence:   summaryMetricConfidence(definition.ID, value.Status),
+			Visibility:   summaryMetricVisibility(definition.ID),
+			Badges:       summaryMetricBadges(definition.ID, value.Status),
+			Evidence:     definition.Method,
 		}
 		if index, ok := categoryIndexes[definition.CategoryID]; ok {
 			categories[index].Metrics = append(categories[index].Metrics, metric)
@@ -219,11 +234,15 @@ func AnalyzeSummary(doc Document) SummaryReport {
 }
 
 type summaryExportMetric struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Value  any    `json:"value"`
-	Unit   string `json:"unit,omitempty"`
-	Status string `json:"status"`
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Value      any      `json:"value"`
+	Unit       string   `json:"unit,omitempty"`
+	Status     string   `json:"status"`
+	Source     string   `json:"source,omitempty"`
+	Confidence string   `json:"confidence,omitempty"`
+	Visibility string   `json:"visibility,omitempty"`
+	Badges     []string `json:"badges,omitempty"`
 }
 
 func ExportSummaryJSON(summary SummaryReport) (string, error) {
@@ -232,11 +251,15 @@ func ExportSummaryJSON(summary SummaryReport) (string, error) {
 		metrics := map[string]summaryExportMetric{}
 		for _, metric := range category.Metrics {
 			metrics[metric.ID] = summaryExportMetric{
-				ID:     metric.ID,
-				Name:   metric.Name,
-				Value:  metric.Value,
-				Unit:   metric.Unit,
-				Status: metric.Status,
+				ID:         metric.ID,
+				Name:       metric.Name,
+				Value:      metric.Value,
+				Unit:       metric.Unit,
+				Status:     metric.Status,
+				Source:     metric.Source,
+				Confidence: metric.Confidence,
+				Visibility: metric.Visibility,
+				Badges:     metric.Badges,
 			}
 		}
 		out[category.Name] = metrics
@@ -417,76 +440,84 @@ func isFinitePositiveOrZero(value float64) bool {
 }
 
 type summaryFacts struct {
-	version                   string
-	buildingName              string
-	buildingNorthAxis         float64
-	hasBuildingNorthAxis      bool
-	objectCount               int
-	objectTypeCount           int
-	zoneCount                 int
-	spaceCount                int
-	scheduleCount             int
-	constructionCount         int
-	materialCount             int
-	zoneMultipliers           map[string]float64
-	zoneDirections            map[string]float64
-	zoneFloorAreas            map[string]float64
-	zoneHeights               map[string]float64
-	declaredZoneVolumes       map[string]float64
-	zoneLists                 map[string][]string
-	conditionedZones          map[string]bool
-	referencedSchedules       map[string]bool
-	scheduleHours             map[string]float64
-	supportedScheduleCount    int
-	unsupportedScheduleCount  int
-	internalLoadObjectCount   int
-	totalPeople               float64
-	hasPeople                 bool
-	peoplePartial             bool
-	totalLightingPower        float64
-	hasLightingPower          bool
-	lightingPartial           bool
-	totalEquipmentPower       float64
-	hasEquipmentPower         bool
-	equipmentPartial          bool
-	hvacObjectCount           int
-	zoneHVACObjectCount       int
-	thermostatCount           int
-	hvacNodeConnectionCount   int
-	grossFloorArea            float64
-	hasGrossFloorArea         bool
-	footprintArea             float64
-	hasFootprintArea          bool
-	footprintPartial          bool
-	totalZoneVolume           float64
-	hasZoneVolume             bool
-	zoneVolumePartial         bool
-	averageFloorHeight        float64
-	hasAverageFloorHeight     bool
-	averageFloorHeightPartial bool
-	buildingLongSide          float64
-	buildingShortSide         float64
-	hasBuildingSides          bool
-	envelopeArea              float64
-	hasEnvelopeArea           bool
-	exteriorWallArea          float64
-	hasExteriorWallArea       bool
-	roofArea                  float64
-	hasRoofArea               bool
-	groundFloorArea           float64
-	hasGroundFloorArea        bool
-	windowArea                float64
-	hasWindowArea             bool
-	doorArea                  float64
-	hasDoorArea               bool
-	skylightArea              float64
-	wallAreaByOrientation     map[string]float64
-	windowAreaByOrientation   map[string]float64
-	bounds                    geometryBounds
-	vertexEntryDirection      string
-	surfaces                  []surfaceInfo
-	floorSurfaces             []surfaceInfo
-	lowestFloorSurfaces       []surfaceInfo
+	version                    string
+	buildingName               string
+	buildingNorthAxis          float64
+	hasBuildingNorthAxis       bool
+	objectCount                int
+	objectTypeCount            int
+	zoneCount                  int
+	spaceCount                 int
+	scheduleCount              int
+	constructionCount          int
+	materialCount              int
+	zoneMultipliers            map[string]float64
+	zoneDirections             map[string]float64
+	zoneFloorAreas             map[string]float64
+	zoneHeights                map[string]float64
+	declaredZoneVolumes        map[string]float64
+	zoneLists                  map[string][]string
+	conditionedZones           map[string]bool
+	referencedSchedules        map[string]bool
+	scheduleHours              map[string]float64
+	supportedScheduleCount     int
+	unsupportedScheduleCount   int
+	internalLoadObjectCount    int
+	totalPeople                float64
+	hasPeople                  bool
+	peoplePartial              bool
+	totalLightingPower         float64
+	hasLightingPower           bool
+	lightingPartial            bool
+	totalEquipmentPower        float64
+	hasEquipmentPower          bool
+	equipmentPartial           bool
+	hvacObjectCount            int
+	zoneHVACObjectCount        int
+	thermostatCount            int
+	hvacNodeConnectionCount    int
+	geometryObjectCount        int
+	detailedGeometryCount      int
+	profileReferenceCount      int
+	supportedProfileReferences int
+	hvacRelationConfidence     string
+	diagnosticSourceCounts     map[string]int
+	outputRequestCount         int
+	recognizedOutputCount      int
+	grossFloorArea             float64
+	hasGrossFloorArea          bool
+	footprintArea              float64
+	hasFootprintArea           bool
+	footprintPartial           bool
+	totalZoneVolume            float64
+	hasZoneVolume              bool
+	zoneVolumePartial          bool
+	averageFloorHeight         float64
+	hasAverageFloorHeight      bool
+	averageFloorHeightPartial  bool
+	buildingLongSide           float64
+	buildingShortSide          float64
+	hasBuildingSides           bool
+	envelopeArea               float64
+	hasEnvelopeArea            bool
+	exteriorWallArea           float64
+	hasExteriorWallArea        bool
+	roofArea                   float64
+	hasRoofArea                bool
+	groundFloorArea            float64
+	hasGroundFloorArea         bool
+	windowArea                 float64
+	hasWindowArea              bool
+	doorArea                   float64
+	hasDoorArea                bool
+	skylightArea               float64
+	wallAreaByOrientation      map[string]float64
+	windowAreaByOrientation    map[string]float64
+	bounds                     geometryBounds
+	vertexEntryDirection       string
+	surfaces                   []surfaceInfo
+	floorSurfaces              []surfaceInfo
+	lowestFloorSurfaces        []surfaceInfo
 }
 
 type geometryBounds struct {
@@ -535,6 +566,7 @@ func collectSummaryFacts(doc Document) summaryFacts {
 		conditionedZones:        map[string]bool{},
 		referencedSchedules:     map[string]bool{},
 		scheduleHours:           map[string]float64{},
+		diagnosticSourceCounts:  map[string]int{},
 		wallAreaByOrientation:   map[string]float64{"north": 0, "east": 0, "south": 0, "west": 0},
 		windowAreaByOrientation: map[string]float64{"north": 0, "east": 0, "south": 0, "west": 0},
 		vertexEntryDirection:    "counterclockwise",
@@ -593,7 +625,58 @@ func collectSummaryFacts(doc Document) summaryFacts {
 	}
 
 	facts.finalizeVolumeAndHeights()
+	facts.captureReadiness(doc)
 	return facts
+}
+
+func (facts *summaryFacts) captureReadiness(doc Document) {
+	for _, obj := range doc.Objects {
+		if isBuildingSurfaceType(obj.Type) || isFenestrationType(obj.Type) {
+			facts.geometryObjectCount++
+			if _, ok := detailedVertices(obj); ok {
+				facts.detailedGeometryCount++
+			}
+		}
+	}
+
+	facts.profileReferenceCount = len(facts.referencedSchedules)
+	for schedule := range facts.referencedSchedules {
+		if _, ok := facts.scheduleHours[schedule]; ok {
+			facts.supportedProfileReferences++
+		}
+	}
+
+	hvacReport := AnalyzeHVAC(doc)
+	facts.hvacRelationConfidence = summaryHVACRelationConfidence(hvacReport.ZoneRelations)
+
+	for _, diagnostic := range AnalyzeDiagnostics(doc) {
+		source := strings.TrimSpace(diagnostic.Source)
+		if source == "" {
+			source = "unspecified"
+		}
+		facts.diagnosticSourceCounts[source]++
+	}
+
+	outputReport := AnalyzeOutput(doc)
+	facts.outputRequestCount = len(outputReport.Recommendations)
+	for _, recommendation := range outputReport.Recommendations {
+		if recommendation.Exists {
+			facts.recognizedOutputCount++
+		}
+	}
+}
+
+func summaryHVACRelationConfidence(relations []HVACZoneChain) string {
+	if len(relations) == 0 {
+		return ""
+	}
+	best := "low"
+	for _, relation := range relations {
+		if confidenceRank(relation.Confidence) < confidenceRank(best) {
+			best = relation.Confidence
+		}
+	}
+	return best
 }
 
 func (facts *summaryFacts) captureInventoryObject(obj Object) {
@@ -944,6 +1027,7 @@ func (facts summaryFacts) metricValues() map[string]summaryMetricValue {
 		"thermostat_count":           countSummaryValue(facts.thermostatCount),
 		"conditioned_zone_count":     countSummaryValue(len(facts.conditionedZones)),
 		"hvac_node_connection_count": countSummaryValue(facts.hvacNodeConnectionCount),
+		"diagnostics_by_source":      stringSummaryValue(summarySourceCountsDisplay(facts.diagnosticSourceCounts)),
 	}
 
 	if facts.hasBuildingNorthAxis {
@@ -1032,6 +1116,22 @@ func (facts summaryFacts) metricValues() map[string]summaryMetricValue {
 	if hours, ok := facts.averageScheduleHours(); ok {
 		values["average_schedule_operating_hours_h"] = numberSummaryValue(hours, precisionFor("average_schedule_operating_hours_h"), partialIf(facts.unsupportedScheduleCount > 0))
 	}
+	if facts.geometryObjectCount > 0 {
+		values["geometry_coverage_percent"] = percentSummaryValue(float64(facts.detailedGeometryCount), float64(facts.geometryObjectCount), precisionFor("geometry_coverage_percent"), partialIf(facts.detailedGeometryCount < facts.geometryObjectCount))
+	} else {
+		values["geometry_coverage_percent"] = missingSummaryValue()
+	}
+	if facts.profileReferenceCount > 0 {
+		values["profile_coverage_percent"] = percentSummaryValue(float64(facts.supportedProfileReferences), float64(facts.profileReferenceCount), precisionFor("profile_coverage_percent"), partialIf(facts.supportedProfileReferences < facts.profileReferenceCount))
+	}
+	if facts.hvacRelationConfidence != "" {
+		values["hvac_relation_confidence"] = stringSummaryValue(facts.hvacRelationConfidence)
+	}
+	if facts.outputRequestCount > 0 {
+		values["output_readiness_percent"] = percentSummaryValue(float64(facts.recognizedOutputCount), float64(facts.outputRequestCount), precisionFor("output_readiness_percent"), partialIf(facts.recognizedOutputCount < facts.outputRequestCount))
+	} else {
+		values["output_readiness_percent"] = missingSummaryValue()
+	}
 
 	for _, definition := range summaryDefinitions {
 		if _, ok := values[definition.ID]; !ok {
@@ -1055,6 +1155,87 @@ func partialIf(condition bool) string {
 		return summaryStatusPartial
 	}
 	return summaryStatusOK
+}
+
+func summaryMetricSource(metricID string, definitionSource string) string {
+	switch metricID {
+	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
+		return "analyzer_readiness"
+	case "hvac_relation_confidence":
+		return "hvac_semantic_evidence"
+	case "diagnostics_by_source":
+		return "diagnostics"
+	}
+	if strings.Contains(strings.ToLower(definitionSource), "fallback") || strings.Contains(strings.ToLower(definitionSource), "detection") {
+		return "analyzer_inference"
+	}
+	return "idf_fields"
+}
+
+func summaryMetricConfidence(metricID string, status string) string {
+	if status == summaryStatusMissing {
+		return "missing"
+	}
+	switch metricID {
+	case "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h":
+		if status == summaryStatusPartial {
+			return "partial"
+		}
+		return "inferred"
+	case "hvac_relation_confidence":
+		return "reported"
+	case "diagnostics_by_source", "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
+		return "computed"
+	default:
+		if status == summaryStatusPartial {
+			return "partial"
+		}
+		return "direct_or_computed"
+	}
+}
+
+func summaryMetricVisibility(metricID string) string {
+	switch metricID {
+	case "average_schedule_operating_hours_h", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "envelope_area_to_volume_ratio", "floor_area_to_volume_ratio", "hvac_node_connection_count", "diagnostics_by_source":
+		return "advanced"
+	default:
+		return "primary"
+	}
+}
+
+func summaryMetricBadges(metricID string, status string) []string {
+	var badges []string
+	if status == summaryStatusPartial {
+		badges = append(badges, "partial")
+	}
+	if status == summaryStatusMissing {
+		badges = append(badges, "missing")
+	}
+	switch metricID {
+	case "conditioned_floor_area_m2", "unconditioned_floor_area_m2", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h", "hvac_relation_confidence":
+		badges = append(badges, "inferred")
+	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
+		badges = append(badges, "readiness")
+	case "diagnostics_by_source":
+		badges = append(badges, "diagnostic")
+	}
+	return badges
+}
+
+func summarySourceCountsDisplay(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func floorAreaStatus(conditionedArea, grossArea float64, hasGross bool) string {
@@ -1917,7 +2098,7 @@ func scheduleSelectorTokens(value string) []string {
 }
 
 func init() {
-	if len(summaryDefinitions) != 50 {
-		panic(fmt.Sprintf("summary metric registry has %d metrics, want 50", len(summaryDefinitions)))
+	if len(summaryDefinitions) != 55 {
+		panic(fmt.Sprintf("summary metric registry has %d metrics, want 55", len(summaryDefinitions)))
 	}
 }

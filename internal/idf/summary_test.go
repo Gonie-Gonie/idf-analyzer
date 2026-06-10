@@ -285,8 +285,8 @@ Fan:ConstantVolume,
 func TestSummaryRegistryAndGuideCoverage(t *testing.T) {
 	definitions := SummaryDefinitions()
 	guides := SummaryGuides()
-	if len(definitions) != 50 {
-		t.Fatalf("definition count = %d, want 50", len(definitions))
+	if len(definitions) != 55 {
+		t.Fatalf("definition count = %d, want 55", len(definitions))
 	}
 	if len(guides) != len(definitions) {
 		t.Fatalf("guide count = %d, want %d", len(guides), len(definitions))
@@ -316,11 +316,11 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 		t.Fatalf("Parse() error = %v", err)
 	}
 	summary := AnalyzeSummary(doc)
-	if summary.MetricCount != 50 {
-		t.Fatalf("summary metric count = %d, want 50", summary.MetricCount)
+	if summary.MetricCount != 55 {
+		t.Fatalf("summary metric count = %d, want 55", summary.MetricCount)
 	}
-	if got := countMetrics(summary); got != 50 {
-		t.Fatalf("rendered metric count = %d, want 50", got)
+	if got := countMetrics(summary); got != 55 {
+		t.Fatalf("rendered metric count = %d, want 55", got)
 	}
 	if got := metricByID(t, summary, "building_name").DisplayValue; got != "Summary Test Building" {
 		t.Fatalf("building name = %q, want Summary Test Building", got)
@@ -359,6 +359,15 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if got := metricByID(t, summary, "hvac_node_connection_count").Value; got != 1 {
 		t.Fatalf("hvac node connection count = %#v, want 1", got)
 	}
+	if got := metricByID(t, summary, "model_operating_hours_h").Name; got != "Representative operating hours" {
+		t.Fatalf("model operating hours label = %q", got)
+	}
+	if got := metricByID(t, summary, "average_schedule_operating_hours_h").Visibility; got != "advanced" {
+		t.Fatalf("average schedule visibility = %q, want advanced", got)
+	}
+	if got := metricByID(t, summary, "geometry_coverage_percent").Confidence; got == "" {
+		t.Fatalf("geometry coverage confidence is empty")
+	}
 
 	jsonText, err := ExportSummaryJSON(summary)
 	if err != nil {
@@ -386,8 +395,8 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary CSV did not parse: %v\n%s", err, csvText)
 	}
-	if len(records) != 51 {
-		t.Fatalf("CSV rows = %d, want 51", len(records))
+	if len(records) != 56 {
+		t.Fatalf("CSV rows = %d, want 56", len(records))
 	}
 	if len(records[0]) != 2 || records[0][0] != "name" || records[0][1] != "value" {
 		t.Fatalf("CSV header = %#v, want name,value", records[0])

@@ -149,6 +149,11 @@ func TestFieldCatalogDiagnosticsValidatesChoicesAndNumbers(t *testing.T) {
 	if !hasDiagnosticCode(diagnostics, "invalid_number") {
 		t.Fatalf("diagnostics = %#v, want invalid_number", diagnostics)
 	}
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Source != "energyplus_rule" || diagnostic.Confidence == "" {
+			t.Fatalf("diagnostic metadata = %#v, want energyplus_rule with confidence", diagnostic)
+		}
+	}
 }
 
 func hasSuggestionValue(suggestions []FieldValueSuggestion, value string) bool {
