@@ -4265,6 +4265,7 @@ function renderPurposeHTMLResultSections(results) {
     renderPurposeHTMLEnergy(results.energy || {}),
     renderPurposeHTMLHeatFlow(results.zoneHeatFlow || {}),
     renderPurposeHTMLHVAC(results.hvacLoops || []),
+    renderPurposeHTMLIntegrity(results.integrity || {}),
     renderPurposeHTMLComfort(results.comfort || {}),
   ]
     .filter(Boolean)
@@ -4336,6 +4337,53 @@ function renderPurposeHTMLHVAC(loops) {
     nodeRows.length ? `<h2>HVAC Node Results</h2>${renderPurposeHTMLTable(["Loop", "Node", "Avg temp", "Peak flow", "Avg delta", "Source"], nodeRows)}` : "",
     componentRows.length
       ? `<h2>HVAC Component Results</h2>${renderPurposeHTMLTable(["Loop", "Component", "Type", "Metric", "Peak", "Total", "Source"], componentRows)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function renderPurposeHTMLIntegrity(integrity) {
+  const err = integrity.err || {};
+  const errRows = errIssueGroups(err.issues || [])
+    .slice(0, 120)
+    .map((group) => [group.severity || "", group.message || "", group.count || 0, (group.lines || []).join(", ")]);
+  const sqlRows = (integrity.sqlIssues || [])
+    .slice(0, 120)
+    .map((issue) => [issue.severity || "", issue.message || "", issue.count || "", issue.source || ""]);
+  const tabularRows = (integrity.tabularReports || [])
+    .flatMap((report) =>
+      (report.rows || []).slice(0, 40).map((row) => [
+        report.reportName || "",
+        report.tableName || "",
+        row.rowName || "",
+        Object.entries(row.values || {})
+          .slice(0, 4)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join("; "),
+        report.source || "",
+      ]),
+    )
+    .slice(0, 160);
+  if (!errRows.length && !sqlRows.length && !tabularRows.length && !err.total && !(integrity.tabularReports || []).length) {
+    return "";
+  }
+  const summaryRows = [
+    ["Status", integrity.status || ""],
+    ["ERR completed", err.completed ? "Yes" : "No"],
+    ["ERR warnings", err.warnings || 0],
+    ["ERR severe/fatal", (err.severe || 0) + (err.fatal || 0)],
+    ["SQL diagnostics", (integrity.sqlIssues || []).length],
+    ["Tabular reports", (integrity.tabularReports || []).length],
+  ];
+  return [
+    `<h2>Integrity Summary</h2>${renderPurposeHTMLTable(["Field", "Value"], summaryRows)}`,
+    errRows.length ? `<h2>Integrity ERR Issues</h2>${renderPurposeHTMLTable(["Severity", "Message", "Count", "Lines"], errRows)}` : "",
+    sqlRows.length
+      ? `<h2>Integrity SQL Diagnostics</h2>${renderPurposeHTMLTable(["Severity", "Message", "Count", "Source"], sqlRows)}`
+      : "",
+    tabularRows.length
+      ? `<h2>Integrity Tabular Reports</h2>${renderPurposeHTMLTable(["Report", "Table", "Row", "Values", "Source"], tabularRows)}`
       : "",
   ]
     .filter(Boolean)
