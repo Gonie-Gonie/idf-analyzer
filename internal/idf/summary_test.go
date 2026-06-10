@@ -356,8 +356,8 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if got := metricByID(t, summary, "conditioned_zone_count").Value; got != 1 {
 		t.Fatalf("conditioned zone count = %#v, want 1", got)
 	}
-	if got := metricByID(t, summary, "hvac_node_connection_count").Value; got != 1 {
-		t.Fatalf("hvac node connection count = %#v, want 1", got)
+	if got := metricByID(t, summary, "hvac_node_connection_count").Value; got != 0 {
+		t.Fatalf("hvac node connection count = %#v, want 0 typed loop edges", got)
 	}
 	if got := metricByID(t, summary, "model_operating_hours_h").Name; got != "Representative operating hours" {
 		t.Fatalf("model operating hours label = %q", got)

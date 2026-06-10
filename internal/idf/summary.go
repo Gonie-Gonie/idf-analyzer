@@ -138,7 +138,7 @@ var summaryDefinitions = []SummaryDefinition{
 	def("zone_hvac_object_count", "hvac_conditioning", "Zone HVAC object count", "", 0, "ZoneHVAC:* objects.", "Counts objects whose type starts with ZoneHVAC:.", "ZoneHVAC:EquipmentConnections is included.", "Always available; zero means no ZoneHVAC objects were found."),
 	def("thermostat_count", "hvac_conditioning", "Thermostat count", "", 0, "ZoneControl:Thermostat and ThermostatSetpoint:* objects.", "Counts thermostat control and setpoint objects.", "Both controllers and setpoint definitions are included.", "Always available; zero means no thermostat objects were found."),
 	def("conditioned_zone_count", "hvac_conditioning", "Conditioned zone count", "", 0, "ZoneHVAC and thermostat zone references.", "Counts distinct zones referenced by ZoneHVAC, ZoneHVAC:EquipmentConnections, or ZoneControl:Thermostat objects.", "ZoneList references are expanded when a matching ZoneList object exists.", "Always available; zero means no conditioned-zone references were found."),
-	def("hvac_node_connection_count", "hvac_conditioning", "HVAC node connection count", "", 0, "Node-name fields on HVAC objects.", "Reuses the analyzer node extraction logic to count inlet-to-outlet or sequential node connections.", "The result is a simple input graph count, not a validated EnergyPlus branch topology.", "Always available; zero means no node-to-node connections were inferred."),
+	def("hvac_node_connection_count", "hvac_conditioning", "HVAC node connection count", "", 0, "Typed HVAC loop branch components.", "Counts typed inlet-to-outlet edges produced by AnalyzeHVAC for parsed loop branch components.", "The result is an analyzer topology count, not a full EnergyPlus simulation solve.", "Always available; zero means no typed loop component edges were parsed."),
 	def("geometry_coverage_percent", "model_inventory", "Geometry coverage", "%", 1, "Detailed geometry inputs.", "Compares surfaces/fenestration with usable detailed vertices against geometry-bearing objects.", "Simple geometry objects are counted as uncovered because detailed polygon checks cannot verify them.", "Always available; zero means no detailed geometry was available."),
 	def("profile_coverage_percent", "model_inventory", "Profile coverage", "%", 1, "Schedule references and supported annual-hour parser.", "Divides referenced schedules that can be evaluated for annual hours by all referenced schedules.", "Unreferenced schedules are excluded from this readiness metric.", "N/A when no schedule references are present."),
 	def("hvac_relation_confidence", "hvac_conditioning", "HVAC relation confidence", "", 0, "HVAC zone relation evidence.", "Reports high, medium, low, or none based on ZoneHVAC equipment lists, terminal nodes, and loop demand-path evidence.", "This is an evidence label, not an EnergyPlus simulation validation result.", "N/A when no HVAC zone relations are present."),
@@ -648,6 +648,7 @@ func (facts *summaryFacts) captureReadiness(doc Document) {
 
 	hvacReport := AnalyzeHVAC(doc)
 	facts.hvacRelationConfidence = summaryHVACRelationConfidence(hvacReport.ZoneRelations)
+	facts.hvacNodeConnectionCount = summaryHVACTypedNodeConnectionCount(hvacReport)
 
 	for _, diagnostic := range AnalyzeDiagnostics(doc) {
 		source := strings.TrimSpace(diagnostic.Source)
@@ -677,6 +678,25 @@ func summaryHVACRelationConfidence(relations []HVACZoneChain) string {
 		}
 	}
 	return best
+}
+
+func summaryHVACTypedNodeConnectionCount(report HVACReport) int {
+	count := 0
+	for _, loop := range report.Loops {
+		for _, side := range []HVACLoopSide{loop.SupplySide, loop.DemandSide} {
+			for _, branch := range side.Branches {
+				for _, component := range branch.Components {
+					if component.InletNode != "" && component.OutletNode != "" {
+						count++
+					}
+					if component.WaterInletNode != "" && component.WaterOutletNode != "" {
+						count++
+					}
+				}
+			}
+		}
+	}
+	return count
 }
 
 func (facts *summaryFacts) captureInventoryObject(obj Object) {
@@ -852,7 +872,6 @@ func (facts *summaryFacts) captureConditioningAndSchedules(obj Object) {
 	for _, scheduleName := range referencedScheduleNames(obj) {
 		facts.referencedSchedules[normalizeName(scheduleName)] = true
 	}
-	facts.hvacNodeConnectionCount += len(extractHVACConnections(obj))
 }
 
 func (facts *summaryFacts) captureScheduleHours(obj Object) {

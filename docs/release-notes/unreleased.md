@@ -35,6 +35,7 @@ The release script infers bump size from these sections:
 - Heat-flow floor plans now support independent spatial zoom/pan controls and a collapsible zone ledger inspector.
 - HVAC analysis now builds separate SpaceHVAC equipment relations with parent-zone links, node-list provenance, splitter evidence, and UI labels.
 - HVAC node diagnostics now use typed loop component edges, avoid global disconnected-loop false positives, and treat outdoor/relief boundary nodes as expected one-sided nodes.
+- Summary HVAC node connection counts now use typed loop component connection pairs instead of sequential field fallback inference.
 
 ## Fixed
 
