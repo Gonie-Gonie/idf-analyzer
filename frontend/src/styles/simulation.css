@@ -389,6 +389,45 @@
   max-height: 260px;
 }
 
+.simulation-source-output {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 7px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.simulation-source-output.existing {
+  color: var(--green);
+  border-color: color-mix(in srgb, var(--green) 42%, var(--line));
+}
+
+.simulation-source-output.temporary {
+  color: var(--teal);
+  border-color: color-mix(in srgb, var(--teal) 42%, var(--line));
+}
+
+.simulation-source-output.will_be_persisted,
+.simulation-source-output.conflict {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--line));
+}
+
+.simulation-source-signature {
+  display: block;
+  max-width: 220px;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .simulation-plan-table td {
   vertical-align: top;
 }

@@ -494,6 +494,7 @@ function renderSimulationHVACLoopResult(loop) {
           <td>${escapeHTML(seriesNodeKey(series.column))}</td>
           <td>${escapeHTML(seriesVariableName(series.column))}</td>
           <td>${escapeHTML(series.file || "")}</td>
+          <td>${renderSourceOutputCell(sourceOutputForSeriesColumn(series.column))}</td>
           <td>${escapeHTML(formatNumber(series.min))}</td>
           <td>${escapeHTML(formatNumber(series.max))}</td>
           <td>${escapeHTML(formatNumber(series.average))}</td>
@@ -513,8 +514,8 @@ function renderSimulationHVACLoopResult(loop) {
       ${renderSimulationHVACNodeSummaries(loop.nodeSummaries || [])}
       <div class="output-table-wrap">
         <table class="output-table">
-          <thead><tr><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="7">${escapeHTML(t("simulation.noSeries", {}, "No SQL/CSV series"))}</td></tr>`}</tbody>
+          <thead><tr><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="8">${escapeHTML(t("simulation.noSeries", {}, "No SQL/CSV series"))}</td></tr>`}</tbody>
         </table>
       </div>
     </section>`;
@@ -627,6 +628,7 @@ function renderSimulationComfort(result) {
           <td>${escapeHTML(formatNumber(metric.max))}</td>
           <td>${escapeHTML(formatNumber(metric.average))}</td>
           <td>${escapeHTML(metric.source || "")}</td>
+          <td>${renderSourceOutputCell(sourceOutputForVariable(zoneName, metric.name))}</td>
           <td>${escapeHTML(metric.points?.length || 0)}</td>
         </tr>`,
     )
@@ -635,8 +637,8 @@ function renderSimulationComfort(result) {
     ${completenessHTML}
     <div class="output-table-wrap">
       <table class="output-table">
-        <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.unit", {}, "Unit"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
-        <tbody>${rows || `<tr><td colspan="8">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
+        <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.unit", {}, "Unit"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="9">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
       </table>
     </div>`;
 }
@@ -815,6 +817,7 @@ function renderZoneEnergyTable(zones) {
           <td>${escapeHTML(item.metric || "")}</td>
           <td>${escapeHTML(formatEnergyValue(Number(item.total) || 0, item.unit || ""))}</td>
           <td>${escapeHTML(item.source || "")}</td>
+          <td>${renderSourceOutputCell(sourceOutputForVariable(item.zoneName, item.metric))}</td>
         </tr>`,
     )
     .join("");
@@ -823,8 +826,8 @@ function renderZoneEnergyTable(zones) {
       <h4>${escapeHTML(t("simulation.zoneEnergy", {}, "Zone reported energy"))}</h4>
       <div class="output-table-wrap">
         <table class="output-table">
-          <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.value", {}, "Value"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr></thead>
-          <tbody>${rows || `<tr><td colspan="4">${escapeHTML(t("simulation.noZoneEnergy", {}, "No zone reported energy series found."))}</td></tr>`}</tbody>
+          <thead><tr><th>${escapeHTML(t("common.targetZones", {}, "Target Zones"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.value", {}, "Value"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th></tr></thead>
+          <tbody>${rows || `<tr><td colspan="5">${escapeHTML(t("simulation.noZoneEnergy", {}, "No zone reported energy series found."))}</td></tr>`}</tbody>
         </table>
       </div>
     </section>`;
@@ -841,6 +844,63 @@ function formatValueWithUnit(value, unit) {
 
 function formatOptionalValueWithUnit(value, unit) {
   return Number.isFinite(Number(value)) ? formatValueWithUnit(value, unit) : "";
+}
+
+function sourceOutputForSeriesColumn(column) {
+  return sourceOutputForVariable(seriesNodeKey(column), seriesVariableName(column));
+}
+
+function sourceOutputForVariable(keyValue, variableName) {
+  return findPurposeOutputObject("Output:Variable", keyValue, variableName);
+}
+
+function findPurposeOutputObject(objectType, keyValue, variableName) {
+  const objectTypeKey = normalizeOutputMatchToken(objectType);
+  const key = normalizeOutputMatchToken(keyValue);
+  const variable = normalizeOutputMatchToken(variableName);
+  const candidates = activePurposeOutputObjects().filter((object) => {
+    if (normalizeOutputMatchToken(object.objectType) !== objectTypeKey) {
+      return false;
+    }
+    if (objectTypeKey === "output:variable") {
+      return normalizeOutputMatchToken(object.variableName) === variable && purposeOutputKeyMatches(object.keyValue, key);
+    }
+    return purposeOutputKeyMatches(object.keyValue, key);
+  });
+  return candidates.sort((a, b) => purposeSourceOutputRank(b, key) - purposeSourceOutputRank(a, key))[0] || null;
+}
+
+function activePurposeOutputObjects() {
+  return state.simulationResult?.purposeRunPlan?.outputObjects || state.simulationPurposePlan?.outputObjects || [];
+}
+
+function purposeOutputKeyMatches(objectKeyValue, resultKey) {
+  const objectKey = normalizeOutputMatchToken(objectKeyValue);
+  return objectKey === resultKey || objectKey === "*" || objectKey === "";
+}
+
+function purposeSourceOutputRank(object, resultKey) {
+  const objectKey = normalizeOutputMatchToken(object.keyValue);
+  if (objectKey === resultKey) {
+    return 3;
+  }
+  if (objectKey === "*") {
+    return 2;
+  }
+  return 1;
+}
+
+function renderSourceOutputCell(object) {
+  if (!object) {
+    return `<span class="simulation-source-output missing">${escapeHTML(t("common.notAvailable", {}, "N/A"))}</span>`;
+  }
+  const signature = object.signature || [object.objectType, object.keyValue, object.variableName, object.reportingFrequency].filter(Boolean).join(" / ");
+  const stateLabel = outputStateLabel(object.state || "");
+  return `<span class="simulation-source-output ${escapeHTML(object.state || "")}" title="${escapeHTML(signature)}">${escapeHTML(stateLabel)}</span><small class="simulation-source-signature" title="${escapeHTML(signature)}">${escapeHTML(signature)}</small>`;
+}
+
+function normalizeOutputMatchToken(value) {
+  return String(value || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function scheduleSimulationRunPlan(delay = 260) {
