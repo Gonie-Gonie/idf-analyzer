@@ -37,7 +37,13 @@ type energySeriesBuilder struct {
 	dictionary sqlEnergyDictionaryRow
 	unit       string
 	points     []SimulationPoint
+	monthly    map[int]*energyMonthlyBucket
 	total      float64
+}
+
+type energyMonthlyBucket struct {
+	label string
+	value float64
 }
 
 type integritySQLParseResult struct {
@@ -206,7 +212,7 @@ func parseSimulationEnergySQL(path string) (EnergyDashboardResult, error) {
 		number, unit := convertEnergySQLValue(value.Float64, dictionary.units)
 		builder.unit = unit
 		builder.total += number
-		builder.points = append(builder.points, SimulationPoint{X: ordinal, Label: timeLabels[timeIndex], Value: roundedEnergyNumber(number)})
+		builder.addPoint(month, ordinal, timeLabels[timeIndex], number)
 	}
 	if err := rows.Err(); err != nil {
 		return EnergyDashboardResult{}, err
@@ -215,14 +221,15 @@ func parseSimulationEnergySQL(path string) (EnergyDashboardResult, error) {
 	result := EnergyDashboardResult{}
 	for _, dictionary := range dictionaries {
 		builder := builders[dictionary.index]
-		if builder == nil || len(builder.points) == 0 {
+		if builder == nil || builder.pointCount() == 0 {
 			continue
 		}
+		points := builder.sortedPoints()
 		series := EnergySeries{
 			Name:   dictionary.displayName,
 			Unit:   builder.unit,
 			Source: filepath.Base(path),
-			Points: builder.points,
+			Points: points,
 			Total:  roundedEnergyNumber(builder.total),
 		}
 		switch dictionary.category {
@@ -249,6 +256,48 @@ func parseSimulationEnergySQL(path string) (EnergyDashboardResult, error) {
 	}
 	sortEnergyDashboardResult(&result)
 	return result, nil
+}
+
+func (builder *energySeriesBuilder) addPoint(month sql.NullInt64, ordinal int, label string, value float64) {
+	if month.Valid && month.Int64 >= 1 && month.Int64 <= 12 {
+		if builder.monthly == nil {
+			builder.monthly = map[int]*energyMonthlyBucket{}
+		}
+		monthIndex := int(month.Int64)
+		bucket := builder.monthly[monthIndex]
+		if bucket == nil {
+			bucket = &energyMonthlyBucket{label: fmt.Sprintf("M%d", monthIndex)}
+			builder.monthly[monthIndex] = bucket
+		}
+		bucket.value += value
+		return
+	}
+	builder.points = append(builder.points, SimulationPoint{X: ordinal, Label: label, Value: roundedEnergyNumber(value)})
+}
+
+func (builder *energySeriesBuilder) pointCount() int {
+	return len(builder.points) + len(builder.monthly)
+}
+
+func (builder *energySeriesBuilder) sortedPoints() []SimulationPoint {
+	if len(builder.monthly) == 0 {
+		return builder.points
+	}
+	months := make([]int, 0, len(builder.monthly))
+	for month := range builder.monthly {
+		months = append(months, month)
+	}
+	sort.Ints(months)
+	points := make([]SimulationPoint, 0, len(months)+len(builder.points))
+	for _, month := range months {
+		bucket := builder.monthly[month]
+		points = append(points, SimulationPoint{X: len(points) + 1, Label: bucket.label, Value: roundedEnergyNumber(bucket.value)})
+	}
+	for _, point := range builder.points {
+		point.X = len(points) + 1
+		points = append(points, point)
+	}
+	return points
 }
 
 func parseSimulationHeatFlowSQL(path string) (HeatFlowDataset, error) {

@@ -195,8 +195,40 @@ func TestParseSimulationEnergySQLBuildsDashboard(t *testing.T) {
 	if result.FacilityMonthly[0].Unit != "kWh" || result.FacilityMonthly[0].Total != 3 {
 		t.Fatalf("facility energy = %+v, want 3 kWh", result.FacilityMonthly[0])
 	}
+	if len(result.FacilityMonthly[0].Points) != 2 || result.FacilityMonthly[0].Points[0].Label != "M1" || result.FacilityMonthly[0].Points[1].Label != "M2" {
+		t.Fatalf("facility monthly points = %#v", result.FacilityMonthly[0].Points)
+	}
 	if result.ZoneMonthly[0].ZoneName != "ZONE ONE" || result.ZoneMonthly[0].Total != 0.5 {
 		t.Fatalf("zone energy = %+v, want ZONE ONE 0.5 kWh", result.ZoneMonthly[0])
+	}
+}
+
+func TestParseSimulationEnergySQLAggregatesRowsByMonth(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.sql")
+	createTestEnergySQL(t, path)
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`INSERT INTO "Time" VALUES (3, 1, 15, 1, 0)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO ReportData VALUES (7, 3, 20, 3600000.0)`); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := parseSimulationEnergySQL(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facility := result.FacilityMonthly[0]
+	if facility.Total != 4 {
+		t.Fatalf("facility total = %+v, want 4 kWh", facility)
+	}
+	if len(facility.Points) != 2 || facility.Points[0].Label != "M1" || facility.Points[0].Value != 2 || facility.Points[1].Value != 2 {
+		t.Fatalf("aggregated monthly points = %#v", facility.Points)
 	}
 }
 
