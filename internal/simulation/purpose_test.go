@@ -507,6 +507,27 @@ func TestBuildPurposeRunPlanDiscoveryAddsDictionaryOutput(t *testing.T) {
 	}
 }
 
+func TestBuildPurposeRunPlanMarksPersistedOutputs(t *testing.T) {
+	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF)
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes:       []SimulationPurposeID{SimulationPurposeBasicEnergy},
+		PersistOutputs: true,
+	})
+
+	meter := findPurposeOutput(plan, "Output:Meter", "Electricity:Facility", "")
+	if meter == nil {
+		t.Fatalf("missing facility meter in %#v", plan.OutputObjects)
+	}
+	if meter.State != PurposeOutputStateWillPersist {
+		t.Fatalf("meter state = %q, want will persist", meter.State)
+	}
+	sql := findPurposeOutput(plan, "Output:SQLite", "", "")
+	if sql == nil || sql.State != PurposeOutputStateWillPersist {
+		t.Fatalf("sql output = %#v, want will persist", sql)
+	}
+}
+
 func TestPurposeRunPlanTemporaryOutputDiffIncludesOnlyTemporaryOutputs(t *testing.T) {
 	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF+`
 Output:Variable,
