@@ -81,6 +81,7 @@ export const state = {
   inputFilterQuery: "",
   semanticSelectedObjectIndex: "",
   semanticProjectionMode: "basic",
+  semanticProjectionFacet: "all",
   jsonCollapseDepth: 2,
   jsonSelectedObjectIndex: "",
   syncTextRawPosition: true,

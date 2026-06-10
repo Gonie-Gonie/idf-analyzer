@@ -126,6 +126,7 @@ function renderSemanticView() {
 
   const sourceNameConflicts = projection.sourceNameConflicts || [];
   const mode = semanticProjectionMode();
+  const facet = semanticProjectionFacet();
   elements.semanticEditor.innerHTML = `
     <div class="semantic-toolbar">
       <div class="json-meta">
@@ -133,10 +134,14 @@ function renderSemanticView() {
         <span class="badge">Version ${escapeHTML(projection.energyplusVersion || "unknown")}</span>
         <span class="badge">${escapeHTML(t("count.objects", { count: projection.objectCount || 0 }))}</span>
         <span class="badge">${escapeHTML(semanticModeLabel(mode))}</span>
+        ${facet === "all" ? "" : `<span class="badge">${escapeHTML(semanticFacetLabel(facet))}</span>`}
       </div>
       <div class="semantic-actions">
         <div class="semantic-mode-tabs" role="group" aria-label="Semantic detail level">
           ${["basic", "detailed", "source"].map((item) => `<button class="${item === mode ? "active" : ""}" data-semantic-mode="${item}" type="button">${escapeHTML(semanticModeLabel(item))}</button>`).join("")}
+        </div>
+        <div class="semantic-filter-tabs" role="group" aria-label="Semantic search facet">
+          ${["all", "field", "editable", "derived", "evidence"].map((item) => `<button class="${item === facet ? "active" : ""}" data-semantic-facet="${item}" type="button">${escapeHTML(semanticFacetLabel(item))}</button>`).join("")}
         </div>
         <button id="semanticFocusObjectButton" type="button">${escapeHTML(t("input.focusObject"))}</button>
         <button id="semanticFixDuplicatesButton" type="button" ${sourceNameConflicts.length ? "" : "disabled"}>
@@ -169,17 +174,19 @@ function semanticKeyWidths(lines) {
 
 function semanticVisibleLines(lines, terms) {
   const mode = semanticProjectionMode();
-  const compactLines = terms.length || mode === "source"
+  const facet = semanticProjectionFacet();
+  const compactLines = terms.length || facet !== "all" || mode === "source"
     ? lines
     : mode === "detailed"
       ? compactSemanticLines(lines)
       : basicSemanticLines(lines);
+  const facetLines = semanticLinesForFacet(compactLines, facet);
   if (!terms.length) {
-    return compactLines;
+    return facetLines;
   }
   const matchingObjects = new Set();
   const objectText = new Map();
-  for (const line of compactLines) {
+  for (const line of facetLines) {
     if (line.objectIndex === undefined || line.objectIndex === null) {
       continue;
     }
@@ -191,7 +198,7 @@ function semanticVisibleLines(lines, terms) {
       matchingObjects.add(objectIndex);
     }
   }
-  return compactLines.filter((line) => {
+  return facetLines.filter((line) => {
     if (line.objectIndex === undefined || line.objectIndex === null) {
       return true;
     }
@@ -203,6 +210,10 @@ function semanticProjectionMode() {
   return ["basic", "detailed", "source"].includes(state.semanticProjectionMode) ? state.semanticProjectionMode : "basic";
 }
 
+function semanticProjectionFacet() {
+  return ["all", "field", "editable", "derived", "evidence"].includes(state.semanticProjectionFacet) ? state.semanticProjectionFacet : "all";
+}
+
 function semanticModeLabel(mode) {
   switch (mode) {
     case "source":
@@ -212,6 +223,91 @@ function semanticModeLabel(mode) {
     default:
       return "Basic";
   }
+}
+
+function semanticFacetLabel(facet) {
+  switch (facet) {
+    case "field":
+      return "Source fields";
+    case "editable":
+      return "Editable";
+    case "derived":
+      return "Derived";
+    case "evidence":
+      return "Evidence";
+    default:
+      return "All";
+  }
+}
+
+function semanticLinesForFacet(lines, facet) {
+  if (facet === "all") {
+    return lines;
+  }
+  const keep = new Set();
+  lines.forEach((line, index) => {
+    if (!semanticLineMatchesFacet(line, facet)) {
+      return;
+    }
+    keep.add(index);
+    for (const ancestorIndex of semanticAncestorLineIndexes(lines, index)) {
+      keep.add(ancestorIndex);
+    }
+    const indent = Number(line.indent || 0);
+    for (let childIndex = index + 1; childIndex < lines.length; childIndex += 1) {
+      if (Number(lines[childIndex].indent || 0) <= indent) {
+        break;
+      }
+      keep.add(childIndex);
+    }
+  });
+  return lines.filter((_, index) => keep.has(index));
+}
+
+function semanticLineMatchesFacet(line, facet) {
+  const sourceKind = String(line.sourceKind || "");
+  const role = String(line.role || "");
+  const key = semanticLineKeyToken(line);
+  switch (facet) {
+    case "field":
+      return sourceKind === "field";
+    case "editable":
+      return Boolean(line.editable);
+    case "derived":
+      return sourceKind === "derived" || sourceKind === "summary" || role === "metadata";
+    case "evidence":
+      return ["source", "confidence", "evidence", "relation", "relation_source", "source_relations", "source_preservation", "duplicated_as", "also_shown_in", "sync_policy"].includes(key);
+    default:
+      return true;
+  }
+}
+
+function semanticLineKeyToken(line) {
+  const explicit = String(line.key || "").trim();
+  if (explicit) {
+    return explicit;
+  }
+  const text = String(line.text || "").trim().replace(/^- /, "");
+  return text.split(":")[0].trim();
+}
+
+function semanticAncestorLineIndexes(lines, index) {
+  const ancestors = [];
+  let indent = Number(lines[index]?.indent || 0);
+  for (let candidate = index - 1; candidate >= 0; candidate -= 1) {
+    const candidateIndent = Number(lines[candidate].indent || 0);
+    if (candidateIndent >= indent) {
+      continue;
+    }
+    if (semanticLineIsBranch(lines[candidate]) || candidateIndent <= 1) {
+      ancestors.push(candidate);
+      indent = candidateIndent;
+      if (indent <= 0) {
+        break;
+      }
+    }
+  }
+  return ancestors.reverse();
 }
 
 function basicSemanticLines(lines) {
@@ -421,6 +517,12 @@ function bindSemanticControls() {
   elements.semanticEditor.querySelectorAll("[data-semantic-mode]").forEach((button) => {
     button.addEventListener("click", () => {
       state.semanticProjectionMode = button.dataset.semanticMode || "basic";
+      renderSemanticView();
+    });
+  });
+  elements.semanticEditor.querySelectorAll("[data-semantic-facet]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.semanticProjectionFacet = button.dataset.semanticFacet || "all";
       renderSemanticView();
     });
   });

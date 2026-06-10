@@ -533,7 +533,8 @@ button:disabled:hover {
   gap: 6px;
 }
 
-.semantic-mode-tabs {
+.semantic-mode-tabs,
+.semantic-filter-tabs {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -543,7 +544,8 @@ button:disabled:hover {
   padding: 2px;
 }
 
-.semantic-mode-tabs button {
+.semantic-mode-tabs button,
+.semantic-filter-tabs button {
   min-height: 26px;
   border-color: transparent;
   background: transparent;
@@ -552,7 +554,9 @@ button:disabled:hover {
 }
 
 .semantic-mode-tabs button:hover,
-.semantic-mode-tabs button.active {
+.semantic-mode-tabs button.active,
+.semantic-filter-tabs button:hover,
+.semantic-filter-tabs button.active {
   border-color: var(--teal);
   background: var(--teal-soft);
   color: var(--teal-dark);
