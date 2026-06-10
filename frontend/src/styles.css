@@ -1505,6 +1505,52 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   gap: 10px;
 }
 
+.diagnose-fix-shell {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 12px;
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.diagnose-fix-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.75fr);
+  align-items: end;
+  gap: 12px;
+}
+
+.diagnose-fix-head h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.diagnose-fix-grid {
+  grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.diagnose-fix-preview {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg);
+  padding: 10px;
+}
+
+.diagnose-fix-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.diagnose-fix-preview ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
 .diagnostic-toolbar {
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -6102,6 +6148,123 @@ th.input-jump-highlight {
   font-size: 12px;
   font-style: normal;
   line-height: 1.35;
+}
+
+.cleanup-risk.safe {
+  color: var(--green);
+}
+
+.cleanup-risk.review {
+  color: var(--amber);
+}
+
+.cleanup-risk.risky {
+  color: var(--red);
+}
+
+.batch-delta-drawer {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px;
+}
+
+.batch-delta-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.batch-delta-head span,
+.batch-delta-head strong {
+  display: block;
+}
+
+.batch-column-button {
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  display: grid;
+  gap: 2px;
+  min-width: 100%;
+  padding: 4px 6px;
+  text-align: left;
+}
+
+.batch-column-button.baseline {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.batch-column-button.compare {
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface));
+}
+
+.tool-inline-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.batch-purpose-fieldset {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  padding: 8px 10px;
+}
+
+.batch-purpose-fieldset legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.batch-purpose-bars {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.batch-purpose-bar-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(160px, 1fr) minmax(64px, auto);
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.batch-purpose-bar-row span,
+.batch-purpose-bar-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-purpose-bar-row div {
+  height: 10px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.batch-purpose-bar-row i {
+  display: block;
+  height: 100%;
+  background: var(--teal);
 }
 
 @media (max-width: 1260px) {

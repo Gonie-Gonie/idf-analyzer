@@ -41,6 +41,119 @@ func TestAnalyzeInputTextIncludesSummary(t *testing.T) {
 	}
 }
 
+func TestAnalyzeBatchDiagnosePathsKeepsParseFailuresInResult(t *testing.T) {
+	dir := t.TempDir()
+	okPath := filepath.Join(dir, "ok.idf")
+	badPath := filepath.Join(dir, "bad.epjson")
+	if err := os.WriteFile(okPath, []byte(appSummaryIDF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(badPath, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := AnalyzeBatchDiagnosePaths(BatchJobRequest{RunID: "diagnose-test", InputPaths: []string{okPath, badPath}})
+	if result.Total != 2 || result.Completed != 2 || result.Succeeded != 1 || result.Failed != 1 {
+		t.Fatalf("batch diagnose counts = %+v", result)
+	}
+	if len(result.Files) != 2 {
+		t.Fatalf("files = %d, want 2", len(result.Files))
+	}
+}
+
+func TestAnalyzeBatchOutputQAReportsInventoryAndReadiness(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "outputs.idf")
+	text := appSummaryIDF + `
+Output:SQLite,
+  SimpleAndTabular;
+
+Output:VariableDictionary,
+  Regular;
+
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Detailed;
+
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Detailed;
+`
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := AnalyzeBatchOutputQAPaths(BatchJobRequest{RunID: "output-test", InputPaths: []string{path}})
+	if result.Succeeded != 1 || len(result.Files) != 1 {
+		t.Fatalf("output qa result = %+v", result)
+	}
+	file := result.Files[0]
+	if !file.SQLitePresent || !file.VariableDictionary || file.OutputVariableCount != 2 || file.DuplicateOutputCount != 1 || file.DetailedOrTimestepCount != 2 {
+		t.Fatalf("output qa file = %+v", file)
+	}
+	if file.PurposeReadiness["basic_energy"] {
+		t.Fatalf("basic energy readiness should report missing purpose outputs: %+v", file.PurposeReadiness)
+	}
+}
+
+func TestConvertExportBatchRenamePolicyPreservesExistingOutput(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "model.idf")
+	if err := os.WriteFile(path, []byte(appSummaryIDF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	request := BatchConvertExportRequest{
+		BatchJobRequest: BatchJobRequest{RunID: "convert-test", InputPaths: []string{path}},
+		TargetFormat:    "epjson",
+		OutputDirectory: dir,
+		OverwritePolicy: "rename",
+	}
+	first := ConvertExportBatch(request)
+	second := ConvertExportBatch(request)
+	if first.Succeeded != 1 || second.Succeeded != 1 {
+		t.Fatalf("convert results = %+v / %+v", first, second)
+	}
+	if first.Files[0].OutputPath == second.Files[0].OutputPath {
+		t.Fatalf("rename policy reused output path %q", first.Files[0].OutputPath)
+	}
+}
+
+func TestCreateBatchSafeCleanupCopiesWritesCleanedCopyOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cleanup.idf")
+	text := appSummaryIDF + `
+Schedule:Constant,
+  Unused,
+  ,
+  1;
+`
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := CreateBatchSafeCleanupCopies(BatchConvertExportRequest{
+		BatchJobRequest: BatchJobRequest{RunID: "cleanup-copy-test", InputPaths: []string{path}},
+		OutputDirectory: dir,
+		OverwritePolicy: "rename",
+	})
+	if result.Succeeded != 1 || len(result.Files) != 1 || result.Files[0].OutputPath == "" {
+		t.Fatalf("cleanup copy result = %+v", result)
+	}
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleaned, err := os.ReadFile(result.Files[0].OutputPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(original), "Unused") {
+		t.Fatalf("original was unexpectedly changed:\n%s", string(original))
+	}
+	if strings.Contains(string(cleaned), "Unused") {
+		t.Fatalf("cleaned copy still contains unused schedule:\n%s", string(cleaned))
+	}
+}
+
 func TestDefaultEnergyPlusSampleAnalyzes(t *testing.T) {
 	content, err := os.ReadFile("frontend/src/samples/RefBldgLargeOfficeNew2004_Chicago.idf")
 	if err != nil {

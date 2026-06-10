@@ -9,7 +9,7 @@ import {
   openGuide,
   openInputFile,
   openSettings,
-  openTools,
+  openBatch,
   currentDocumentStorageKey,
   registerLoadedDocument,
   revertToLoadedDocument,
@@ -20,6 +20,7 @@ import {
 } from "./actions.js";
 import { renderDiagnostics, renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
 import { renderGeometry, resizeGeometry, setGeometryMode, setGeometrySelectionAid, setGeometryStory } from "./geometry-loader.js";
+import { initializeDiagnoseFixes } from "./diagnose-fixes.js";
 import { initializeHVACControls } from "./hvac-views.js";
 import { initializeOutputControls } from "./output-views.js";
 import {
@@ -63,7 +64,7 @@ elements.saveButton.addEventListener("click", saveInputFile);
 elements.revertButton.addEventListener("click", revertToLoadedDocument);
 elements.exportSummaryJSONButton.addEventListener("click", () => exportSummary("json"));
 elements.exportSummaryCSVButton.addEventListener("click", () => exportSummary("csv"));
-elements.toolsButton.addEventListener("click", openTools);
+elements.toolsButton.addEventListener("click", openBatch);
 elements.guideButton.addEventListener("click", openGuide);
 elements.settingsButton.addEventListener("click", openSettings);
 elements.idfInput.addEventListener("input", () => {
@@ -250,6 +251,7 @@ initializeProfileControls();
 initializeHVACControls();
 initializeOutputControls();
 initializeSimulationControls();
+initializeDiagnoseFixes();
 initializeKeyboardShortcuts({
   save: saveInputFile,
   open: openInputFile,

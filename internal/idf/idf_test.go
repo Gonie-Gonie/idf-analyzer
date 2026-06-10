@@ -262,6 +262,9 @@ Output:Variable,
 	if scan.Candidates[0].Key == "" {
 		t.Fatalf("cleanup candidate key was empty: %#v", scan.Candidates[0])
 	}
+	if len(scan.Candidates[0].RelatedCodes) == 0 || scan.Candidates[0].Risk == "" || scan.Candidates[0].Source == "" {
+		t.Fatalf("cleanup candidate metadata missing: %#v", scan.Candidates[0])
+	}
 	excludedPreview := PreviewCleanup(doc, []string{CleanupRuleUnusedSchedules, CleanupRuleDuplicateOutputVars}, []string{scan.Candidates[0].Key})
 	if excludedPreview.RemovedCount != 1 {
 		t.Fatalf("removed count with excluded candidate = %d, want 1", excludedPreview.RemovedCount)
@@ -273,6 +276,67 @@ Output:Variable,
 	if len(updated.Objects) != len(doc.Objects)-2 {
 		t.Fatalf("updated object count = %d, want %d", len(updated.Objects), len(doc.Objects)-2)
 	}
+}
+
+func TestCleanupFindsDuplicateOutputManagementObjects(t *testing.T) {
+	doc, err := Parse(`
+Version, 24.1;
+
+Output:Meter,
+  Electricity:Facility,
+  Hourly;
+
+Output:Meter,
+  Electricity:Facility,
+  Hourly;
+
+Output:SQLite,
+  SimpleAndTabular;
+
+Output:SQLite,
+  SimpleAndTabular;
+
+OutputControl:Table:Style,
+  HTML,
+  JtoKWH;
+
+OutputControl:Table:Style,
+  HTML,
+  JtoKWH;
+`)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	scan := ScanCleanup(doc)
+	if len(scan.Candidates) != 3 {
+		t.Fatalf("cleanup candidates = %d, want 3: %#v", len(scan.Candidates), scan.Candidates)
+	}
+	for _, candidate := range scan.Candidates {
+		if candidate.RuleID != CleanupRuleDuplicateOutputVars || candidate.Source != "output" || candidate.Risk != "safe" {
+			t.Fatalf("duplicate output candidate metadata = %#v", candidate)
+		}
+		assertStringSliceContains(t, candidate.RelatedCodes, "duplicate_output_request")
+	}
+	var duplicateRule *CleanupRule
+	for index := range scan.Rules {
+		if scan.Rules[index].ID == CleanupRuleDuplicateOutputVars {
+			duplicateRule = &scan.Rules[index]
+			break
+		}
+	}
+	if duplicateRule == nil || duplicateRule.Group != "output" || !duplicateRule.Default {
+		t.Fatalf("duplicate rule = %#v", duplicateRule)
+	}
+}
+
+func assertStringSliceContains(t *testing.T, values []string, want string) {
+	t.Helper()
+	for _, value := range values {
+		if value == want {
+			return
+		}
+	}
+	t.Fatalf("%q not found in %#v", want, values)
 }
 
 func assertDiagnosticCode(t *testing.T, diagnostics []Diagnostic, code string) {

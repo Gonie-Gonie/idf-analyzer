@@ -14,11 +14,13 @@ The release script infers bump size from these sections:
 
 ## Added
 
+- Batch now includes Summary delta comparison, Diagnose matrix, Output QA, Convert / Export, Batch Simulation purpose controls, and Cleanup Report surfaces.
 - Semantic YAML now exposes EnergyPlus compatibility adapter metadata, split ZoneList/SpaceList/ZoneGroup views, zone Spaces, richer output attachment resolution, and expanded HVAC loop metadata.
 - Diagnose, Summary, HVAC, and semantic exports now expose source, confidence, and evidence metadata for inferred or analyzer-limited results.
 
 ## Changed
 
+- The former Tools page is now Batch, with cleanup suggestions moved into Diagnose / Fixes and connected directly to the current editor input.
 - HVAC analysis now treats Branch components as EP26-style 4-field groups by default and includes CondenserLoop, connector/branch rule diagnostics, and ZoneHVAC equipment sequence metadata.
 - Summary and HVAC UI views now surface confidence/source badges, grouped diagnostic sources, HVAC component families, and a compact/full semantic YAML toggle.
 - The analyzer workspace, HVAC relation view, and simulation graphs now provide denser layout presets, a zone-first relation table, and time-range controls for long SQL/CSV and heat-flow outputs.

@@ -384,7 +384,7 @@ func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) 
 		return nil, fmt.Errorf("desktop runtime is not ready")
 	}
 	paths, err := wailsruntime.OpenMultipleFilesDialog(a.ctx, wailsruntime.OpenDialogOptions{
-		Title:   "Open EnergyPlus inputs for Multi-IDF Summary",
+		Title:   "Open EnergyPlus inputs for Batch Summary",
 		Filters: inputFileFilters(),
 	})
 	if err != nil {
@@ -397,6 +397,7 @@ func (a *App) AnalyzeMultiIDFSummary(runID string) (*MultiSummaryResult, error) 
 	return analyzeMultiSummaryPaths(paths, runID, func(progress MultiSummaryProgress) {
 		if a.ctx != nil {
 			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:multiSummaryProgress", progress)
+			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:batchProgress", progress)
 		}
 	}), nil
 }

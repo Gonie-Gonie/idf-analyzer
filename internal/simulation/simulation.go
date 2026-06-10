@@ -95,14 +95,15 @@ type SimulationRunRequest struct {
 }
 
 type MultiSimulationRequest struct {
-	RunID                    string   `json:"runId"`
-	InputPaths               []string `json:"inputPaths"`
-	RootDirectory            string   `json:"rootDirectory"`
-	Recursive                bool     `json:"recursive"`
-	EnergyPlusExecutablePath string   `json:"energyPlusExecutablePath"`
-	WeatherMode              string   `json:"weatherMode"`
-	WeatherPath              string   `json:"weatherPath"`
-	WorkerCount              int      `json:"workerCount"`
+	RunID                    string                    `json:"runId"`
+	InputPaths               []string                  `json:"inputPaths"`
+	RootDirectory            string                    `json:"rootDirectory"`
+	Recursive                bool                      `json:"recursive"`
+	EnergyPlusExecutablePath string                    `json:"energyPlusExecutablePath"`
+	WeatherMode              string                    `json:"weatherMode"`
+	WeatherPath              string                    `json:"weatherPath"`
+	WorkerCount              int                       `json:"workerCount"`
+	PurposeRequest           *SimulationPurposeRequest `json:"purposeRequest,omitempty"`
 }
 
 type SimulationFileSelectionResult struct {
@@ -147,6 +148,17 @@ type SimulationRunResult struct {
 	HeatFlow                 HeatFlowDataset      `json:"heatFlow,omitempty"`
 	PurposeRunPlan           *PurposeRunPlan      `json:"purposeRunPlan,omitempty"`
 	PurposeResults           *PurposeResultBundle `json:"purposeResults,omitempty"`
+	PurposeMetrics           []PurposeMetric      `json:"purposeMetrics,omitempty"`
+}
+
+type PurposeMetric struct {
+	ID           string              `json:"id"`
+	Label        string              `json:"label"`
+	PurposeID    SimulationPurposeID `json:"purposeId,omitempty"`
+	Value        float64             `json:"value"`
+	Unit         string              `json:"unit,omitempty"`
+	DisplayValue string              `json:"displayValue"`
+	Status       string              `json:"status,omitempty"`
 }
 
 type SimulationRunManifest struct {
@@ -827,14 +839,35 @@ func RunMultipleSimulations(request MultiSimulationRequest, progress func(Simula
 			defer wg.Done()
 			for path := range jobs {
 				weatherPath := resolveBatchWeather(path, request)
-				runResult, err := RunSimulation(SimulationRunRequest{
+				runRequest := SimulationRunRequest{
 					RunID:                    request.RunID + "-" + shortPathHash(path),
 					InputPath:                path,
 					Filename:                 filepath.Base(path),
 					EnergyPlusExecutablePath: request.EnergyPlusExecutablePath,
 					WeatherPath:              weatherPath,
 					Silent:                   true,
-				}, nil, settings)
+				}
+				if request.PurposeRequest != nil {
+					prepared, prepareErr := prepareBatchPurposeSimulationRequest(runRequest, *request.PurposeRequest)
+					if prepareErr != nil {
+						results <- SimulationRunResult{
+							RunID:     runRequest.RunID,
+							Status:    "failed",
+							InputPath: path,
+							Filename:  filepath.Base(path),
+							Error:     prepareErr.Error(),
+							ExitCode:  -1,
+						}
+						completedMu.Lock()
+						completed++
+						currentCompleted := completed
+						completedMu.Unlock()
+						emitSimulationProgress(progress, request.RunID, "execute", "failed", filepath.Base(path), currentCompleted, len(paths), path)
+						continue
+					}
+					runRequest = prepared
+				}
+				runResult, err := RunSimulation(runRequest, nil, settings)
 				if err != nil {
 					runResult = &SimulationRunResult{
 						RunID:     request.RunID + "-" + shortPathHash(path),
@@ -844,6 +877,9 @@ func RunMultipleSimulations(request MultiSimulationRequest, progress func(Simula
 						Error:     err.Error(),
 						ExitCode:  -1,
 					}
+				}
+				if runResult != nil && runResult.PurposeResults != nil {
+					runResult.PurposeMetrics = SummarizePurposeMetrics(runResult.PurposeResults)
 				}
 				completedMu.Lock()
 				completed++

@@ -329,9 +329,12 @@ export function openGuide() {
   window.location.assign("./guide.html");
 }
 
+export function openBatch() {
+  window.location.assign("./batch.html");
+}
+
 export function openTools() {
-  storeCurrentDocumentForTools();
-  window.location.assign("./tools.html");
+  openBatch();
 }
 
 export function openSettings() {
@@ -368,21 +371,6 @@ function nextPaint() {
 
 function normalizeLineEndings(text) {
   return String(text ?? "").replace(/\r\n?/g, "\n");
-}
-
-function storeCurrentDocumentForTools() {
-  try {
-    window.sessionStorage.setItem(
-      currentDocumentStorageKey,
-      JSON.stringify({
-        text: elements.idfInput.value || "",
-        path: state.currentFilePath || "",
-        filename: state.currentFilename || suggestedSaveFilename(),
-      }),
-    );
-  } catch {
-    // Session storage can be unavailable in hardened webview settings.
-  }
 }
 
 function suggestedSaveFilename() {

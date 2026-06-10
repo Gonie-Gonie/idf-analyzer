@@ -334,6 +334,7 @@ func (a *App) RunMultipleSimulations(request simulation.MultiSimulationRequest) 
 	progress := func(item simulation.SimulationProgress) {
 		if a.ctx != nil {
 			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:multiSimulationProgress", item)
+			wailsruntime.EventsEmit(a.ctx, "idfAnalyzer:batchProgress", item)
 		}
 	}
 	return simulation.RunMultipleSimulations(request, progress, settings.Simulation)

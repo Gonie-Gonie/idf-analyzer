@@ -19,18 +19,22 @@ type CleanupRule struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	Description string `json:"description"`
+	Group       string `json:"group,omitempty"`
 	Available   bool   `json:"available"`
 	Default     bool   `json:"default"`
 	Future      bool   `json:"future,omitempty"`
 }
 
 type CleanupCandidate struct {
-	Key         string `json:"key"`
-	RuleID      string `json:"ruleId"`
-	ObjectIndex int    `json:"objectIndex"`
-	ObjectType  string `json:"objectType"`
-	ObjectName  string `json:"objectName,omitempty"`
-	Reason      string `json:"reason"`
+	Key          string   `json:"key"`
+	RuleID       string   `json:"ruleId"`
+	ObjectIndex  int      `json:"objectIndex"`
+	ObjectType   string   `json:"objectType"`
+	ObjectName   string   `json:"objectName,omitempty"`
+	Reason       string   `json:"reason"`
+	RelatedCodes []string `json:"relatedCodes,omitempty"`
+	Risk         string   `json:"risk,omitempty"`
+	Source       string   `json:"source,omitempty"`
 }
 
 type CleanupScan struct {
@@ -101,6 +105,7 @@ func cleanupRules(candidates []CleanupCandidate) []CleanupRule {
 			ID:          CleanupRuleUnusedSchedules,
 			Name:        "Remove unused schedules",
 			Description: "Remove Schedule:* objects that are not referenced by other fields.",
+			Group:       "safe",
 			Available:   counts[CleanupRuleUnusedSchedules] > 0,
 			Default:     counts[CleanupRuleUnusedSchedules] > 0,
 		},
@@ -108,20 +113,23 @@ func cleanupRules(candidates []CleanupCandidate) []CleanupRule {
 			ID:          CleanupRuleUnusedEnvelopeResources,
 			Name:        "Remove unused materials/constructions",
 			Description: "Remove unreferenced material, window material, and construction resources.",
+			Group:       "review",
 			Available:   counts[CleanupRuleUnusedEnvelopeResources] > 0,
-			Default:     counts[CleanupRuleUnusedEnvelopeResources] > 0,
+			Default:     false,
 		},
 		{
 			ID:          CleanupRuleUnusedCurvesTables,
 			Name:        "Remove unused curves/tables",
 			Description: "Remove unreferenced performance curves and tables.",
+			Group:       "review",
 			Available:   counts[CleanupRuleUnusedCurvesTables] > 0,
-			Default:     counts[CleanupRuleUnusedCurvesTables] > 0,
+			Default:     false,
 		},
 		{
 			ID:          CleanupRuleDuplicateOutputVars,
-			Name:        "Remove duplicate Output:Variable objects",
-			Description: "Keep the first Output:Variable for each identical field signature.",
+			Name:        "Remove duplicate Output objects",
+			Description: "Keep the first Output:* or OutputControl:Table:Style object for each identical field signature.",
+			Group:       "output",
 			Available:   counts[CleanupRuleDuplicateOutputVars] > 0,
 			Default:     counts[CleanupRuleDuplicateOutputVars] > 0,
 		},
@@ -129,6 +137,7 @@ func cleanupRules(candidates []CleanupCandidate) []CleanupRule {
 			ID:          CleanupRuleCommentsOnly,
 			Name:        "Remove comments only",
 			Description: "Reserved for a future comment-only cleanup pass.",
+			Group:       "experimental",
 			Available:   false,
 			Default:     false,
 			Future:      true,
@@ -137,6 +146,7 @@ func cleanupRules(candidates []CleanupCandidate) []CleanupRule {
 			ID:          CleanupRuleCompactFormatting,
 			Name:        "Compact formatting",
 			Description: "Rewrite IDF object spacing using the app formatter without removing extra objects.",
+			Group:       "formatting",
 			Available:   true,
 			Default:     false,
 		},
@@ -152,15 +162,18 @@ func cleanupCandidates(doc Document) []CleanupCandidate {
 			continue
 		}
 		candidates = append(candidates, CleanupCandidate{
-			Key:         cleanupCandidateKey(ruleID, obj.Index),
-			RuleID:      ruleID,
-			ObjectIndex: obj.Index,
-			ObjectType:  obj.Type,
-			ObjectName:  obj.Name,
-			Reason:      fmt.Sprintf("%s %q is not referenced.", obj.Type, obj.Name),
+			Key:          cleanupCandidateKey(ruleID, obj.Index),
+			RuleID:       ruleID,
+			ObjectIndex:  obj.Index,
+			ObjectType:   obj.Type,
+			ObjectName:   obj.Name,
+			Reason:       fmt.Sprintf("%s %q is not referenced.", obj.Type, obj.Name),
+			RelatedCodes: []string{"orphan_object"},
+			Risk:         cleanupRiskForRule(ruleID),
+			Source:       "analyzer",
 		})
 	}
-	candidates = append(candidates, duplicateOutputVariableCandidates(doc)...)
+	candidates = append(candidates, duplicateOutputCandidates(doc)...)
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].RuleID != candidates[j].RuleID {
 			return candidates[i].RuleID < candidates[j].RuleID
@@ -187,28 +200,57 @@ func cleanupRuleForUnusedObject(objectType string) string {
 	}
 }
 
-func duplicateOutputVariableCandidates(doc Document) []CleanupCandidate {
+func duplicateOutputCandidates(doc Document) []CleanupCandidate {
 	seen := map[string]Object{}
 	var candidates []CleanupCandidate
 	for _, obj := range doc.Objects {
-		if !strings.EqualFold(obj.Type, "Output:Variable") {
+		if !cleanupDuplicateOutputType(obj.Type) {
 			continue
 		}
-		signature := outputVariableSignature(obj)
+		signature := outputObjectSignature(obj.Type, outputFieldValues(obj))
 		if first, ok := seen[signature]; ok {
 			candidates = append(candidates, CleanupCandidate{
-				Key:         cleanupCandidateKey(CleanupRuleDuplicateOutputVars, obj.Index),
-				RuleID:      CleanupRuleDuplicateOutputVars,
-				ObjectIndex: obj.Index,
-				ObjectType:  obj.Type,
-				ObjectName:  objectName(obj),
-				Reason:      fmt.Sprintf("Duplicate Output:Variable already defined by object #%d.", first.Index+1),
+				Key:          cleanupCandidateKey(CleanupRuleDuplicateOutputVars, obj.Index),
+				RuleID:       CleanupRuleDuplicateOutputVars,
+				ObjectIndex:  obj.Index,
+				ObjectType:   obj.Type,
+				ObjectName:   objectName(obj),
+				Reason:       fmt.Sprintf("Duplicate %s already defined by object #%d.", obj.Type, first.Index+1),
+				RelatedCodes: []string{"duplicate_output_request"},
+				Risk:         cleanupRiskForRule(CleanupRuleDuplicateOutputVars),
+				Source:       "output",
 			})
 			continue
 		}
 		seen[signature] = obj
 	}
 	return candidates
+}
+
+func cleanupDuplicateOutputType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	switch lower {
+	case "output:variable",
+		"output:meter",
+		"output:meter:meterfileonly",
+		"output:meter:cumulative",
+		"output:meter:cumulative:meterfileonly",
+		"output:sqlite",
+		"output:json",
+		"outputcontrol:table:style":
+		return true
+	default:
+		return strings.HasPrefix(lower, "output:table:")
+	}
+}
+
+func cleanupRiskForRule(ruleID string) string {
+	switch ruleID {
+	case CleanupRuleUnusedSchedules, CleanupRuleDuplicateOutputVars, CleanupRuleCompactFormatting:
+		return "safe"
+	default:
+		return "review"
+	}
 }
 
 func outputVariableSignature(obj Object) string {
