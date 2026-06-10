@@ -344,7 +344,6 @@ var objectFieldCatalog = map[string]ObjectSpec{
 	),
 	"outputcontrol:table:style": catalogObject("OutputControl:Table:Style",
 		choiceField("Column Separator", "", "Tab", "Fixed", "Comma", "HTML", "XML", "All"),
-		choiceField("Unit Conversion", "", "None", "JtoKWH", "JtoMJ", "JtoGJ", "InchPound"),
 	),
 	"output:diagnostics": catalogObject("Output:Diagnostics",
 		field("Key 1", ""),

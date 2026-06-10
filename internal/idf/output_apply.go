@@ -132,6 +132,9 @@ func applyOutputAddObject(updated *Document, original Document, request OutputOb
 			return
 		}
 	}
+	if applyOutputMergeUniqueObject(updated, original, objectType, fields, mutate, preview) {
+		return
+	}
 	objectIndex := len(updated.Objects)
 	preview.Changes = append(preview.Changes, OutputApplyChange{
 		Action:       "add_output",
@@ -149,6 +152,113 @@ func applyOutputAddObject(updated *Document, original Document, request OutputOb
 		Type:   objectType,
 		Fields: outputFieldsForObject(objectType, fields),
 	})
+}
+
+func applyOutputMergeUniqueObject(updated *Document, original Document, objectType string, fields []OutputFieldValue, mutate bool, preview *OutputApplyPreview) bool {
+	typeKey := normalizeFieldCatalogKey(objectType)
+	switch typeKey {
+	case "output:table:summaryreports", "output:diagnostics":
+		return applyOutputMergeExtensibleUniqueObject(updated, original, objectType, fields, mutate, preview)
+	case "output:sqlite", "output:json", "outputcontrol:files", "outputcontrol:table:style":
+		if existing, ok := firstOutputObjectOfType(original, objectType); ok {
+			preview.Changes = append(preview.Changes, OutputApplyChange{
+				Action:       "no_change",
+				ObjectIndex:  existing.Index,
+				ObjectType:   existing.Type,
+				After:        outputObjectLabel(objectType, fields),
+				Message:      fmt.Sprintf("%s already has a unique %s object; not adding a duplicate.", objectLabel(existing), objectType),
+				RequiresSave: false,
+			})
+			return true
+		}
+	}
+	return false
+}
+
+func applyOutputMergeExtensibleUniqueObject(updated *Document, original Document, objectType string, fields []OutputFieldValue, mutate bool, preview *OutputApplyPreview) bool {
+	existing, ok := firstOutputObjectOfType(original, objectType)
+	if !ok {
+		return false
+	}
+	existingValues := map[string]bool{}
+	for _, field := range existing.Fields {
+		if value := normalizeName(field.Value); value != "" {
+			existingValues[value] = true
+		}
+	}
+	missing := make([]OutputFieldValue, 0, len(fields))
+	for _, field := range fields {
+		value := strings.TrimSpace(field.Value)
+		if value == "" || existingValues[normalizeName(value)] {
+			continue
+		}
+		missing = append(missing, OutputFieldValue{Name: outputExtensibleFieldName(objectType, len(existing.Fields)+len(missing)), Value: value})
+		existingValues[normalizeName(value)] = true
+	}
+	if len(missing) == 0 {
+		preview.Changes = append(preview.Changes, OutputApplyChange{
+			Action:       "no_change",
+			ObjectIndex:  existing.Index,
+			ObjectType:   existing.Type,
+			After:        outputObjectLabel(objectType, fields),
+			Message:      fmt.Sprintf("%s already includes %s.", objectLabel(existing), outputObjectLabel(objectType, fields)),
+			RequiresSave: false,
+		})
+		return true
+	}
+	for index, field := range missing {
+		preview.Changes = append(preview.Changes, OutputApplyChange{
+			Action:       "update_field",
+			ObjectIndex:  existing.Index,
+			ObjectType:   existing.Type,
+			FieldIndex:   len(existing.Fields) + index,
+			FieldName:    field.Name,
+			After:        field.Value,
+			Message:      fmt.Sprintf("Add %s to %s.", field.Value, objectLabel(existing)),
+			RequiresSave: true,
+		})
+	}
+	if mutate {
+		if updatedIndex, ok := objectIndexByOriginalIndex(*updated, existing.Index); ok {
+			for _, field := range missing {
+				updated.Objects[updatedIndex].Fields = append(updated.Objects[updatedIndex].Fields, Field{
+					Value:   field.Value,
+					Comment: field.Name,
+				})
+			}
+		}
+	}
+	return true
+}
+
+func firstOutputObjectOfType(doc Document, objectType string) (Object, bool) {
+	typeKey := normalizeFieldCatalogKey(objectType)
+	for _, obj := range doc.Objects {
+		if normalizeFieldCatalogKey(obj.Type) == typeKey {
+			return obj, true
+		}
+	}
+	return Object{}, false
+}
+
+func objectIndexByOriginalIndex(doc Document, objectIndex int) (int, bool) {
+	for index, obj := range doc.Objects {
+		if obj.Index == objectIndex {
+			return index, true
+		}
+	}
+	return -1, false
+}
+
+func outputExtensibleFieldName(objectType string, fieldIndex int) string {
+	switch normalizeFieldCatalogKey(objectType) {
+	case "output:table:summaryreports":
+		return fmt.Sprintf("Report %d Name", fieldIndex+1)
+	case "output:diagnostics":
+		return fmt.Sprintf("Key %d", fieldIndex+1)
+	default:
+		return outputDefaultFieldName(objectType, fieldIndex)
+	}
 }
 
 func applyOutputFieldUpdate(updated *Document, original Document, request OutputFieldUpdate, mutate bool, preview *OutputApplyPreview) {

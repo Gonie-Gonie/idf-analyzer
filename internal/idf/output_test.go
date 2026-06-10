@@ -167,6 +167,89 @@ func TestApplyOutputAddsUpdatesAndRemoves(t *testing.T) {
 	}
 }
 
+func TestTableStyleRecommendationUsesSingleIDDField(t *testing.T) {
+	doc, err := Parse(outputFixtureIDF)
+	if err != nil {
+		t.Fatalf("parse output fixture: %v", err)
+	}
+	report := AnalyzeOutput(doc)
+	recommendation := findOutputRecommendation(report, "table-style-html")
+	if recommendation == nil {
+		t.Fatalf("missing table-style-html recommendation")
+	}
+	if len(recommendation.Fields) != 1 {
+		t.Fatalf("table style fields = %#v, want only Column Separator", recommendation.Fields)
+	}
+	if recommendation.Fields[0].Name != "Column Separator" || recommendation.Fields[0].Value != "HTML" {
+		t.Fatalf("table style field = %#v, want Column Separator=HTML", recommendation.Fields[0])
+	}
+}
+
+func TestApplyOutputMergesUniqueSummaryReports(t *testing.T) {
+	doc, err := Parse(outputFixtureIDF + `
+Output:Table:SummaryReports,
+  AnnualBuildingUtilityPerformanceSummary;
+`)
+	if err != nil {
+		t.Fatalf("parse output fixture: %v", err)
+	}
+	updated, preview := ApplyOutput(doc, OutputApplyRequest{
+		AddObjects: []OutputObjectRequest{{
+			ObjectType: "Output:Table:SummaryReports",
+			Fields:     outputFields("Report 1 Name", "AllSummary"),
+		}},
+	})
+	if !preview.CanApply {
+		t.Fatalf("preview blocking warnings: %#v", preview.Warnings)
+	}
+	var summaryObjects []Object
+	for _, obj := range updated.Objects {
+		if obj.Type == "Output:Table:SummaryReports" {
+			summaryObjects = append(summaryObjects, obj)
+		}
+	}
+	if len(summaryObjects) != 1 {
+		t.Fatalf("summary object count = %d, want 1: %#v", len(summaryObjects), summaryObjects)
+	}
+	if len(summaryObjects[0].Fields) != 2 {
+		t.Fatalf("summary fields = %#v, want existing report plus AllSummary", summaryObjects[0].Fields)
+	}
+	if summaryObjects[0].Fields[1].Value != "AllSummary" || summaryObjects[0].Fields[1].Comment != "Report 2 Name" {
+		t.Fatalf("merged summary field = %#v, want AllSummary / Report 2 Name", summaryObjects[0].Fields[1])
+	}
+}
+
+func TestApplyOutputDoesNotDuplicateUniqueTableStyle(t *testing.T) {
+	doc, err := Parse(outputFixtureIDF + `
+OutputControl:Table:Style,
+  Comma;
+`)
+	if err != nil {
+		t.Fatalf("parse output fixture: %v", err)
+	}
+	updated, preview := ApplyOutput(doc, OutputApplyRequest{
+		AddObjects: []OutputObjectRequest{{
+			ObjectType: "OutputControl:Table:Style",
+			Fields:     outputFields("Column Separator", "HTML"),
+		}},
+	})
+	if !preview.CanApply {
+		t.Fatalf("preview blocking warnings: %#v", preview.Warnings)
+	}
+	count := 0
+	for _, obj := range updated.Objects {
+		if obj.Type == "OutputControl:Table:Style" {
+			count++
+			if len(obj.Fields) != 1 || obj.Fields[0].Value != "Comma" {
+				t.Fatalf("table style was unexpectedly rewritten: %#v", obj.Fields)
+			}
+		}
+	}
+	if count != 1 {
+		t.Fatalf("table style object count = %d, want 1", count)
+	}
+}
+
 func TestApplyStandardOutputPresetReplacesNonStandardOutput(t *testing.T) {
 	doc, err := Parse(outputFixtureIDF + `
 Output:Variable,
@@ -211,6 +294,15 @@ Output:Variable,
 	if foundOldHumidity {
 		t.Fatalf("replace preset should remove non-standard humidity output: %#v", report.Existing)
 	}
+}
+
+func findOutputRecommendation(report OutputReport, id string) *OutputRecommendation {
+	for index := range report.Recommendations {
+		if report.Recommendations[index].ID == id {
+			return &report.Recommendations[index]
+		}
+	}
+	return nil
 }
 
 func recommendationExists(report OutputReport, id string) bool {
