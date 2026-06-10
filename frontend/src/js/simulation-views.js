@@ -444,6 +444,7 @@ function renderSimulationEnergyDashboard(result) {
     .join("");
   elements.simulationEnergyDashboard.innerHTML = `
     <div class="simulation-energy-kpis">${kpis || `<div><span>${escapeHTML(t("common.notAvailable", {}, "N/A"))}</span><strong>0</strong></div>`}</div>
+    ${renderPurposeCompletenessRow(energy.completeness || [])}
     ${renderEnergyMonthlyChart(t("simulation.facilityMonthlyProfile", {}, "Facility monthly profile"), facility)}
     ${renderEnergyMonthlyChart(t("simulation.endUseMonthlyProfile", {}, "End-use monthly profile"), endUse)}
     ${renderEnergyBarSection(t("simulation.facilityEnergy", {}, "Facility energy"), facility)}
@@ -479,12 +480,6 @@ function renderSimulationHVACLoops(result) {
 }
 
 function renderSimulationHVACLoopResult(loop) {
-  const completeness = loop.completeness || [];
-  const completenessHTML = completeness.length
-    ? `<div class="simulation-completeness-row">${completeness
-        .map((item) => `<span class="${item.found ? "found" : "missing"}">${escapeHTML(item.requiredOutput || "")}</span>`)
-        .join("")}</div>`
-    : "";
   const rows = (loop.series || [])
     .slice(0, 80)
     .map(
@@ -506,7 +501,7 @@ function renderSimulationHVACLoopResult(loop) {
         <h4>${escapeHTML(loop.name || t("simulation.hvacLoops", {}, "HVAC Loops"))}</h4>
         <span>${escapeHTML(loop.loopType || t("simulation.nodeStateSeries", {}, "Node state series"))}</span>
       </div>
-      ${completenessHTML}
+      ${renderPurposeCompletenessRow(loop.completeness || [])}
       <div class="output-table-wrap">
         <table class="output-table">
           <thead><tr><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
@@ -541,9 +536,7 @@ function renderSimulationComfort(result) {
     );
   }
   const completenessHTML = (comfort.completeness || []).length
-    ? `<div class="simulation-completeness-row">${comfort.completeness
-        .map((item) => `<span class="${item.found ? "found" : "missing"}">${escapeHTML(item.requiredOutput || "")}</span>`)
-        .join("")}</div>`
+    ? renderPurposeCompletenessRow(comfort.completeness || [])
     : "";
   const rows = zones
     .flatMap((zone) => (zone.metrics || []).map((metric) => ({ zoneName: zone.zoneName, metric })))
@@ -570,6 +563,18 @@ function renderSimulationComfort(result) {
         <tbody>${rows || `<tr><td colspan="8">${escapeHTML(t("simulation.noComfortResult", {}, "No comfort result"))}</td></tr>`}</tbody>
       </table>
     </div>`;
+}
+
+function renderPurposeCompletenessRow(items) {
+  if (!items.length) {
+    return "";
+  }
+  return `<div class="simulation-completeness-row">${items
+    .map((item) => {
+      const source = item.source ? ` - ${item.source}` : "";
+      return `<span class="${item.found ? "found" : "missing"}" title="${escapeHTML(`${item.requiredOutput || ""}${source}`)}">${escapeHTML(item.requiredOutput || "")}</span>`;
+    })
+    .join("")}</div>`;
 }
 
 function renderEnergyBarSection(title, series) {

@@ -69,6 +69,7 @@ The release script infers bump size from these sections:
 - Purpose simulation runs now save `idf-analyzer-run-plan.json` and `temporary_outputs.diff` artifacts alongside EnergyPlus outputs.
 - Simulation progress events now distinguish purpose planning, temporary output application, SQL parsing, fallback parsing, and purpose-result bundling phases.
 - Basic Energy results now include monthly stacked profile charts and a zone energy heatmap matrix in addition to total bars and ranking tables.
+- Basic Energy now surfaces purpose completeness badges alongside HVAC Loop and Comfort result views.
 
 ## Fixed
 
