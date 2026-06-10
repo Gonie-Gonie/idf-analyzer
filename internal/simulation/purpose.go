@@ -158,14 +158,16 @@ type PurposeCompletenessItem struct {
 }
 
 type purposePlanBuilder struct {
-	doc             idf.Document
-	request         SimulationPurposeRequest
-	existing        map[string]PurposeOutputObject
-	existingBase    map[string]PurposeOutputObject
-	recommendations map[string]idf.OutputRecommendation
-	objects         []PurposeOutputObject
-	bySignature     map[string]int
-	warnings        []PurposeRunWarning
+	doc              idf.Document
+	request          SimulationPurposeRequest
+	existing         map[string]PurposeOutputObject
+	existingBase     map[string]PurposeOutputObject
+	recommendations  map[string]idf.OutputRecommendation
+	objects          []PurposeOutputObject
+	bySignature      map[string]int
+	warnings         []PurposeRunWarning
+	runPeriodDays    int
+	timestepsPerHour int
 }
 
 func NormalizeSimulationPurposeRequest(request *SimulationPurposeRequest) SimulationPurposeRequest {
@@ -349,12 +351,14 @@ func newPurposePlanBuilder(doc idf.Document, request SimulationPurposeRequest) *
 		recommendations[item.ID] = item
 	}
 	return &purposePlanBuilder{
-		doc:             doc,
-		request:         request,
-		existing:        existing,
-		existingBase:    existingBase,
-		recommendations: recommendations,
-		bySignature:     map[string]int{},
+		doc:              doc,
+		request:          request,
+		existing:         existing,
+		existingBase:     existingBase,
+		recommendations:  recommendations,
+		bySignature:      map[string]int{},
+		runPeriodDays:    estimatedRunPeriodDays(doc),
+		timestepsPerHour: estimatedTimestepsPerHour(doc),
 	}
 }
 
@@ -647,7 +651,7 @@ func (builder *purposePlanBuilder) plan() PurposeRunPlan {
 			continue
 		}
 		seriesCount++
-		frameCount = maxInt(frameCount, purposeFrequencyFrames(object.ReportingFrequency))
+		frameCount = maxInt(frameCount, purposeFrequencyFrames(object.ReportingFrequency, builder.runPeriodDays, builder.timestepsPerHour))
 	}
 	weight := planWeight(seriesCount, frameCount)
 	return PurposeRunPlan{
@@ -801,20 +805,22 @@ func purposeFrequencyRank(frequency string) int {
 	}
 }
 
-func purposeFrequencyFrames(frequency string) int {
+func purposeFrequencyFrames(frequency string, runPeriodDays int, timestepsPerHour int) int {
+	days := maxInt(runPeriodDays, 1)
+	timesteps := maxInt(timestepsPerHour, 1)
 	switch strings.ToLower(canonicalPurposeFrequency(frequency)) {
 	case "detailed", "timestep":
-		return 35040
+		return days * 24 * timesteps
 	case "hourly":
-		return 8760
+		return days * 24
 	case "daily":
-		return 365
+		return days
 	case "monthly":
-		return 12
+		return maxInt(1, minInt(12, (days+30)/31))
 	case "runperiod", "annual":
 		return 1
 	default:
-		return 8760
+		return days * 24
 	}
 }
 
@@ -977,6 +983,79 @@ func docHasObject(doc idf.Document, objectType string) bool {
 	return false
 }
 
+func estimatedRunPeriodDays(doc idf.Document) int {
+	total := 0
+	for _, obj := range doc.Objects {
+		if !strings.EqualFold(strings.TrimSpace(obj.Type), "RunPeriod") {
+			continue
+		}
+		beginMonth := purposeIntField(obj, 1, 1)
+		beginDay := purposeIntField(obj, 2, 1)
+		endMonth := purposeIntField(obj, 4, 12)
+		endDay := purposeIntField(obj, 5, 31)
+		start := dayOfYear(beginMonth, beginDay)
+		end := dayOfYear(endMonth, endDay)
+		if start <= 0 || end <= 0 {
+			continue
+		}
+		days := end - start + 1
+		if days <= 0 {
+			days += 365
+		}
+		total += days
+	}
+	if total <= 0 {
+		return 365
+	}
+	return total
+}
+
+func estimatedTimestepsPerHour(doc idf.Document) int {
+	for _, obj := range doc.Objects {
+		if !strings.EqualFold(strings.TrimSpace(obj.Type), "Timestep") {
+			continue
+		}
+		return maxInt(1, purposeIntField(obj, 0, 4))
+	}
+	return 4
+}
+
+func purposeIntField(obj idf.Object, index int, fallback int) int {
+	if index < 0 || index >= len(obj.Fields) {
+		return fallback
+	}
+	value := strings.TrimSpace(obj.Fields[index].Value)
+	if value == "" {
+		return fallback
+	}
+	number := 0
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return fallback
+		}
+		number = number*10 + int(r-'0')
+	}
+	if number <= 0 {
+		return fallback
+	}
+	return number
+}
+
+func dayOfYear(month int, day int) int {
+	daysByMonth := []int{31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}
+	if month < 1 || month > len(daysByMonth) {
+		return 0
+	}
+	if day < 1 || day > daysByMonth[month-1] {
+		return 0
+	}
+	total := day
+	for index := 0; index < month-1; index++ {
+		total += daysByMonth[index]
+	}
+	return total
+}
+
 func normalizePurposeIDs(values []SimulationPurposeID) []SimulationPurposeID {
 	order := []SimulationPurposeID{
 		SimulationPurposeBasicEnergy,
@@ -1056,6 +1135,13 @@ func purposeOutputLabel(object PurposeOutputObject) string {
 
 func maxInt(a int, b int) int {
 	if a > b {
+		return a
+	}
+	return b
+}
+
+func minInt(a int, b int) int {
+	if a < b {
 		return a
 	}
 	return b

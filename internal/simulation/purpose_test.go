@@ -91,6 +91,42 @@ func TestBuildPurposeRunPlanZoneHeatFlowSelectedZones(t *testing.T) {
 	}
 }
 
+func TestBuildPurposeRunPlanEstimatesFramesFromRunPeriod(t *testing.T) {
+	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF+`
+Timestep,
+  6;
+
+RunPeriod,
+  One Week,
+  1,
+  1,
+  ,
+  1,
+  7;
+`)
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeZoneHeatFlow},
+	})
+
+	if plan.EstimatedFrames != 168 {
+		t.Fatalf("estimated frames = %d, want 168 hourly frames for one week", plan.EstimatedFrames)
+	}
+
+	timestepPlan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeCustomOutputs},
+		Scope: SimulationPurposeScope{CustomOutputs: []PurposeCustomOutput{{
+			ObjectType:         "Output:Variable",
+			KeyValue:           "*",
+			VariableName:       "Zone Mean Air Temperature",
+			ReportingFrequency: "Timestep",
+		}}},
+	})
+	if timestepPlan.EstimatedFrames != 1008 {
+		t.Fatalf("timestep estimated frames = %d, want 1008", timestepPlan.EstimatedFrames)
+	}
+}
+
 func TestBuildPurposeRunPlanMergesDuplicateOutputsAcrossPurposes(t *testing.T) {
 	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF)
 
