@@ -389,6 +389,10 @@
   max-height: 260px;
 }
 
+.simulation-hvac-component-summary {
+  max-height: 300px;
+}
+
 .simulation-source-output {
   display: inline-flex;
   width: max-content;

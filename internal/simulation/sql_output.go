@@ -647,7 +647,7 @@ FROM ReportDataDictionary rdd
 JOIN ReportData rd ON rd.ReportDataDictionaryIndex = rdd.ReportDataDictionaryIndex
 WHERE TRIM(COALESCE(rdd.Name, '')) <> ''
 ORDER BY rdd.ReportDataDictionaryIndex
-LIMIT ?`, maxCSVSeriesColumns)
+LIMIT ?`, maxSQLSeriesColumns)
 	if err != nil {
 		return nil, err
 	}

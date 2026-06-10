@@ -137,6 +137,9 @@ Fan:ConstantVolume,
 	if findPurposeOutput(plan, "Output:Variable", "Fan Outlet", "System Node Mass Flow Rate") == nil {
 		t.Fatalf("missing component outlet node output in %#v", plan.OutputObjects)
 	}
+	if findPurposeOutput(plan, "Output:Variable", "Supply Fan", "Fan Electricity Rate") == nil {
+		t.Fatalf("missing selected loop fan operation output in %#v", plan.OutputObjects)
+	}
 	if findPurposeOutput(plan, "Output:Variable", "*", "System Node Temperature") != nil {
 		t.Fatalf("selected loop plan should not use wildcard node key: %#v", plan.OutputObjects)
 	}

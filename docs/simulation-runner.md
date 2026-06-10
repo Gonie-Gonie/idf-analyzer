@@ -61,7 +61,10 @@ Supported purpose ids:
 loops, selected components, output signatures, and custom output objects. Zone
 Heat Flow and Comfort use selected zone names when provided. HVAC Loop Check
 uses selected loop node names when they can be resolved from the current HVAC
-analysis, and falls back to wildcard node keys when scope is broad or unresolved.
+analysis, requests component operation variables for resolved loop components,
+and falls back to wildcard node/component keys when scope is broad or unresolved.
+The Simulation UI passes the active HVAC tab loop as selected HVAC scope when
+HVAC Loop Check is enabled.
 
 `PurposeRunPlan` reports:
 
@@ -100,8 +103,9 @@ Purpose result viewers now include:
   energy table.
 - Zone Heat Flow SQL or CSV/ESO ledger with frame sampling metadata and
   time-range controls.
-- HVAC Loop Check node summaries, derived loop metrics, and alerts for zero
-  flow, missing setpoints, and large temperature-setpoint deltas.
+- HVAC Loop Check node summaries, component operation summaries for fans,
+  pumps, coils, chillers, boilers, and cooling towers, derived loop metrics, and
+  alerts for zero flow, missing setpoints, and large temperature-setpoint deltas.
 - Comfort zone metric summaries for temperature, setpoint, PMV, and PPD series.
 - Integrity ERR, SQL error table, and tabular report previews.
 

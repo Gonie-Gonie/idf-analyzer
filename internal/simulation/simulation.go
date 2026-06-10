@@ -26,6 +26,7 @@ const (
 	defaultSimulationWorkerFraction = 0.5
 	maxWeatherFiles                 = 5000
 	maxCSVSeriesColumns             = 16
+	maxSQLSeriesColumns             = 256
 	maxCSVSeriesPoints              = 1200
 	maxCapturedOutputBytes          = 16000
 	simulationProgressTotal         = 9

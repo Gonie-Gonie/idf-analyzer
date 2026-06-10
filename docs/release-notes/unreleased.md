@@ -78,6 +78,7 @@ The release script infers bump size from these sections:
 - Basic Energy SQL results now aggregate sub-monthly energy rows into monthly chart points while preserving converted kWh totals.
 - Purpose result tables now show the matched source output state and run-plan signature for zone energy, comfort, and HVAC loop series rows.
 - Simulation runner documentation now reflects purpose scopes, SQL monthly aggregation, discovery alias/cache states, result source signatures, and run export artifacts.
+- HVAC Loop Check purpose runs now include selected-loop component operation outputs and group parsed fan, pump, coil, chiller, boiler, and cooling-tower series in the HVAC result view.
 
 ## Fixed
 

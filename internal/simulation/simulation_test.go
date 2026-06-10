@@ -317,6 +317,8 @@ func TestPurposeResultBundleBuildsHVACLoopSeries(t *testing.T) {
 			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Setpoint Temperature [C]", Min: 21, Max: 21, Average: 21, Points: []SimulationPoint{{X: 1, Value: 21}, {X: 2, Value: 21}}},
 			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Mass Flow Rate [kg/s]", Min: 0.2, Max: 0.4, Average: 0.3, Points: []SimulationPoint{{X: 1, Value: 0.2}, {X: 2, Value: 0.4}}},
 			{File: "eplusout.sql", Column: "Fan Outlet:System Node Mass Flow Rate [kg/s]", Min: 0, Max: 0, Average: 0, Points: []SimulationPoint{{X: 1, Value: 0}, {X: 2, Value: 0}}},
+			{File: "eplusout.sql", Column: "Supply Fan:Fan Electricity Rate [W]", Min: 120, Max: 260, Average: 190, Points: []SimulationPoint{{X: 1, Value: 120}, {X: 2, Value: 260}}},
+			{File: "eplusout.sql", Column: "Supply Fan:Fan Electricity Energy [J]", Min: 432000, Max: 936000, Average: 684000, Points: []SimulationPoint{{X: 1, Value: 432000}, {X: 2, Value: 936000}}},
 			{File: "eplusout.sql", Column: "Office:Zone Mean Air Temperature [C]", Min: 21, Max: 21, Average: 21, Points: []SimulationPoint{{X: 1, Value: 21}}},
 		},
 	}
@@ -336,16 +338,22 @@ func TestPurposeResultBundleBuildsHVACLoopSeries(t *testing.T) {
 	if len(bundle.HVACLoops[0].NodeSummaries) != 2 {
 		t.Fatalf("node summaries = %#v", bundle.HVACLoops[0].NodeSummaries)
 	}
+	if len(bundle.HVACLoops[0].Components) != 1 || bundle.HVACLoops[0].Components[0].ComponentName != "Supply Fan" {
+		t.Fatalf("component summaries = %#v", bundle.HVACLoops[0].Components)
+	}
+	if len(bundle.HVACLoops[0].Components[0].Metrics) != 2 {
+		t.Fatalf("component metrics = %#v", bundle.HVACLoops[0].Components[0].Metrics)
+	}
 	if len(bundle.HVACLoops[0].DerivedMetrics) == 0 {
 		t.Fatalf("derived metrics missing: %#v", bundle.HVACLoops[0])
 	}
 	if !hvacLoopAlertExists(bundle.HVACLoops[0].Alerts, "no_detected_mass_flow") {
 		t.Fatalf("expected zero-flow alert: %#v", bundle.HVACLoops[0].Alerts)
 	}
-	if len(bundle.Completeness) != 1 || !bundle.Completeness[0].Found || bundle.Completeness[0].Source != "sql" {
+	if len(bundle.Completeness) != 2 || !bundle.Completeness[0].Found || !bundle.Completeness[1].Found || bundle.Completeness[0].Source != "sql" {
 		t.Fatalf("hvac completeness = %#v", bundle.Completeness)
 	}
-	if len(bundle.HVACLoops[0].Completeness) != len(hvacLoopCheckNodeVariables()) {
+	if len(bundle.HVACLoops[0].Completeness) != len(hvacLoopCheckNodeVariables())+1 {
 		t.Fatalf("node completeness = %#v", bundle.HVACLoops[0].Completeness)
 	}
 }

@@ -82,6 +82,11 @@ Output:Variable,
   Hourly;
 
 Output:Variable,
+  Supply Fan,
+  Fan Electricity Rate,
+  Hourly;
+
+Output:Variable,
   *,
   Zone Thermal Comfort Fanger Model PMV,
   Hourly;
@@ -103,6 +108,9 @@ Output:Diagnostics,
 	}
 	if !outputSummaryHasPurpose(report.Existing, "Output:Variable", "System Node Mass Flow Rate", "hvac_loop_check") {
 		t.Fatalf("system node purpose tag missing: %#v", report.Existing)
+	}
+	if !outputSummaryHasPurpose(report.Existing, "Output:Variable", "Fan Electricity Rate", "hvac_loop_check") {
+		t.Fatalf("component operation purpose tag missing: %#v", report.Existing)
 	}
 	if !outputSummaryHasPurpose(report.Existing, "Output:Diagnostics", "", "integrity_check") {
 		t.Fatalf("diagnostics purpose tag missing: %#v", report.Existing)

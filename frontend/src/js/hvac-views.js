@@ -144,8 +144,12 @@ export function renderHVAC(hvac = state.report?.hvac) {
   }
 
   const loops = hvac.loops || [];
+  const previousLoopId = state.activeHVACLoopId;
   if (!state.activeHVACLoopId || !loops.some((loop) => loop.id === state.activeHVACLoopId)) {
     state.activeHVACLoopId = loops[0]?.id || "";
+  }
+  if (previousLoopId !== state.activeHVACLoopId) {
+    notifyHVACSelectionChanged();
   }
   const selectedLoop = loops.find((loop) => loop.id === state.activeHVACLoopId) || null;
   const query = hvacQuery();
@@ -325,6 +329,7 @@ function handleHVACNavigationClick(event) {
     state.activeHVACLoopId = loopButton.dataset.hvacLoopId || "";
     state.activeHVACGraphKey = "";
     state.activeHVACNodeName = "";
+    notifyHVACSelectionChanged();
     renderHVAC();
     return;
   }
@@ -375,7 +380,12 @@ function jumpToHVACLoopByName(loopName, graphKey = "") {
   state.activeHVACLoopId = loop.id;
   state.activeHVACGraphKey = graphKey || `loop:${loop.id}`;
   state.activeHVACNodeName = state.activeHVACGraphKey.startsWith("node:") ? state.activeHVACGraphKey.slice(5) : "";
+  notifyHVACSelectionChanged();
   renderHVAC();
+}
+
+function notifyHVACSelectionChanged() {
+  window.dispatchEvent(new CustomEvent("idfAnalyzer:hvacSelectionChanged"));
 }
 
 function findHVACLoopByName(loopName) {

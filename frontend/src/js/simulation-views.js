@@ -126,6 +126,10 @@ export function initializeSimulationControls() {
     renderSimulation();
   });
   window.addEventListener("idfAnalyzer:outputApplied", () => scheduleSimulationRunPlan(0));
+  window.addEventListener("idfAnalyzer:hvacSelectionChanged", () => {
+    renderSimulationPurposeSetup();
+    scheduleSimulationRunPlan(0);
+  });
   window.addEventListener("idfAnalyzer:analysisComplete", () => maybeAutoRunSimulation());
   window.addEventListener("idfAnalyzer:settingsChanged", (event) => {
     state.simulationAutoRunOnOpen = event.detail?.settings?.simulation?.autoRunOnOpen ?? state.simulationAutoRunOnOpen;
@@ -269,8 +273,9 @@ function renderSimulationPurposeSetup() {
   syncSimulationPurposeInputsFromState();
   const selected = selectedSimulationPurposes();
   if (elements.simulationPurposeStats) {
+    const hvacScope = simulationHVACScopeSummary(selected);
     elements.simulationPurposeStats.textContent = selected.length
-      ? selected.map(purposeLabel).join(" + ")
+      ? [selected.map(purposeLabel).join(" + "), hvacScope].filter(Boolean).join(" | ")
       : t("simulation.noPurposeSelected", {}, "No purposes selected");
   }
   if (elements.simulationPurposeZoneNames) {
@@ -470,7 +475,7 @@ function renderSimulationHVACLoopEmpty(message) {
 
 function renderSimulationHVACLoops(result) {
   const loops = result?.purposeResults?.hvacLoops || [];
-  const seriesCount = loops.reduce((sum, loop) => sum + (loop.series || []).length, 0);
+  const seriesCount = loops.reduce((sum, loop) => sum + (loop.series || []).length + hvacComponentSeriesCount(loop.components || []), 0);
   if (!seriesCount) {
     renderSimulationHVACLoopEmpty(t("simulation.noHVACLoopResult", {}, "Run HVAC Loop Check to inspect node state series."));
     return;
@@ -512,6 +517,7 @@ function renderSimulationHVACLoopResult(loop) {
       ${renderSimulationHVACLoopAlerts(loop.alerts || [])}
       ${renderPurposeCompletenessRow(loop.completeness || [])}
       ${renderSimulationHVACNodeSummaries(loop.nodeSummaries || [])}
+      ${renderSimulationHVACComponentOperations(loop.components || [])}
       <div class="output-table-wrap">
         <table class="output-table">
           <thead><tr><th>${escapeHTML(t("common.key", {}, "Key"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>Min</th><th>Max</th><th>Avg</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr></thead>
@@ -519,6 +525,10 @@ function renderSimulationHVACLoopResult(loop) {
         </table>
       </div>
     </section>`;
+}
+
+function hvacComponentSeriesCount(components) {
+  return components.reduce((sum, component) => sum + (component.series || []).length, 0);
 }
 
 function renderSimulationHVACLoopDerivedMetrics(metrics) {
@@ -582,6 +592,43 @@ function renderSimulationHVACNodeSummaries(nodes) {
       <table class="output-table">
         <thead>
           <tr><th>${escapeHTML(t("common.node", {}, "Node"))}</th><th>Avg temp</th><th>Avg setpoint</th><th>Avg delta</th><th>Peak flow</th><th>Active flow</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderSimulationHVACComponentOperations(components) {
+  if (!components.length) {
+    return "";
+  }
+  const rows = components
+    .flatMap((component) =>
+      (component.metrics || []).map((metric) => ({
+        component,
+        metric,
+      })),
+    )
+    .slice(0, 120)
+    .map(
+      ({ component, metric }) => `
+        <tr>
+          <td>${escapeHTML(component.componentName || "")}</td>
+          <td>${escapeHTML(component.componentType || "")}</td>
+          <td>${escapeHTML(metric.name || "")}</td>
+          <td>${renderSourceOutputCell(sourceOutputForVariable(component.componentName, metric.name))}</td>
+          <td>${escapeHTML(formatValueWithUnit(metric.max, metric.unit))}</td>
+          <td>${escapeHTML(formatValueWithUnit(metric.average, metric.unit))}</td>
+          <td>${escapeHTML(formatValueWithUnit(metric.total, metric.unit))}</td>
+          <td>${escapeHTML(metric.pointCount || 0)}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <div class="output-table-wrap simulation-hvac-component-summary">
+      <table class="output-table">
+        <thead>
+          <tr><th>${escapeHTML(t("common.component", {}, "Component"))}</th><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.metric", {}, "Metric"))}</th><th>${escapeHTML(t("simulation.sourceOutput", {}, "Source output"))}</th><th>Peak</th><th>Avg</th><th>Total</th><th>${escapeHTML(t("common.points", {}, "Points"))}</th></tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
@@ -1205,11 +1252,13 @@ function updatePurposeApplyButton() {
 }
 
 function buildSimulationPurposeRequest() {
+  const purposes = selectedSimulationPurposes();
   return {
-    purposes: selectedSimulationPurposes(),
+    purposes,
     scope: {
       zoneMode: elements.simulationPurposeZoneMode?.value || "all",
       zoneNames: parseCommaList(elements.simulationPurposeZoneNames?.value || ""),
+      ...simulationHVACPurposeScope(purposes),
       customOutputs: parseCustomOutputs(elements.simulationCustomOutputs?.value || ""),
     },
     frequencyPolicy: elements.simulationPurposeFrequencyPolicy?.value || "purpose_default",
@@ -1217,6 +1266,46 @@ function buildSimulationPurposeRequest() {
     persistOutputs: Boolean(elements.simulationPersistOutputs?.checked),
     discoveryAllowed: false,
   };
+}
+
+function simulationHVACPurposeScope(purposes = selectedSimulationPurposes()) {
+  if (!purposes.includes("hvac_loop_check")) {
+    return {};
+  }
+  const loop = activeSimulationHVACLoop();
+  if (!loop) {
+    return { loopMode: "all" };
+  }
+  const scope = { loopMode: "selected" };
+  const name = loop.name || "";
+  switch (loop.type) {
+    case "AirLoopHVAC":
+      scope.airLoopNames = name ? [name] : [];
+      break;
+    case "PlantLoop":
+      scope.plantLoopNames = name ? [name] : [];
+      break;
+    case "CondenserLoop":
+      scope.condenserLoopNames = name ? [name] : [];
+      break;
+    default:
+      scope.loopMode = "all";
+      break;
+  }
+  return scope;
+}
+
+function simulationHVACScopeSummary(purposes = selectedSimulationPurposes()) {
+  if (!purposes.includes("hvac_loop_check")) {
+    return "";
+  }
+  const loop = activeSimulationHVACLoop();
+  return loop?.name ? `HVAC: ${loop.name}` : t("simulation.allHVACLoops", {}, "HVAC: all loops");
+}
+
+function activeSimulationHVACLoop() {
+  const loops = state.report?.hvac?.loops || [];
+  return loops.find((loop) => loop.id === state.activeHVACLoopId) || null;
 }
 
 function selectedSimulationPurposes() {
