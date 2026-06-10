@@ -44,6 +44,59 @@ func TestDiscoverAvailableOutputsFromSQLRDDMDDAndPurposeFallback(t *testing.T) {
 	}
 }
 
+func TestDiscoverOutputsFromMDDParsesMeterMetadata(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "eplusout.mdd")
+	if err := os.WriteFile(path, []byte("Electricity:Facility [J]\nNaturalGas:Heating:Plant [J]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	items, err := discoverOutputsFromMDD(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	facility, ok := discoveryFind(items, "Output:Meter", "", "Electricity:Facility", "available")
+	if !ok {
+		t.Fatalf("missing facility meter: %#v", items)
+	}
+	if facility.ResourceType != "Electricity" || facility.EndUseCategory != "Facility" || facility.MeterGroup != "" {
+		t.Fatalf("facility metadata = %#v", facility)
+	}
+	plant, ok := discoveryFind(items, "Output:Meter", "", "NaturalGas:Heating:Plant", "available")
+	if !ok {
+		t.Fatalf("missing grouped meter: %#v", items)
+	}
+	if plant.ResourceType != "NaturalGas" || plant.EndUseCategory != "Heating" || plant.MeterGroup != "Plant" {
+		t.Fatalf("grouped metadata = %#v", plant)
+	}
+}
+
+func TestDiscoverAvailableOutputsMarksPurposeMeterAvailableFromMDD(t *testing.T) {
+	dir := t.TempDir()
+	mddPath := filepath.Join(dir, "eplusout.mdd")
+	if err := os.WriteFile(mddPath, []byte("Electricity:Facility [J]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := DiscoverAvailableOutputs(OutputDiscoveryRequest{
+		Text:    purposePlanFixtureIDF,
+		MDDPath: mddPath,
+		PurposeRequest: &SimulationPurposeRequest{
+			Purposes: []SimulationPurposeID{SimulationPurposeBasicEnergy},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, ok := discoveryFind(result.Items, "Output:Meter", "Electricity:Facility", "Electricity:Facility", "available")
+	if !ok {
+		t.Fatalf("purpose meter should be available from MDD: %#v", result.Items)
+	}
+	if item.ResourceType != "Electricity" || item.EndUseCategory != "Facility" {
+		t.Fatalf("available purpose meter metadata = %#v", item)
+	}
+}
+
 func TestDiscoverOutputsCachedInvalidatesOnFileChange(t *testing.T) {
 	outputDiscoveryCache.Lock()
 	outputDiscoveryCache.items = map[string]outputDiscoveryCacheEntry{}

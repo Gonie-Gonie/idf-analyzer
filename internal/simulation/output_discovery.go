@@ -31,6 +31,9 @@ type OutputDiscoveryItem struct {
 	KeyValue           string                `json:"keyValue,omitempty"`
 	Name               string                `json:"name"`
 	Units              string                `json:"units,omitempty"`
+	ResourceType       string                `json:"resourceType,omitempty"`
+	EndUseCategory     string                `json:"endUseCategory,omitempty"`
+	MeterGroup         string                `json:"meterGroup,omitempty"`
 	ReportingFrequency string                `json:"reportingFrequency,omitempty"`
 	Source             string                `json:"source"`
 	Status             string                `json:"status"`
@@ -198,11 +201,15 @@ func (collector *outputDiscoveryCollector) add(item OutputDiscoveryItem) {
 	item.KeyValue = strings.TrimSpace(item.KeyValue)
 	item.Name = strings.TrimSpace(item.Name)
 	item.Units = strings.TrimSpace(item.Units)
+	item.ResourceType = strings.TrimSpace(item.ResourceType)
+	item.EndUseCategory = strings.TrimSpace(item.EndUseCategory)
+	item.MeterGroup = strings.TrimSpace(item.MeterGroup)
 	item.ReportingFrequency = canonicalPurposeFrequency(item.ReportingFrequency)
 	item.Source = strings.TrimSpace(item.Source)
 	item.Status = strings.TrimSpace(item.Status)
 	item.AliasOf = strings.TrimSpace(item.AliasOf)
 	item.AliasReason = strings.TrimSpace(item.AliasReason)
+	enrichOutputDiscoveryMeterMetadata(&item)
 	if item.Status == "" {
 		item.Status = "available"
 	}
@@ -217,6 +224,15 @@ func (collector *outputDiscoveryCollector) add(item OutputDiscoveryItem) {
 		existing.PurposeIDs = normalizePurposeIDs(append(existing.PurposeIDs, item.PurposeIDs...))
 		if existing.Units == "" {
 			existing.Units = item.Units
+		}
+		if existing.ResourceType == "" {
+			existing.ResourceType = item.ResourceType
+		}
+		if existing.EndUseCategory == "" {
+			existing.EndUseCategory = item.EndUseCategory
+		}
+		if existing.MeterGroup == "" {
+			existing.MeterGroup = item.MeterGroup
 		}
 		if existing.ReportingFrequency == "" {
 			existing.ReportingFrequency = item.ReportingFrequency
@@ -393,15 +409,65 @@ func discoverOutputsFromMDD(path string) ([]OutputDiscoveryItem, error) {
 			continue
 		}
 		name, units := splitDictionaryNameUnits(parts[len(parts)-1])
-		items = append(items, OutputDiscoveryItem{
+		item := OutputDiscoveryItem{
 			ObjectType: "Output:Meter",
 			Name:       name,
 			Units:      units,
 			Source:     "mdd",
 			Status:     "available",
-		})
+		}
+		enrichOutputDiscoveryMeterMetadata(&item)
+		items = append(items, item)
 	}
 	return items, nil
+}
+
+func enrichOutputDiscoveryMeterMetadata(item *OutputDiscoveryItem) {
+	if item == nil || !outputDiscoveryIsMeter(item.ObjectType) {
+		return
+	}
+	name := item.Name
+	if strings.TrimSpace(name) == "" {
+		name = item.KeyValue
+	}
+	resourceType, endUseCategory, meterGroup := parseMeterDiscoveryName(name)
+	if item.ResourceType == "" {
+		item.ResourceType = resourceType
+	}
+	if item.EndUseCategory == "" {
+		item.EndUseCategory = endUseCategory
+	}
+	if item.MeterGroup == "" {
+		item.MeterGroup = meterGroup
+	}
+}
+
+func parseMeterDiscoveryName(name string) (string, string, string) {
+	raw := strings.Split(strings.TrimSpace(name), ":")
+	parts := make([]string, 0, len(raw))
+	for _, part := range raw {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if len(parts) == 0 {
+		return "", "", ""
+	}
+	resourceType := parts[0]
+	endUseCategory := ""
+	if len(parts) > 1 {
+		endUseCategory = parts[1]
+	}
+	meterGroup := ""
+	if len(parts) > 2 {
+		meterGroup = strings.Join(parts[2:], ":")
+	}
+	return resourceType, endUseCategory, meterGroup
+}
+
+func outputDiscoveryIsMeter(objectType string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(objectType)), "output:meter")
 }
 
 func dictionaryLineParts(line string) []string {

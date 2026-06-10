@@ -1270,6 +1270,9 @@ function discoveryItemMatchesQuery(item, query) {
     item.keyValue,
     item.name,
     item.units,
+    item.resourceType,
+    item.endUseCategory,
+    item.meterGroup,
     item.reportingFrequency,
     item.source,
     item.status,
@@ -1286,7 +1289,8 @@ function renderSimulationOutputDiscoveryItem(item, index) {
   const isMeter = String(item.objectType || "").toLowerCase() === "output:meter";
   const title = isMeter ? item.name || item.keyValue || "" : item.name || "";
   const alias = item.aliasOf ? `alias: ${item.aliasOf}` : "";
-  const detail = isMeter ? [item.objectType || "Output:Meter", alias].filter(Boolean).join(" / ") : [item.keyValue || "*", item.objectType || "Output:Variable", alias].filter(Boolean).join(" / ");
+  const meterParts = [item.resourceType, item.endUseCategory, item.meterGroup].filter(Boolean).join(" / ");
+  const detail = isMeter ? [item.objectType || "Output:Meter", meterParts, alias].filter(Boolean).join(" / ") : [item.keyValue || "*", item.objectType || "Output:Variable", alias].filter(Boolean).join(" / ");
   const meta = [item.reportingFrequency, item.units, item.source, item.aliasReason].filter(Boolean).join(" - ");
   return `
     <div class="simulation-output-discovery-item">
