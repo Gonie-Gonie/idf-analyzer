@@ -260,6 +260,106 @@ func TestAnalyzeHVACReadsZoneEquipmentListSixFieldGroup(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "AirLoopHVAC", Fields: []Field{
+			{Value: "Main Air Loop"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Supply Side Inlet"},
+			{Value: "Return Path Outlet"},
+			{Value: "Supply Path Inlet"},
+			{Value: "Supply Side Outlet"},
+		}},
+		{Index: 1, Type: "AirLoopHVAC:SupplyPath", Fields: []Field{
+			{Value: "Main Supply Path"},
+			{Value: "Supply Path Inlet"},
+			{Value: "AirLoopHVAC:ZoneSplitter"},
+			{Value: "Main Splitter"},
+		}},
+		{Index: 2, Type: "AirLoopHVAC:ZoneSplitter", Fields: []Field{
+			{Value: "Main Splitter"},
+			{Value: "Supply Path Inlet"},
+			{Value: "Office Terminal Inlet"},
+		}},
+		{Index: 3, Type: "AirLoopHVAC:ReturnPath", Fields: []Field{
+			{Value: "Main Return Path"},
+			{Value: "Return Path Outlet"},
+			{Value: "AirLoopHVAC:ZoneMixer"},
+			{Value: "Main Mixer"},
+		}},
+		{Index: 4, Type: "AirLoopHVAC:ZoneMixer", Fields: []Field{
+			{Value: "Main Mixer"},
+			{Value: "Return Path Outlet"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 5, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 6, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 7, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat"},
+			{Value: "Office Terminal"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 8, Type: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Fields: []Field{
+			{Value: "Office Terminal", Comment: "Name"},
+			{Value: "Office Terminal Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Supply Inlet", Comment: "Air Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	loop := findHVACTestingLoop(report, "Main Air Loop")
+	if loop == nil {
+		t.Fatalf("Main Air Loop not found: %#v", report.Loops)
+	}
+	if loop.DemandGraph.SupplyPath == nil || loop.DemandGraph.ReturnPath == nil {
+		t.Fatalf("demand graph paths = %#v, want supply and return paths", loop.DemandGraph)
+	}
+	if !hasDemandGraphEdge(loop.DemandGraph, "zone_splitter", "Supply Path Inlet", "Office Terminal Inlet") {
+		t.Fatalf("demand graph edges = %#v, want zone splitter edge", loop.DemandGraph.Edges)
+	}
+	if !hasDemandGraphEdge(loop.DemandGraph, "zone_mixer", "Office Return Node", "Return Path Outlet") {
+		t.Fatalf("demand graph edges = %#v, want zone mixer edge", loop.DemandGraph.Edges)
+	}
+
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil || len(relation.AirLoopRelations) != 1 {
+		t.Fatalf("Office air loop relation = %#v", report.ZoneRelations)
+	}
+	airRelation := relation.AirLoopRelations[0]
+	if airRelation.Source != "terminal_inlet_on_demand_path" || airRelation.Confidence != "high" {
+		t.Fatalf("air relation = %#v, want terminal_inlet_on_demand_path/high", airRelation)
+	}
+	if !stringSliceContainsFold(airRelation.Evidence, `Terminal inlet node "Office Terminal Inlet" is on the AirLoop demand graph.`) {
+		t.Fatalf("air relation evidence = %#v, want terminal inlet graph evidence", airRelation.Evidence)
+	}
+	if !stringSliceContainsFold(airRelation.Evidence, "Zone return node is present on the AirLoop return path graph.") {
+		t.Fatalf("air relation evidence = %#v, want return path evidence", airRelation.Evidence)
+	}
+	if len(relation.TerminalUnits) != 1 || !relation.TerminalUnits[0].InletOnAirLoopDemand {
+		t.Fatalf("terminal demand evidence = %#v, want inlet on demand graph", relation.TerminalUnits)
+	}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	for _, expected := range []string{"demand_graph:", "supply_path:", "return_path:", "role: zone_splitter", "role: zone_mixer"} {
+		if !strings.Contains(projection.Text, expected) {
+			t.Fatalf("semantic HVAC demand graph missing %q:\n%s", expected, projection.Text)
+		}
+	}
+}
+
 func TestAnalyzeHVACCondenserLoopAndLoopRuleWarnings(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "CondenserLoop", Fields: []Field{
@@ -449,6 +549,15 @@ func findHVACTestingZoneRelation(report HVACReport, name string) *HVACZoneChain 
 func hasHVACWarningCode(warnings []HVACWarning, code string) bool {
 	for _, warning := range warnings {
 		if warning.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDemandGraphEdge(graph AirLoopDemandGraph, role string, fromNode string, toNode string) bool {
+	for _, edge := range graph.Edges {
+		if edge.Role == role && strings.EqualFold(edge.FromNode, fromNode) && strings.EqualFold(edge.ToNode, toNode) {
 			return true
 		}
 	}

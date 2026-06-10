@@ -1196,6 +1196,60 @@ func writeSemanticHVACLoops(builder *semanticYAMLBuilder, ctx *semanticContext, 
 		builder.rawForObject(5, "summary_path: "+yamlScalar(semanticHVACSummaryPath(loop)), loop.ObjectIndex, loop.Type, loop.Name)
 		writeSemanticHVACSide(builder, ctx, 4, "supply_side", loop.SupplySide)
 		writeSemanticHVACSide(builder, ctx, 4, "demand_side", loop.DemandSide)
+		if strings.EqualFold(loop.Type, "AirLoopHVAC") {
+			writeSemanticAirLoopDemandGraph(builder, ctx, 4, loop.DemandGraph)
+		}
+	}
+}
+
+func writeSemanticAirLoopDemandGraph(builder *semanticYAMLBuilder, ctx *semanticContext, indent int, graph AirLoopDemandGraph) {
+	if graph.SupplyPath == nil && graph.ReturnPath == nil && len(graph.Edges) == 0 {
+		return
+	}
+	builder.raw(indent, "demand_graph:")
+	if graph.SupplyPath != nil {
+		writeSemanticAirLoopDemandPath(builder, ctx, indent+1, "supply_path", *graph.SupplyPath)
+	}
+	if graph.ReturnPath != nil {
+		writeSemanticAirLoopDemandPath(builder, ctx, indent+1, "return_path", *graph.ReturnPath)
+	}
+	if len(graph.Edges) > 0 {
+		builder.raw(indent+1, "edges:")
+		for _, edge := range graph.Edges {
+			builder.raw(indent+2, "- role: "+yamlScalar(edge.Role))
+			builder.kv(indent+3, "path", edge.PathType)
+			builder.kv(indent+3, "from_node", edge.FromNode)
+			builder.kv(indent+3, "to_node", edge.ToNode)
+			if edge.ObjectName != "" || edge.ObjectType != "" {
+				builder.kv(indent+3, "via", strings.TrimSpace(strings.Join([]string{edge.ObjectType, edge.ObjectName}, " ")))
+			}
+		}
+	}
+}
+
+func writeSemanticAirLoopDemandPath(builder *semanticYAMLBuilder, ctx *semanticContext, indent int, key string, path AirLoopDemandPath) {
+	ctx.mark(path.ObjectIndex)
+	builder.rawForObject(indent, key+":", path.ObjectIndex, path.ObjectType, path.Name)
+	if path.Name != "" {
+		builder.kvForObject(indent+1, "name", path.Name, path.ObjectIndex, path.ObjectType, path.Name)
+	}
+	if path.InletNode != "" {
+		builder.kvForObject(indent+1, "inlet_node", path.InletNode, path.ObjectIndex, path.ObjectType, path.Name)
+	}
+	if path.OutletNode != "" {
+		builder.kvForObject(indent+1, "outlet_node", path.OutletNode, path.ObjectIndex, path.ObjectType, path.Name)
+	}
+	if len(path.Components) == 0 {
+		return
+	}
+	builder.raw(indent+1, "components:")
+	for _, component := range path.Components {
+		ctx.mark(component.ObjectIndex)
+		builder.rawForObject(indent+2, "- name: "+yamlScalar(component.ObjectName), component.ObjectIndex, component.ObjectType, component.ObjectName)
+		builder.kvForObject(indent+3, "class", component.ObjectType, component.ObjectIndex, component.ObjectType, component.ObjectName)
+		builder.kvForObject(indent+3, "role", component.Role, component.ObjectIndex, component.ObjectType, component.ObjectName)
+		writeSemanticStringList(builder, indent+3, "inlet_nodes", component.InletNodes)
+		writeSemanticStringList(builder, indent+3, "outlet_nodes", component.OutletNodes)
 	}
 }
 

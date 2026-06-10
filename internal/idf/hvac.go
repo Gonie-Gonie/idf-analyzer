@@ -33,9 +33,60 @@ type HVACLoop struct {
 	SetpointNode            string                  `json:"setpointNode,omitempty"`
 	SupplySide              HVACLoopSide            `json:"supplySide"`
 	DemandSide              HVACLoopSide            `json:"demandSide"`
+	DemandGraph             AirLoopDemandGraph      `json:"demandGraph,omitempty"`
 	RelatedZones            []string                `json:"relatedZones,omitempty"`
 	RelatedLoops            []HVACCrossLoopRelation `json:"relatedLoops,omitempty"`
 	Warnings                []HVACWarning           `json:"warnings,omitempty"`
+}
+
+type AirLoopDemandGraph struct {
+	SupplyPath *AirLoopDemandPath  `json:"supplyPath,omitempty"`
+	ReturnPath *AirLoopDemandPath  `json:"returnPath,omitempty"`
+	Nodes      []AirLoopDemandNode `json:"nodes,omitempty"`
+	Edges      []AirLoopDemandEdge `json:"edges,omitempty"`
+}
+
+type AirLoopDemandPath struct {
+	PathType    string                       `json:"pathType"`
+	ObjectType  string                       `json:"objectType"`
+	Name        string                       `json:"name,omitempty"`
+	ObjectIndex int                          `json:"objectIndex,omitempty"`
+	InletNode   string                       `json:"inletNode,omitempty"`
+	OutletNode  string                       `json:"outletNode,omitempty"`
+	Components  []AirLoopDemandPathComponent `json:"components,omitempty"`
+}
+
+type AirLoopDemandPathComponent struct {
+	ObjectType           string              `json:"objectType"`
+	ObjectName           string              `json:"objectName"`
+	ObjectIndex          int                 `json:"objectIndex,omitempty"`
+	Role                 string              `json:"role,omitempty"`
+	SourceTypeFieldIndex int                 `json:"sourceTypeFieldIndex,omitempty"`
+	SourceNameFieldIndex int                 `json:"sourceNameFieldIndex,omitempty"`
+	InletNodes           []string            `json:"inletNodes,omitempty"`
+	OutletNodes          []string            `json:"outletNodes,omitempty"`
+	Nodes                []AirLoopDemandNode `json:"nodes,omitempty"`
+}
+
+type AirLoopDemandNode struct {
+	NodeName    string `json:"nodeName"`
+	Role        string `json:"role"`
+	PathType    string `json:"pathType,omitempty"`
+	ObjectType  string `json:"objectType,omitempty"`
+	ObjectName  string `json:"objectName,omitempty"`
+	ObjectIndex int    `json:"objectIndex,omitempty"`
+	FieldIndex  int    `json:"fieldIndex,omitempty"`
+	FieldName   string `json:"fieldName,omitempty"`
+}
+
+type AirLoopDemandEdge struct {
+	FromNode    string `json:"fromNode,omitempty"`
+	ToNode      string `json:"toNode,omitempty"`
+	Role        string `json:"role,omitempty"`
+	PathType    string `json:"pathType,omitempty"`
+	ObjectType  string `json:"objectType,omitempty"`
+	ObjectName  string `json:"objectName,omitempty"`
+	ObjectIndex int    `json:"objectIndex,omitempty"`
 }
 
 type HVACLoopSide struct {
@@ -368,6 +419,7 @@ func parseAirLoopHVAC(ctx *hvacContext, obj Object) HVACLoop {
 	if loop.ID == "air:" {
 		loop.ID = fmt.Sprintf("air:%d", obj.Index)
 	}
+	loop.DemandGraph = parseAirLoopDemandGraph(ctx, loop)
 	return loop
 }
 
@@ -1430,22 +1482,26 @@ func inferAirLoopRelationsForZone(ctx *hvacContext, loops []HVACLoop, terminals 
 		if loop.Type != "AirLoopHVAC" {
 			continue
 		}
-		demandNodes := airLoopDemandNodes(ctx, loop)
+		demandGraph := airLoopDemandGraphForLoop(ctx, loop)
+		demandNodes := airLoopDemandGraphNodeSet(demandGraph)
+		returnPathNodes := airLoopDemandGraphPathNodeSet(demandGraph, "return_path")
 		for _, terminal := range terminals {
 			if terminal.InletNode != "" && demandNodes[normalizeName(terminal.InletNode)] {
-				addRelation(loop, "node_graph", "high", fmt.Sprintf("Terminal inlet node %q is on the air-loop demand path.", terminal.InletNode))
+				addRelation(loop, "terminal_inlet_on_demand_path", "high", fmt.Sprintf("Terminal inlet node %q is on the AirLoop demand graph.", terminal.InletNode))
 			}
 			if terminal.OutletNode != "" && stringSliceContainsFold(zoneInletNodes, terminal.OutletNode) && anyNodeInSet(zoneInletNodes, demandNodes) {
-				addRelation(loop, "zone_inlet_match", "medium", fmt.Sprintf("Terminal outlet node %q matches a zone inlet also present on the air-loop demand path.", terminal.OutletNode))
+				addRelation(loop, "weak_node_match", "medium", fmt.Sprintf("Terminal outlet node %q matches a zone inlet also present on the AirLoop demand graph.", terminal.OutletNode))
 			}
 		}
-		if anyNodeInSet(zoneReturnNodes, demandNodes) {
-			addRelation(loop, "zone_return_match", "medium", "Zone return node is present on the air-loop demand path.")
+		if anyNodeInSet(zoneReturnNodes, returnPathNodes) {
+			addRelation(loop, "zone_return_on_return_path", "medium", "Zone return node is present on the AirLoop return path graph.")
+		} else if anyNodeInSet(zoneReturnNodes, demandNodes) {
+			addRelation(loop, "weak_node_match", "medium", "Zone return node is present on the AirLoop demand graph.")
 		}
 		for _, component := range loopComponents(loop) {
 			for _, terminal := range terminals {
 				if strings.EqualFold(component.ObjectType, terminal.ObjectType) && strings.EqualFold(component.ObjectName, terminal.ObjectName) {
-					addRelation(loop, "branch_component", "high", fmt.Sprintf("Terminal %s appears directly on an AirLoop branch.", componentLabel(terminal)))
+					addRelation(loop, "component_on_loop", "high", fmt.Sprintf("Terminal %s appears directly on an AirLoop branch.", componentLabel(terminal)))
 				}
 			}
 		}
@@ -1464,7 +1520,9 @@ func inferAirLoopsForZone(ctx *hvacContext, loops []HVACLoop, terminals []HVACCo
 		if loop.Type != "AirLoopHVAC" {
 			continue
 		}
-		demandNodes := airLoopDemandNodes(ctx, loop)
+		demandGraph := airLoopDemandGraphForLoop(ctx, loop)
+		demandNodes := airLoopDemandGraphNodeSet(demandGraph)
+		returnPathNodes := airLoopDemandGraphPathNodeSet(demandGraph, "return_path")
 		for _, terminal := range terminals {
 			if terminal.InletNode != "" && demandNodes[normalizeName(terminal.InletNode)] {
 				loopNames[loop.Name] = true
@@ -1473,7 +1531,7 @@ func inferAirLoopsForZone(ctx *hvacContext, loops []HVACLoop, terminals []HVACCo
 				loopNames[loop.Name] = true
 			}
 		}
-		if anyNodeInSet(zoneReturnNodes, demandNodes) {
+		if anyNodeInSet(zoneReturnNodes, returnPathNodes) || anyNodeInSet(zoneReturnNodes, demandNodes) {
 			loopNames[loop.Name] = true
 		}
 		for _, component := range loopComponents(loop) {
@@ -1573,9 +1631,9 @@ func annotateTerminalAirLoopEvidence(ctx *hvacContext, loops []HVACLoop, relatio
 			demandNodes := airLoopDemandNodes(ctx, loop)
 			if terminal.InletNode != "" && demandNodes[normalizeName(terminal.InletNode)] {
 				terminal.InletOnAirLoopDemand = true
-				terminal.RelationSource = firstNonEmpty(terminal.RelationSource, "node_graph")
+				terminal.RelationSource = firstNonEmpty(terminal.RelationSource, "terminal_inlet_on_demand_path")
 				terminal.RelationConfidence = strongestConfidence(terminal.RelationConfidence, "high")
-				terminal.RelationEvidence = appendUniqueString(terminal.RelationEvidence, "terminal inlet node is on AirLoop demand path")
+				terminal.RelationEvidence = appendUniqueString(terminal.RelationEvidence, "terminal inlet node is on AirLoop demand graph")
 			}
 		}
 		if terminal.OutletMatchesZoneInlet {
@@ -1829,57 +1887,350 @@ func plantSourceComponentsForServicePath(relation HVACZoneChain, plantLoopName s
 	return labels
 }
 
-func airLoopDemandNodes(ctx *hvacContext, loop HVACLoop) map[string]bool {
-	nodes := map[string]bool{}
-	addNode := func(value string) {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			nodes[normalizeName(value)] = true
-		}
+func parseAirLoopDemandGraph(ctx *hvacContext, loop HVACLoop) AirLoopDemandGraph {
+	graph := AirLoopDemandGraph{}
+	addAirLoopDemandNode(&graph.Nodes, AirLoopDemandNode{
+		NodeName:    loop.DemandSide.InletNode,
+		Role:        "air_loop_demand_inlet",
+		ObjectType:  loop.Type,
+		ObjectName:  loop.Name,
+		ObjectIndex: loop.ObjectIndex,
+	})
+	addAirLoopDemandNode(&graph.Nodes, AirLoopDemandNode{
+		NodeName:    loop.DemandSide.OutletNode,
+		Role:        "air_loop_demand_outlet",
+		ObjectType:  loop.Type,
+		ObjectName:  loop.Name,
+		ObjectIndex: loop.ObjectIndex,
+	})
+	if supplyPath := parseAirLoopSupplyPath(ctx, loop); supplyPath != nil {
+		graph.SupplyPath = supplyPath
+		mergeAirLoopDemandPath(&graph, *supplyPath)
 	}
-	addNode(loop.DemandSide.InletNode)
-	addNode(loop.DemandSide.OutletNode)
+	if returnPath := parseAirLoopReturnPath(ctx, loop); returnPath != nil {
+		graph.ReturnPath = returnPath
+		mergeAirLoopDemandPath(&graph, *returnPath)
+	}
+	sortAirLoopDemandGraph(&graph)
+	return graph
+}
+
+func parseAirLoopSupplyPath(ctx *hvacContext, loop HVACLoop) *AirLoopDemandPath {
 	for _, obj := range ctx.objectsByType[normalizeFieldCatalogKey("AirLoopHVAC:SupplyPath")] {
 		inlet := fieldValueByCatalogName(obj, "Supply Air Path Inlet Node Name")
 		if !strings.EqualFold(inlet, loop.DemandSide.InletNode) {
 			continue
 		}
-		for _, usage := range nodeUsagesForObject(ctx, obj) {
-			addNode(usage.NodeName)
+		path := AirLoopDemandPath{
+			PathType:    "supply_path",
+			ObjectType:  obj.Type,
+			Name:        objectName(obj),
+			ObjectIndex: obj.Index,
+			InletNode:   inlet,
+			Components:  parseAirLoopPathComponents(ctx, obj, "supply_path"),
 		}
-		for index := 2; index+1 < len(obj.Fields); index += 2 {
-			componentType := strings.TrimSpace(obj.Fields[index].Value)
-			componentName := strings.TrimSpace(obj.Fields[index+1].Value)
-			componentObj, ok := ctx.objectsByTypeName[hvacObjectKey(componentType, componentName)]
-			if !ok {
-				continue
-			}
-			for _, usage := range nodeUsagesForObject(ctx, componentObj) {
-				addNode(usage.NodeName)
-			}
-		}
+		return &path
 	}
+	return nil
+}
+
+func parseAirLoopReturnPath(ctx *hvacContext, loop HVACLoop) *AirLoopDemandPath {
 	for _, obj := range ctx.objectsByType[normalizeFieldCatalogKey("AirLoopHVAC:ReturnPath")] {
 		outlet := fieldValueByCatalogName(obj, "Return Air Path Outlet Node Name")
 		if !strings.EqualFold(outlet, loop.DemandSide.OutletNode) {
 			continue
 		}
-		for _, usage := range nodeUsagesForObject(ctx, obj) {
-			addNode(usage.NodeName)
+		path := AirLoopDemandPath{
+			PathType:    "return_path",
+			ObjectType:  obj.Type,
+			Name:        objectName(obj),
+			ObjectIndex: obj.Index,
+			OutletNode:  outlet,
+			Components:  parseAirLoopPathComponents(ctx, obj, "return_path"),
 		}
-		for index := 2; index+1 < len(obj.Fields); index += 2 {
-			componentType := strings.TrimSpace(obj.Fields[index].Value)
-			componentName := strings.TrimSpace(obj.Fields[index+1].Value)
-			componentObj, ok := ctx.objectsByTypeName[hvacObjectKey(componentType, componentName)]
-			if !ok {
-				continue
-			}
-			for _, usage := range nodeUsagesForObject(ctx, componentObj) {
-				addNode(usage.NodeName)
+		return &path
+	}
+	return nil
+}
+
+func parseAirLoopPathComponents(ctx *hvacContext, pathObj Object, pathType string) []AirLoopDemandPathComponent {
+	var components []AirLoopDemandPathComponent
+	for index := 2; index+1 < len(pathObj.Fields); index += 2 {
+		componentType := strings.TrimSpace(pathObj.Fields[index].Value)
+		componentName := strings.TrimSpace(pathObj.Fields[index+1].Value)
+		if componentType == "" && componentName == "" {
+			continue
+		}
+		component := AirLoopDemandPathComponent{
+			ObjectType:           componentType,
+			ObjectName:           componentName,
+			Role:                 airLoopDemandComponentRole(componentType),
+			SourceTypeFieldIndex: index,
+			SourceNameFieldIndex: index + 1,
+		}
+		if componentObj, ok := ctx.objectsByTypeName[hvacObjectKey(componentType, componentName)]; ok {
+			component.ObjectIndex = componentObj.Index
+			component.Nodes = airLoopDemandComponentNodes(ctx, componentObj, pathType)
+			component.InletNodes, component.OutletNodes = airLoopDemandComponentFlowNodes(component.Nodes)
+		}
+		components = append(components, component)
+	}
+	return components
+}
+
+func airLoopDemandComponentNodes(ctx *hvacContext, obj Object, pathType string) []AirLoopDemandNode {
+	var nodes []AirLoopDemandNode
+	for _, usage := range nodeUsagesForObject(ctx, obj) {
+		role := airLoopDemandNodeRole(obj.Type, usage.Role, usage.FieldIndex, pathType)
+		addAirLoopDemandNode(&nodes, AirLoopDemandNode{
+			NodeName:    usage.NodeName,
+			Role:        role,
+			PathType:    pathType,
+			ObjectType:  usage.ObjectType,
+			ObjectName:  usage.ObjectName,
+			ObjectIndex: usage.ObjectIndex,
+			FieldIndex:  usage.FieldIndex,
+			FieldName:   usage.FieldName,
+		})
+	}
+	sortAirLoopDemandNodes(nodes)
+	return nodes
+}
+
+func airLoopDemandComponentRole(objectType string) string {
+	switch normalizeFieldCatalogKey(objectType) {
+	case "airloophvac:zonesplitter":
+		return "zone_splitter"
+	case "airloophvac:zonemixer":
+		return "zone_mixer"
+	case "airloophvac:supplyplenum":
+		return "supply_plenum"
+	case "airloophvac:returnplenum":
+		return "return_plenum"
+	default:
+		if isAirTerminalType(objectType) {
+			return "terminal_unit"
+		}
+		return "demand_path_component"
+	}
+}
+
+func airLoopDemandNodeRole(objectType string, usageRole string, fieldIndex int, pathType string) string {
+	switch normalizeFieldCatalogKey(objectType) {
+	case "airloophvac:zonesplitter":
+		if fieldIndex == 1 {
+			return "splitter_inlet"
+		}
+		return "zone_inlet"
+	case "airloophvac:zonemixer":
+		if fieldIndex == 1 {
+			return "mixer_outlet"
+		}
+		return "zone_return"
+	case "airloophvac:supplyplenum":
+		switch {
+		case fieldIndex == 2:
+			return "plenum_zone_air"
+		case fieldIndex == 3:
+			return "plenum_inlet"
+		case fieldIndex > 3:
+			return "zone_inlet"
+		}
+	case "airloophvac:returnplenum":
+		switch {
+		case fieldIndex == 2:
+			return "plenum_zone_air"
+		case fieldIndex == 3:
+			return "plenum_outlet"
+		case fieldIndex > 3:
+			return "zone_return"
+		}
+	}
+	if isAirTerminalType(objectType) {
+		if strings.Contains(usageRole, "inlet") {
+			return "terminal_inlet"
+		}
+		if strings.Contains(usageRole, "outlet") {
+			return "terminal_outlet"
+		}
+	}
+	if usageRole != "" {
+		return usageRole
+	}
+	if pathType == "return_path" {
+		return "return_path_node"
+	}
+	return "supply_path_node"
+}
+
+func airLoopDemandComponentFlowNodes(nodes []AirLoopDemandNode) ([]string, []string) {
+	var inlets []string
+	var outlets []string
+	for _, node := range nodes {
+		switch airLoopDemandNodeFlowSide(node.Role) {
+		case "inlet":
+			inlets = appendUniqueString(inlets, node.NodeName)
+		case "outlet":
+			outlets = appendUniqueString(outlets, node.NodeName)
+		}
+	}
+	return inlets, outlets
+}
+
+func airLoopDemandNodeFlowSide(role string) string {
+	switch role {
+	case "splitter_inlet", "plenum_inlet", "terminal_inlet", "zone_return":
+		return "inlet"
+	case "zone_inlet", "mixer_outlet", "plenum_outlet", "terminal_outlet":
+		return "outlet"
+	default:
+		if strings.HasSuffix(role, "_inlet") || strings.Contains(role, "air_inlet") {
+			return "inlet"
+		}
+		if strings.HasSuffix(role, "_outlet") || strings.Contains(role, "air_outlet") {
+			return "outlet"
+		}
+		return ""
+	}
+}
+
+func mergeAirLoopDemandPath(graph *AirLoopDemandGraph, path AirLoopDemandPath) {
+	if path.InletNode != "" {
+		addAirLoopDemandNode(&graph.Nodes, AirLoopDemandNode{
+			NodeName:    path.InletNode,
+			Role:        path.PathType + "_inlet",
+			PathType:    path.PathType,
+			ObjectType:  path.ObjectType,
+			ObjectName:  path.Name,
+			ObjectIndex: path.ObjectIndex,
+			FieldIndex:  1,
+			FieldName:   "Supply Air Path Inlet Node Name",
+		})
+	}
+	if path.OutletNode != "" {
+		addAirLoopDemandNode(&graph.Nodes, AirLoopDemandNode{
+			NodeName:    path.OutletNode,
+			Role:        path.PathType + "_outlet",
+			PathType:    path.PathType,
+			ObjectType:  path.ObjectType,
+			ObjectName:  path.Name,
+			ObjectIndex: path.ObjectIndex,
+			FieldIndex:  1,
+			FieldName:   "Return Air Path Outlet Node Name",
+		})
+	}
+	for _, component := range path.Components {
+		for _, node := range component.Nodes {
+			addAirLoopDemandNode(&graph.Nodes, node)
+		}
+		for _, inlet := range component.InletNodes {
+			for _, outlet := range component.OutletNodes {
+				addAirLoopDemandEdge(&graph.Edges, AirLoopDemandEdge{
+					FromNode:    inlet,
+					ToNode:      outlet,
+					Role:        component.Role,
+					PathType:    path.PathType,
+					ObjectType:  component.ObjectType,
+					ObjectName:  component.ObjectName,
+					ObjectIndex: component.ObjectIndex,
+				})
 			}
 		}
 	}
+}
+
+func addAirLoopDemandNode(nodes *[]AirLoopDemandNode, node AirLoopDemandNode) {
+	if strings.TrimSpace(node.NodeName) == "" {
+		return
+	}
+	for _, existing := range *nodes {
+		if strings.EqualFold(existing.NodeName, node.NodeName) &&
+			existing.Role == node.Role &&
+			existing.PathType == node.PathType &&
+			existing.ObjectIndex == node.ObjectIndex &&
+			existing.FieldIndex == node.FieldIndex {
+			return
+		}
+	}
+	*nodes = append(*nodes, node)
+}
+
+func addAirLoopDemandEdge(edges *[]AirLoopDemandEdge, edge AirLoopDemandEdge) {
+	if strings.TrimSpace(edge.FromNode) == "" || strings.TrimSpace(edge.ToNode) == "" {
+		return
+	}
+	for _, existing := range *edges {
+		if strings.EqualFold(existing.FromNode, edge.FromNode) &&
+			strings.EqualFold(existing.ToNode, edge.ToNode) &&
+			existing.Role == edge.Role &&
+			existing.PathType == edge.PathType &&
+			existing.ObjectIndex == edge.ObjectIndex {
+			return
+		}
+	}
+	*edges = append(*edges, edge)
+}
+
+func airLoopDemandGraphForLoop(ctx *hvacContext, loop HVACLoop) AirLoopDemandGraph {
+	if len(loop.DemandGraph.Nodes) > 0 || loop.DemandGraph.SupplyPath != nil || loop.DemandGraph.ReturnPath != nil {
+		return loop.DemandGraph
+	}
+	return parseAirLoopDemandGraph(ctx, loop)
+}
+
+func airLoopDemandGraphNodeSet(graph AirLoopDemandGraph) map[string]bool {
+	nodes := map[string]bool{}
+	for _, node := range graph.Nodes {
+		if node.NodeName != "" {
+			nodes[normalizeName(node.NodeName)] = true
+		}
+	}
 	return nodes
+}
+
+func airLoopDemandGraphPathNodeSet(graph AirLoopDemandGraph, pathType string) map[string]bool {
+	nodes := map[string]bool{}
+	for _, node := range graph.Nodes {
+		if node.NodeName != "" && node.PathType == pathType {
+			nodes[normalizeName(node.NodeName)] = true
+		}
+	}
+	return nodes
+}
+
+func sortAirLoopDemandGraph(graph *AirLoopDemandGraph) {
+	sortAirLoopDemandNodes(graph.Nodes)
+	sort.SliceStable(graph.Edges, func(i, j int) bool {
+		if graph.Edges[i].PathType != graph.Edges[j].PathType {
+			return graph.Edges[i].PathType < graph.Edges[j].PathType
+		}
+		if !strings.EqualFold(graph.Edges[i].FromNode, graph.Edges[j].FromNode) {
+			return strings.ToLower(graph.Edges[i].FromNode) < strings.ToLower(graph.Edges[j].FromNode)
+		}
+		if !strings.EqualFold(graph.Edges[i].ToNode, graph.Edges[j].ToNode) {
+			return strings.ToLower(graph.Edges[i].ToNode) < strings.ToLower(graph.Edges[j].ToNode)
+		}
+		return graph.Edges[i].Role < graph.Edges[j].Role
+	})
+}
+
+func sortAirLoopDemandNodes(nodes []AirLoopDemandNode) {
+	sort.SliceStable(nodes, func(i, j int) bool {
+		if nodes[i].PathType != nodes[j].PathType {
+			return nodes[i].PathType < nodes[j].PathType
+		}
+		if nodes[i].Role != nodes[j].Role {
+			return nodes[i].Role < nodes[j].Role
+		}
+		if !strings.EqualFold(nodes[i].NodeName, nodes[j].NodeName) {
+			return strings.ToLower(nodes[i].NodeName) < strings.ToLower(nodes[j].NodeName)
+		}
+		return nodes[i].ObjectIndex < nodes[j].ObjectIndex
+	})
+}
+
+func airLoopDemandNodes(ctx *hvacContext, loop HVACLoop) map[string]bool {
+	return airLoopDemandGraphNodeSet(airLoopDemandGraphForLoop(ctx, loop))
 }
 
 func applyLoopZoneRelations(loops []HVACLoop, relations []HVACZoneChain) {
