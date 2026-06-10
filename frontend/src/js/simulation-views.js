@@ -2524,6 +2524,7 @@ function renderMiniProgressSVG() {
 function renderSimulationSummary(result, stale) {
   const err = result.err || {};
   const integrity = result.purposeResults?.integrity || {};
+  const staticDiagnostics = integrity.staticDiagnostics || (!stale ? state.report?.diagnostics || [] : []);
   const sqlIssues = integrity.sqlIssues || [];
   const tabularReports = integrity.tabularReports || [];
   const staleBadge = stale ? `<span class="simulation-badge stale">${escapeHTML(t("simulation.stale", {}, "Stale"))}</span>` : "";
@@ -2563,6 +2564,7 @@ function renderSimulationSummary(result, stale) {
       <div><span>${escapeHTML(t("simulation.errWarnings", {}, "ERR warnings"))}</span><strong>${escapeHTML(err.warnings || 0)}</strong></div>
       <div><span>${escapeHTML(t("simulation.errSevere", {}, "Severe/Fatal"))}</span><strong>${escapeHTML((err.severe || 0) + (err.fatal || 0))}</strong></div>
       <div><span>${escapeHTML(t("simulation.csvFiles", {}, "CSV files"))}</span><strong>${escapeHTML(result.csvs?.length || 0)}</strong></div>
+      <div><span>${escapeHTML(t("simulation.staticDiagnostics", {}, "Static diagnostics"))}</span><strong>${escapeHTML(staticDiagnostics.length)}</strong></div>
       <div><span>${escapeHTML(t("simulation.sqlDiagnostics", {}, "SQL diagnostics"))}</span><strong>${escapeHTML(sqlIssues.length)}</strong></div>
       <div><span>${escapeHTML(t("simulation.tabularReports", {}, "Tabular reports"))}</span><strong>${escapeHTML(tabularReports.length)}</strong></div>
     </div>
@@ -2590,6 +2592,7 @@ function renderSimulationSummary(result, stale) {
         </div>
       </section>
     </div>
+    ${renderIntegrityStaticDiagnostics(staticDiagnostics)}
     ${renderIntegritySQLDetails(sqlIssues, tabularReports)}`;
 }
 
@@ -2675,8 +2678,67 @@ function renderIntegritySQLDetails(sqlIssues = [], tabularReports = []) {
     </div>`;
 }
 
+function renderIntegrityStaticDiagnostics(diagnostics = []) {
+  if (!diagnostics.length) {
+    return "";
+  }
+  const query = normalizeOutputMatchToken(state.simulationIntegrityQuery);
+  const filtered = query ? diagnostics.filter((diagnostic) => integrityStaticDiagnosticMatches(diagnostic, query)) : diagnostics;
+  const rows = filtered
+    .slice(0, 32)
+    .map(
+      (diagnostic) => `
+        <tr>
+          <td><span class="simulation-severity ${escapeHTML(diagnostic.severity || "notice")}">${escapeHTML(diagnostic.severity || "notice")}</span></td>
+          <td>${escapeHTML(diagnostic.category || "Static Diagnose")}</td>
+          <td>${escapeHTML(diagnostic.message || "")}</td>
+          <td>${escapeHTML(staticDiagnosticLocation(diagnostic))}</td>
+          <td>${escapeHTML(diagnostic.code || "")}</td>
+          <td>${escapeHTML(simulationDiagnosticSourceLabel(diagnostic.source || ""))}</td>
+        </tr>`,
+    )
+    .join("");
+  return `
+    <div class="simulation-integrity-static">
+      <section>
+        <h4>${escapeHTML(integrityFilteredTitle(t("simulation.staticDiagnostics", {}, "Static diagnostics"), filtered.length, diagnostics.length, query))}</h4>
+        <div class="output-table-wrap">
+          <table class="output-table">
+            <thead><tr><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.category", {}, "Category"))}</th><th>${escapeHTML(t("common.message", {}, "Message"))}</th><th>${escapeHTML(t("common.location", {}, "Location"))}</th><th>${escapeHTML(t("common.code", {}, "Code"))}</th><th>${escapeHTML(t("common.source", {}, "Source"))}</th></tr></thead>
+            <tbody>${rows || `<tr><td colspan="6">${escapeHTML(t("diagnose.noMatching", {}, "No matching diagnostics"))}</td></tr>`}</tbody>
+          </table>
+        </div>
+      </section>
+    </div>`;
+}
+
 function integrityFilteredTitle(title, shown, total, query) {
   return query ? `${title} (${shown}/${total})` : title;
+}
+
+function integrityStaticDiagnosticMatches(diagnostic, query) {
+  return normalizeOutputMatchToken([
+    diagnostic.severity,
+    diagnostic.category,
+    diagnostic.message,
+    diagnostic.objectType,
+    diagnostic.objectName,
+    diagnostic.field,
+    diagnostic.value,
+    diagnostic.code,
+    diagnostic.source,
+    diagnostic.evidence,
+  ].filter(Boolean).join(" ")).includes(query);
+}
+
+function staticDiagnosticLocation(diagnostic) {
+  return [diagnostic.objectType, diagnostic.objectName, diagnostic.field, diagnostic.value].filter((value) => String(value || "").trim() !== "").join(" / ");
+}
+
+function simulationDiagnosticSourceLabel(source) {
+  return String(source || "")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function integritySQLIssueMatches(issue, query) {
@@ -4356,7 +4418,7 @@ function renderPurposeHTMLIntegrity(integrity) {
       (report.rows || []).slice(0, 40).map((row) => [
         report.reportName || "",
         report.tableName || "",
-        row.rowName || "",
+        row.name || row.rowName || "",
         Object.entries(row.values || {})
           .slice(0, 4)
           .map(([key, value]) => `${key}: ${value}`)
@@ -4365,7 +4427,17 @@ function renderPurposeHTMLIntegrity(integrity) {
       ]),
     )
     .slice(0, 160);
-  if (!errRows.length && !sqlRows.length && !tabularRows.length && !err.total && !(integrity.tabularReports || []).length) {
+  const staticRows = (integrity.staticDiagnostics || [])
+    .slice(0, 120)
+    .map((diagnostic) => [
+      diagnostic.severity || "",
+      diagnostic.category || "",
+      diagnostic.message || "",
+      staticDiagnosticLocation(diagnostic),
+      diagnostic.code || "",
+      simulationDiagnosticSourceLabel(diagnostic.source || ""),
+    ]);
+  if (!staticRows.length && !errRows.length && !sqlRows.length && !tabularRows.length && !err.total && !(integrity.tabularReports || []).length) {
     return "";
   }
   const summaryRows = [
@@ -4373,11 +4445,15 @@ function renderPurposeHTMLIntegrity(integrity) {
     ["ERR completed", err.completed ? "Yes" : "No"],
     ["ERR warnings", err.warnings || 0],
     ["ERR severe/fatal", (err.severe || 0) + (err.fatal || 0)],
+    ["Static diagnostics", (integrity.staticDiagnostics || []).length],
     ["SQL diagnostics", (integrity.sqlIssues || []).length],
     ["Tabular reports", (integrity.tabularReports || []).length],
   ];
   return [
     `<h2>Integrity Summary</h2>${renderPurposeHTMLTable(["Field", "Value"], summaryRows)}`,
+    staticRows.length
+      ? `<h2>Integrity Static Diagnostics</h2>${renderPurposeHTMLTable(["Severity", "Category", "Message", "Location", "Code", "Source"], staticRows)}`
+      : "",
     errRows.length ? `<h2>Integrity ERR Issues</h2>${renderPurposeHTMLTable(["Severity", "Message", "Count", "Lines"], errRows)}` : "",
     sqlRows.length
       ? `<h2>Integrity SQL Diagnostics</h2>${renderPurposeHTMLTable(["Severity", "Message", "Count", "Source"], sqlRows)}`

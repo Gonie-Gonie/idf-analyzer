@@ -1191,11 +1191,13 @@
   font-size: 13px;
 }
 
+.simulation-integrity-static,
 .simulation-integrity-sql {
   display: grid;
   gap: 12px;
 }
 
+.simulation-integrity-static h4,
 .simulation-integrity-sql h4,
 .simulation-tabular-report h5 {
   margin: 0 0 6px;
@@ -1230,9 +1232,14 @@
   color: var(--amber);
 }
 
+.simulation-severity.error,
 .simulation-severity.severe,
 .simulation-severity.fatal {
   color: var(--red);
+}
+
+.simulation-severity.notice {
+  color: var(--muted);
 }
 
 .simulation-chart {

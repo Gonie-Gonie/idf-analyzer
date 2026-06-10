@@ -106,6 +106,7 @@ The release script infers bump size from these sections:
 - Purpose simulation run manifests now include EnergyPlus version metadata when it can be resolved from configured or detected installations.
 - Purpose zone scopes now support visible and filtered zone modes, letting Heat Flow and Comfort outputs narrow to geometry/profile-derived zone names.
 - Purpose result HTML export now includes Integrity ERR, SQL diagnostics, and tabular report summary tables before the embedded raw bundle.
+- Integrity purpose results now connect static Diagnose issues with EnergyPlus ERR and SQL diagnostics in the result view and exported bundle.
 
 ## Fixed
 

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 )
 
 func TestParseERRFileCountsIssues(t *testing.T) {
@@ -483,9 +485,14 @@ func TestPurposeResultBundleUsesSQLIntegrityResult(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "eplusout.sql")
 	createTestIntegritySQL(t, path)
+	inputPath := filepath.Join(dir, "run.idf")
+	if err := os.WriteFile(inputPath, []byte("Version, 9.6;\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	result := &SimulationRunResult{
-		Status: "succeeded",
+		Status:    "succeeded",
+		InputPath: inputPath,
 		Files: []SimulationFileInfo{{
 			Name: "eplusout.sql",
 			Path: path,
@@ -498,6 +505,9 @@ func TestPurposeResultBundleUsesSQLIntegrityResult(t *testing.T) {
 
 	if len(bundle.Integrity.SQLIssues) != 2 || len(bundle.Integrity.TabularReports) != 1 {
 		t.Fatalf("integrity bundle = %#v", bundle.Integrity)
+	}
+	if !integrityHasStaticDiagnostic(bundle.Integrity.StaticDiagnostics, "missing_required_object") {
+		t.Fatalf("static diagnostics = %#v, want missing required object", bundle.Integrity.StaticDiagnostics)
 	}
 	if len(bundle.Completeness) != 3 || !bundle.Completeness[1].Found || !bundle.Completeness[2].Found {
 		t.Fatalf("integrity completeness = %#v", bundle.Completeness)
@@ -780,6 +790,15 @@ func purposeCompletenessFound(items []PurposeCompletenessItem, requiredOutput st
 	for _, item := range items {
 		if item.RequiredOutput == requiredOutput {
 			return item.Found
+		}
+	}
+	return false
+}
+
+func integrityHasStaticDiagnostic(items []idf.Diagnostic, code string) bool {
+	for _, item := range items {
+		if item.Code == code {
+			return true
 		}
 	}
 	return false

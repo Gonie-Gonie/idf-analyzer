@@ -3,6 +3,7 @@ package simulation
 import (
 	"fmt"
 	"math"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -260,12 +261,13 @@ type ComfortUnmetSummary struct {
 }
 
 type IntegrityResult struct {
-	Status         string                   `json:"status"`
-	ERR            ERRSummary               `json:"err"`
-	Files          []SimulationFileInfo     `json:"files,omitempty"`
-	Completed      bool                     `json:"completed"`
-	SQLIssues      []IntegritySQLIssue      `json:"sqlIssues,omitempty"`
-	TabularReports []IntegrityTabularReport `json:"tabularReports,omitempty"`
+	Status            string                   `json:"status"`
+	ERR               ERRSummary               `json:"err"`
+	Files             []SimulationFileInfo     `json:"files,omitempty"`
+	Completed         bool                     `json:"completed"`
+	StaticDiagnostics []idf.Diagnostic         `json:"staticDiagnostics,omitempty"`
+	SQLIssues         []IntegritySQLIssue      `json:"sqlIssues,omitempty"`
+	TabularReports    []IntegrityTabularReport `json:"tabularReports,omitempty"`
 }
 
 type IntegritySQLIssue struct {
@@ -526,12 +528,13 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 		case SimulationPurposeIntegrity:
 			sqlIntegrity := buildIntegritySQLResultFromFiles(result.Files)
 			bundle.Integrity = IntegrityResult{
-				Status:         result.Status,
-				ERR:            result.ERR,
-				Files:          append([]SimulationFileInfo(nil), result.Files...),
-				Completed:      result.ERR.Completed,
-				SQLIssues:      sqlIntegrity.Issues,
-				TabularReports: sqlIntegrity.TabularReports,
+				Status:            result.Status,
+				ERR:               result.ERR,
+				Files:             append([]SimulationFileInfo(nil), result.Files...),
+				Completed:         result.ERR.Completed,
+				StaticDiagnostics: buildIntegrityStaticDiagnostics(result.InputPath),
+				SQLIssues:         sqlIntegrity.Issues,
+				TabularReports:    sqlIntegrity.TabularReports,
 			}
 			bundle.Completeness = append(bundle.Completeness, purposeCompleteness(
 				SimulationPurposeIntegrity,
@@ -1222,6 +1225,33 @@ func buildIntegritySQLResultFromFiles(files []SimulationFileInfo) integritySQLPa
 		}
 	}
 	return integritySQLParseResult{}
+}
+
+func buildIntegrityStaticDiagnostics(path string) []idf.Diagnostic {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return []idf.Diagnostic{integrityStaticDiagnosticUnavailable(fmt.Sprintf("Static Diagnose could not read the run input: %v", err))}
+	}
+	doc, err := idf.Parse(string(content))
+	if err != nil {
+		return []idf.Diagnostic{integrityStaticDiagnosticUnavailable(fmt.Sprintf("Static Diagnose could not parse the run input: %v", err))}
+	}
+	return idf.AnalyzeDiagnostics(doc)
+}
+
+func integrityStaticDiagnosticUnavailable(message string) idf.Diagnostic {
+	return idf.Diagnostic{
+		Severity:   idf.DiagnosticWarning,
+		Category:   "Static Diagnose",
+		Code:       "static_diagnostics_unavailable",
+		Source:     "idf_analyzer",
+		Confidence: "high",
+		Message:    message,
+	}
 }
 
 func buildComfortUnmetSummariesFromFiles(files []SimulationFileInfo) []ComfortUnmetSummary {
