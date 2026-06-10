@@ -285,8 +285,8 @@ Fan:ConstantVolume,
 func TestSummaryRegistryAndGuideCoverage(t *testing.T) {
 	definitions := SummaryDefinitions()
 	guides := SummaryGuides()
-	if len(definitions) != 55 {
-		t.Fatalf("definition count = %d, want 55", len(definitions))
+	if len(definitions) != 56 {
+		t.Fatalf("definition count = %d, want 56", len(definitions))
 	}
 	if len(guides) != len(definitions) {
 		t.Fatalf("guide count = %d, want %d", len(guides), len(definitions))
@@ -316,11 +316,11 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 		t.Fatalf("Parse() error = %v", err)
 	}
 	summary := AnalyzeSummary(doc)
-	if summary.MetricCount != 55 {
-		t.Fatalf("summary metric count = %d, want 55", summary.MetricCount)
+	if summary.MetricCount != 56 {
+		t.Fatalf("summary metric count = %d, want 56", summary.MetricCount)
 	}
-	if got := countMetrics(summary); got != 55 {
-		t.Fatalf("rendered metric count = %d, want 55", got)
+	if got := countMetrics(summary); got != 56 {
+		t.Fatalf("rendered metric count = %d, want 56", got)
 	}
 	if got := metricByID(t, summary, "building_name").DisplayValue; got != "Summary Test Building" {
 		t.Fatalf("building name = %q, want Summary Test Building", got)
@@ -355,6 +355,15 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	}
 	if got := metricByID(t, summary, "conditioned_zone_count").Value; got != 1 {
 		t.Fatalf("conditioned zone count = %#v, want 1", got)
+	}
+	if got := metricByID(t, summary, "conditioned_zone_evidence_breakdown").DisplayValue; !strings.Contains(got, "by_thermostat:1") {
+		t.Fatalf("conditioned zone evidence = %q, want thermostat count", got)
+	}
+	if got := metricByID(t, summary, "conditioned_floor_area_m2").Confidence; got != "inferred" {
+		t.Fatalf("conditioned floor confidence = %q, want inferred", got)
+	}
+	if got := metricByID(t, summary, "unconditioned_floor_area_m2").Visibility; got != "advanced" {
+		t.Fatalf("unconditioned floor visibility = %q, want advanced", got)
 	}
 	if got := metricByID(t, summary, "hvac_node_connection_count").Value; got != 0 {
 		t.Fatalf("hvac node connection count = %#v, want 0 typed loop edges", got)
@@ -395,8 +404,8 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if err != nil {
 		t.Fatalf("summary CSV did not parse: %v\n%s", err, csvText)
 	}
-	if len(records) != 56 {
-		t.Fatalf("CSV rows = %d, want 56", len(records))
+	if len(records) != 57 {
+		t.Fatalf("CSV rows = %d, want 57", len(records))
 	}
 	if len(records[0]) != 2 || records[0][0] != "name" || records[0][1] != "value" {
 		t.Fatalf("CSV header = %#v, want name,value", records[0])
@@ -440,6 +449,50 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	}
 	if got := csvValues["total_wwr [%]"]; got != "3.3" {
 		t.Fatalf("CSV total WWR = %q, want 3.3", got)
+	}
+}
+
+func TestAnalyzeSummaryConditionedZoneEvidenceBreakdown(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Equipment Zone"}}},
+		{Index: 1, Type: "Zone", Fields: []Field{{Value: "Thermostat Zone"}}},
+		{Index: 2, Type: "Zone", Fields: []Field{{Value: "Zone HVAC Zone"}}},
+		{Index: 3, Type: "Zone", Fields: []Field{{Value: "Space HVAC Zone"}}},
+		{Index: 4, Type: "Space", Fields: []Field{
+			{Value: "Open Office", Comment: "Name"},
+			{Value: "Space HVAC Zone", Comment: "Zone Name"},
+		}},
+		{Index: 5, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Equipment Zone", Comment: "Zone Name"},
+		}},
+		{Index: 6, Type: "ZoneControl:Thermostat", Fields: []Field{
+			{Value: "Thermostat Zone", Comment: "Zone Name"},
+		}},
+		{Index: 7, Type: "ZoneHVAC:IdealLoadsAirSystem", Fields: []Field{
+			{Value: "Zone HVAC Zone", Comment: "Zone Name"},
+		}},
+		{Index: 8, Type: "SpaceHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Open Office", Comment: "Space Name"},
+		}},
+	}}
+
+	summary := AnalyzeSummary(doc)
+	if got := metricByID(t, summary, "conditioned_zone_count").Value; got != 4 {
+		t.Fatalf("conditioned zone count = %#v, want 4", got)
+	}
+	breakdown := metricByID(t, summary, "conditioned_zone_evidence_breakdown")
+	for _, expected := range []string{
+		"by_equipment_connections:1",
+		"by_zone_hvac:1",
+		"by_thermostat:1",
+		"by_space_hvac:1",
+	} {
+		if !strings.Contains(breakdown.DisplayValue, expected) {
+			t.Fatalf("conditioned evidence = %q, want %s", breakdown.DisplayValue, expected)
+		}
+	}
+	if breakdown.Confidence != "inferred" {
+		t.Fatalf("conditioned evidence confidence = %q, want inferred", breakdown.Confidence)
 	}
 }
 

@@ -137,7 +137,8 @@ var summaryDefinitions = []SummaryDefinition{
 	def("hvac_object_count", "hvac_conditioning", "HVAC object count", "", 0, "HVAC-related object types.", "Counts objects whose types indicate HVAC, air loops, plant loops, coils, fans, pumps, boilers, chillers, or setpoint managers.", "This is a broad inventory count, not a system simulation result.", "Always available; zero means no recognized HVAC objects were found."),
 	def("zone_hvac_object_count", "hvac_conditioning", "Zone HVAC object count", "", 0, "ZoneHVAC:* objects.", "Counts objects whose type starts with ZoneHVAC:.", "ZoneHVAC:EquipmentConnections is included.", "Always available; zero means no ZoneHVAC objects were found."),
 	def("thermostat_count", "hvac_conditioning", "Thermostat count", "", 0, "ZoneControl:Thermostat and ThermostatSetpoint:* objects.", "Counts thermostat control and setpoint objects.", "Both controllers and setpoint definitions are included.", "Always available; zero means no thermostat objects were found."),
-	def("conditioned_zone_count", "hvac_conditioning", "Conditioned zone count", "", 0, "ZoneHVAC and thermostat zone references.", "Counts distinct zones referenced by ZoneHVAC, ZoneHVAC:EquipmentConnections, or ZoneControl:Thermostat objects.", "ZoneList references are expanded when a matching ZoneList object exists.", "Always available; zero means no conditioned-zone references were found."),
+	def("conditioned_zone_count", "hvac_conditioning", "Conditioned zone count", "", 0, "ZoneHVAC, SpaceHVAC, and thermostat zone references.", "Counts distinct zones referenced by ZoneHVAC, SpaceHVAC, ZoneHVAC:EquipmentConnections, or ZoneControl:Thermostat objects.", "ZoneList references are expanded when a matching ZoneList object exists. SpaceHVAC references are mapped through Space parent zones.", "Always available; zero means no conditioned-zone references were found."),
+	def("conditioned_zone_evidence_breakdown", "hvac_conditioning", "Conditioned zone evidence", "", 0, "Conditioned-zone source buckets.", "Counts conditioned zones separately by equipment connections, ZoneHVAC objects, thermostat controls, and SpaceHVAC objects.", "A zone may appear in more than one evidence bucket; the total conditioned zone count is deduplicated.", "Always available; zero buckets mean no conditioned-zone references were found."),
 	def("hvac_node_connection_count", "hvac_conditioning", "HVAC node connection count", "", 0, "Typed HVAC loop branch components.", "Counts typed inlet-to-outlet edges produced by AnalyzeHVAC for parsed loop branch components.", "The result is an analyzer topology count, not a full EnergyPlus simulation solve.", "Always available; zero means no typed loop component edges were parsed."),
 	def("geometry_coverage_percent", "model_inventory", "Geometry coverage", "%", 1, "Detailed geometry inputs.", "Compares surfaces/fenestration with usable detailed vertices against geometry-bearing objects.", "Simple geometry objects are counted as uncovered because detailed polygon checks cannot verify them.", "Always available; zero means no detailed geometry was available."),
 	def("profile_coverage_percent", "model_inventory", "Profile coverage", "%", 1, "Schedule references and supported annual-hour parser.", "Divides referenced schedules that can be evaluated for annual hours by all referenced schedules.", "Unreferenced schedules are excluded from this readiness metric.", "N/A when no schedule references are present."),
@@ -458,6 +459,8 @@ type summaryFacts struct {
 	declaredZoneVolumes        map[string]float64
 	zoneLists                  map[string][]string
 	conditionedZones           map[string]bool
+	conditionedZoneEvidence    map[string]map[string]bool
+	spaceZones                 map[string]string
 	referencedSchedules        map[string]bool
 	scheduleHours              map[string]float64
 	supportedScheduleCount     int
@@ -564,6 +567,8 @@ func collectSummaryFacts(doc Document) summaryFacts {
 		declaredZoneVolumes:     map[string]float64{},
 		zoneLists:               map[string][]string{},
 		conditionedZones:        map[string]bool{},
+		conditionedZoneEvidence: map[string]map[string]bool{},
+		spaceZones:              map[string]string{},
 		referencedSchedules:     map[string]bool{},
 		scheduleHours:           map[string]float64{},
 		diagnosticSourceCounts:  map[string]int{},
@@ -752,6 +757,19 @@ func (facts *summaryFacts) captureInventoryObject(obj Object) {
 
 	if strings.EqualFold(obj.Type, "Space") {
 		facts.spaceCount++
+		spaceKey := normalizeName(name)
+		if spaceKey != "" {
+			zoneName := findFieldByCommentWords(obj, "zone", "name")
+			if zoneName == "" {
+				zoneName = fieldValueByCatalogName(obj, "Zone Name")
+			}
+			if zoneName == "" && len(obj.Fields) > 1 {
+				zoneName = strings.TrimSpace(obj.Fields[1].Value)
+			}
+			if zoneName != "" {
+				facts.spaceZones[spaceKey] = zoneName
+			}
+		}
 	}
 	if isScheduleType(obj.Type) {
 		facts.scheduleCount++
@@ -864,13 +882,36 @@ func (facts *summaryFacts) captureConditioningAndSchedules(obj Object) {
 	if strings.EqualFold(obj.Type, "ZoneControl:Thermostat") || strings.HasPrefix(lowerType, "thermostatsetpoint:") {
 		facts.thermostatCount++
 	}
-	if strings.HasPrefix(lowerType, "zonehvac:") || strings.EqualFold(obj.Type, "ZoneControl:Thermostat") {
-		for _, zone := range facts.objectTargetZones(obj) {
-			facts.conditionedZones[normalizeName(zone)] = true
-		}
+	switch {
+	case strings.EqualFold(obj.Type, "ZoneHVAC:EquipmentConnections"):
+		facts.markConditionedZones(facts.objectTargetZones(obj), "by_equipment_connections")
+	case strings.HasPrefix(lowerType, "zonehvac:"):
+		facts.markConditionedZones(facts.objectTargetZones(obj), "by_zone_hvac")
+	case strings.EqualFold(obj.Type, "ZoneControl:Thermostat"):
+		facts.markConditionedZones(facts.objectTargetZones(obj), "by_thermostat")
+	case strings.HasPrefix(lowerType, "spacehvac:"):
+		facts.markConditionedZones(facts.objectTargetSpaceZones(obj), "by_space_hvac")
 	}
 	for _, scheduleName := range referencedScheduleNames(obj) {
 		facts.referencedSchedules[normalizeName(scheduleName)] = true
+	}
+}
+
+func (facts *summaryFacts) markConditionedZones(zones []string, evidence string) {
+	evidence = strings.TrimSpace(evidence)
+	if evidence == "" {
+		evidence = "by_unspecified"
+	}
+	if facts.conditionedZoneEvidence[evidence] == nil {
+		facts.conditionedZoneEvidence[evidence] = map[string]bool{}
+	}
+	for _, zone := range zones {
+		zoneKey := normalizeName(zone)
+		if zoneKey == "" {
+			continue
+		}
+		facts.conditionedZones[zoneKey] = true
+		facts.conditionedZoneEvidence[evidence][zoneKey] = true
 	}
 }
 
@@ -1028,25 +1069,26 @@ func (facts *summaryFacts) finalizeVolumeAndHeights() {
 
 func (facts summaryFacts) metricValues() map[string]summaryMetricValue {
 	values := map[string]summaryMetricValue{
-		"energyplus_version":         stringSummaryValue(facts.version),
-		"building_name":              stringSummaryValue(facts.buildingName),
-		"object_count":               countSummaryValue(facts.objectCount),
-		"object_type_count":          countSummaryValue(facts.objectTypeCount),
-		"zone_count":                 countSummaryValue(facts.zoneCount),
-		"space_count":                countSummaryValue(facts.spaceCount),
-		"schedule_count":             countSummaryValue(facts.scheduleCount),
-		"construction_count":         countSummaryValue(facts.constructionCount),
-		"material_count":             countSummaryValue(facts.materialCount),
-		"internal_load_object_count": countSummaryValue(facts.internalLoadObjectCount),
-		"referenced_schedule_count":  countSummaryValue(len(facts.referencedSchedules)),
-		"supported_schedule_count":   countSummaryValue(facts.supportedScheduleCount),
-		"unsupported_schedule_count": countSummaryValue(facts.unsupportedScheduleCount),
-		"hvac_object_count":          countSummaryValue(facts.hvacObjectCount),
-		"zone_hvac_object_count":     countSummaryValue(facts.zoneHVACObjectCount),
-		"thermostat_count":           countSummaryValue(facts.thermostatCount),
-		"conditioned_zone_count":     countSummaryValue(len(facts.conditionedZones)),
-		"hvac_node_connection_count": countSummaryValue(facts.hvacNodeConnectionCount),
-		"diagnostics_by_source":      stringSummaryValue(summarySourceCountsDisplay(facts.diagnosticSourceCounts)),
+		"energyplus_version":                  stringSummaryValue(facts.version),
+		"building_name":                       stringSummaryValue(facts.buildingName),
+		"object_count":                        countSummaryValue(facts.objectCount),
+		"object_type_count":                   countSummaryValue(facts.objectTypeCount),
+		"zone_count":                          countSummaryValue(facts.zoneCount),
+		"space_count":                         countSummaryValue(facts.spaceCount),
+		"schedule_count":                      countSummaryValue(facts.scheduleCount),
+		"construction_count":                  countSummaryValue(facts.constructionCount),
+		"material_count":                      countSummaryValue(facts.materialCount),
+		"internal_load_object_count":          countSummaryValue(facts.internalLoadObjectCount),
+		"referenced_schedule_count":           countSummaryValue(len(facts.referencedSchedules)),
+		"supported_schedule_count":            countSummaryValue(facts.supportedScheduleCount),
+		"unsupported_schedule_count":          countSummaryValue(facts.unsupportedScheduleCount),
+		"hvac_object_count":                   countSummaryValue(facts.hvacObjectCount),
+		"zone_hvac_object_count":              countSummaryValue(facts.zoneHVACObjectCount),
+		"thermostat_count":                    countSummaryValue(facts.thermostatCount),
+		"conditioned_zone_count":              countSummaryValue(len(facts.conditionedZones)),
+		"conditioned_zone_evidence_breakdown": stringSummaryValue(summaryConditionedEvidenceDisplay(facts.conditionedZoneEvidence)),
+		"hvac_node_connection_count":          countSummaryValue(facts.hvacNodeConnectionCount),
+		"diagnostics_by_source":               stringSummaryValue(summarySourceCountsDisplay(facts.diagnosticSourceCounts)),
 	}
 
 	if facts.hasBuildingNorthAxis {
@@ -1180,7 +1222,7 @@ func summaryMetricSource(metricID string, definitionSource string) string {
 	switch metricID {
 	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
 		return "analyzer_readiness"
-	case "hvac_relation_confidence":
+	case "conditioned_zone_count", "conditioned_zone_evidence_breakdown", "hvac_relation_confidence":
 		return "hvac_semantic_evidence"
 	case "diagnostics_by_source":
 		return "diagnostics"
@@ -1196,6 +1238,11 @@ func summaryMetricConfidence(metricID string, status string) string {
 		return "missing"
 	}
 	switch metricID {
+	case "conditioned_floor_area_m2", "unconditioned_floor_area_m2", "conditioned_zone_count", "conditioned_zone_evidence_breakdown":
+		if status == summaryStatusPartial {
+			return "partial"
+		}
+		return "inferred"
 	case "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h":
 		if status == summaryStatusPartial {
 			return "partial"
@@ -1215,7 +1262,7 @@ func summaryMetricConfidence(metricID string, status string) string {
 
 func summaryMetricVisibility(metricID string) string {
 	switch metricID {
-	case "average_schedule_operating_hours_h", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "envelope_area_to_volume_ratio", "floor_area_to_volume_ratio", "hvac_node_connection_count", "diagnostics_by_source":
+	case "average_schedule_operating_hours_h", "unconditioned_floor_area_m2", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "envelope_area_to_volume_ratio", "floor_area_to_volume_ratio", "hvac_node_connection_count", "diagnostics_by_source":
 		return "advanced"
 	default:
 		return "primary"
@@ -1231,7 +1278,7 @@ func summaryMetricBadges(metricID string, status string) []string {
 		badges = append(badges, "missing")
 	}
 	switch metricID {
-	case "conditioned_floor_area_m2", "unconditioned_floor_area_m2", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h", "hvac_relation_confidence":
+	case "conditioned_floor_area_m2", "unconditioned_floor_area_m2", "conditioned_zone_count", "conditioned_zone_evidence_breakdown", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h", "hvac_relation_confidence":
 		badges = append(badges, "inferred")
 	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
 		badges = append(badges, "readiness")
@@ -1253,6 +1300,15 @@ func summarySourceCountsDisplay(counts map[string]int) string {
 	parts := make([]string, 0, len(keys))
 	for _, key := range keys {
 		parts = append(parts, fmt.Sprintf("%s:%d", key, counts[key]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func summaryConditionedEvidenceDisplay(evidence map[string]map[string]bool) string {
+	order := []string{"by_equipment_connections", "by_zone_hvac", "by_thermostat", "by_space_hvac"}
+	parts := make([]string, 0, len(order))
+	for _, key := range order {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, len(evidence[key])))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -1438,6 +1494,24 @@ func (facts summaryFacts) objectTargetZones(obj Object) []string {
 		return zones
 	}
 	return []string{target}
+}
+
+func (facts summaryFacts) objectTargetSpaceZones(obj Object) []string {
+	spaceName := findFieldByCommentWords(obj, "space", "name")
+	if spaceName == "" {
+		spaceName = fieldValueByCatalogName(obj, "Space Name")
+	}
+	if spaceName == "" && len(obj.Fields) > 0 {
+		spaceName = strings.TrimSpace(obj.Fields[0].Value)
+	}
+	if spaceName == "" {
+		return nil
+	}
+	zoneName := facts.spaceZones[normalizeName(spaceName)]
+	if zoneName == "" {
+		return nil
+	}
+	return []string{zoneName}
 }
 
 func (facts summaryFacts) targetArea(obj Object) (float64, bool) {
@@ -2117,7 +2191,7 @@ func scheduleSelectorTokens(value string) []string {
 }
 
 func init() {
-	if len(summaryDefinitions) != 55 {
-		panic(fmt.Sprintf("summary metric registry has %d metrics, want 55", len(summaryDefinitions)))
+	if len(summaryDefinitions) != 56 {
+		panic(fmt.Sprintf("summary metric registry has %d metrics, want 56", len(summaryDefinitions)))
 	}
 }

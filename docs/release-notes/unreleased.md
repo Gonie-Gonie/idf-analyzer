@@ -38,6 +38,7 @@ The release script infers bump size from these sections:
 - Summary HVAC node connection counts now use typed loop component connection pairs instead of sequential field fallback inference.
 - Semantic HVAC duplicate markers now list actual loop, zone relation, demand graph, and catalog occurrence paths instead of only pointing back to the catalog entry.
 - Semantic YAML search now includes facet buttons for source fields, editable values, derived metadata, and evidence/debug blocks while preserving parent path context.
+- Summary conditioned-zone metrics now expose evidence breakdowns for equipment connections, ZoneHVAC objects, thermostats, and SpaceHVAC references, with inferred confidence metadata.
 
 ## Fixed
 
