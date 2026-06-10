@@ -91,6 +91,11 @@ Output:Variable,
   Zone Thermal Comfort Fanger Model PMV,
   Hourly;
 
+Output:Variable,
+  *,
+  Zone Air Relative Humidity,
+  Hourly;
+
 Output:Diagnostics,
   DisplayExtraWarnings;
 `)
@@ -105,6 +110,9 @@ Output:Diagnostics,
 	if !outputSummaryHasPurpose(report.Existing, "Output:Variable", "Zone Mean Air Temperature", "zone_heat_flow") ||
 		!outputSummaryHasPurpose(report.Existing, "Output:Variable", "Zone Mean Air Temperature", "comfort_check") {
 		t.Fatalf("zone mean air temperature purpose tags missing: %#v", report.Existing)
+	}
+	if !outputSummaryHasPurpose(report.Existing, "Output:Variable", "Zone Air Relative Humidity", "comfort_check") {
+		t.Fatalf("zone relative humidity comfort purpose tag missing: %#v", report.Existing)
 	}
 	if !outputSummaryHasPurpose(report.Existing, "Output:Variable", "System Node Mass Flow Rate", "hvac_loop_check") {
 		t.Fatalf("system node purpose tag missing: %#v", report.Existing)

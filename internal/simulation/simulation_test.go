@@ -468,7 +468,9 @@ func TestPurposeResultBundleBuildsComfortResult(t *testing.T) {
 		Status: "succeeded",
 		Series: []SimulationSeries{
 			{File: "eplusout.sql", Column: "Office:Zone Mean Air Temperature [C]", Min: 20, Max: 24, Average: 22, Points: []SimulationPoint{{X: 1, Value: 22}}},
+			{File: "eplusout.sql", Column: "Office:Zone Air Relative Humidity [%]", Min: 40, Max: 50, Average: 45, Points: []SimulationPoint{{X: 1, Value: 45}}},
 			{File: "eplusout.sql", Column: "Office:Zone Thermostat Cooling Setpoint Temperature [C]", Min: 26, Max: 26, Average: 26, Points: []SimulationPoint{{X: 1, Value: 26}}},
+			{File: "eplusout.sql", Column: "Office:Zone Air System Sensible Heating Rate [W]", Min: 0, Max: 120, Average: 60, Points: []SimulationPoint{{X: 1, Value: 60}}},
 			{File: "eplusout.sql", Column: "Air Supply Inlet:System Node Temperature [C]", Min: 12, Max: 14, Average: 13, Points: []SimulationPoint{{X: 1, Value: 13}}},
 		},
 	}
@@ -479,10 +481,13 @@ func TestPurposeResultBundleBuildsComfortResult(t *testing.T) {
 	if len(bundle.Comfort.Zones) != 1 || bundle.Comfort.Zones[0].ZoneName != "Office" {
 		t.Fatalf("comfort zones = %#v", bundle.Comfort.Zones)
 	}
-	if len(bundle.Comfort.Series) != 2 || len(bundle.Comfort.Zones[0].Metrics) != 2 {
+	if len(bundle.Comfort.Series) != 4 || len(bundle.Comfort.Zones[0].Metrics) != 4 {
 		t.Fatalf("comfort series = %#v", bundle.Comfort)
 	}
-	if len(bundle.Completeness) != 1 || !bundle.Completeness[0].Found || bundle.Completeness[0].Source != "sql" {
+	if len(bundle.Completeness) != len(comfortCheckVariables()) ||
+		!purposeCompletenessFound(bundle.Completeness, "Zone Air Relative Humidity") ||
+		!purposeCompletenessFound(bundle.Completeness, "Zone Air System Sensible Heating Rate") ||
+		purposeCompletenessFound(bundle.Completeness, "Zone Air System Sensible Cooling Rate") {
 		t.Fatalf("comfort completeness = %#v", bundle.Completeness)
 	}
 }

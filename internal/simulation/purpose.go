@@ -492,12 +492,7 @@ func BuildPurposeResultBundle(result *SimulationRunResult, request SimulationPur
 			))
 		case SimulationPurposeComfort:
 			bundle.Comfort = buildComfortResult(result.Series)
-			bundle.Completeness = append(bundle.Completeness, purposeCompleteness(
-				SimulationPurposeComfort,
-				"zone comfort series",
-				len(bundle.Comfort.Series) > 0,
-				seriesSource(bundle.Comfort.Series),
-			))
+			bundle.Completeness = append(bundle.Completeness, bundle.Comfort.Completeness...)
 		case SimulationPurposeIntegrity:
 			sqlIntegrity := buildIntegritySQLResultFromFiles(result.Files)
 			bundle.Integrity = IntegrityResult{
@@ -2116,8 +2111,11 @@ func zoneHeatFlowVariableNames() []string {
 func comfortCheckVariables() []string {
 	return []string{
 		"Zone Mean Air Temperature",
+		"Zone Air Relative Humidity",
 		"Zone Thermostat Heating Setpoint Temperature",
 		"Zone Thermostat Cooling Setpoint Temperature",
+		"Zone Air System Sensible Heating Rate",
+		"Zone Air System Sensible Cooling Rate",
 		"Zone Thermal Comfort Fanger Model PMV",
 		"Zone Thermal Comfort Fanger Model PPD",
 	}

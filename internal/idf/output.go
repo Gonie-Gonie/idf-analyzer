@@ -473,7 +473,9 @@ func outputVariablePurposeTags(variableName string, tags map[string]bool) {
 		"boiler heating rate", "boiler heating energy",
 		"cooling tower heat transfer rate", "cooling tower heat transfer energy":
 		addOutputPurposeTags(tags, "hvac_loop_check")
-	case "zone thermostat heating setpoint temperature", "zone thermostat cooling setpoint temperature",
+	case "zone air relative humidity",
+		"zone thermostat heating setpoint temperature", "zone thermostat cooling setpoint temperature",
+		"zone air system sensible heating rate", "zone air system sensible cooling rate",
 		"zone thermal comfort fanger model pmv", "zone thermal comfort fanger model ppd":
 		addOutputPurposeTags(tags, "comfort_check")
 	}

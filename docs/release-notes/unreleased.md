@@ -73,6 +73,7 @@ The release script infers bump size from these sections:
 - Basic Energy results now include monthly stacked profile charts and a zone energy heatmap matrix in addition to total bars and ranking tables.
 - Basic Energy now surfaces purpose completeness badges for each requested energy meter and zone-energy variable alongside HVAC Loop and Comfort result views.
 - Zone Heat Flow now reports purpose completeness for temperature and each heat-balance category instead of only a single ledger-level status.
+- Comfort Check now includes relative humidity and sensible heating/cooling rate outputs, and exports metric-level completeness.
 - Simulation output discovery now caches SQL/RDD/MDD catalog reads and invalidates them when source files change.
 - Output analysis now tags existing and recommended output requests by simulation purpose and adds a purpose filter to the Output tab.
 - HVAC Loop Check results now include node summaries, derived loop metrics, and alert rules for zero flow, missing setpoints, and large setpoint deltas.
