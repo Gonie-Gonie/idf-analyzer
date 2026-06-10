@@ -82,6 +82,7 @@ The release script infers bump size from these sections:
 - Purpose output permanent apply now has explicit modes for adding missing outputs, replacing conflicts, keeping existing outputs while adding purpose duplicates, or removing selected purpose outputs.
 - Purpose result HTML export now includes Energy, Zone Heat Flow, HVAC node/component, and Comfort summary tables before the embedded raw bundle.
 - Simulation output discovery now treats purpose meters as first-class fallback/alias entries, including `NaturalGas:*` and `Gas:*` meter aliases.
+- Purpose result source rows now include a Chart action that opens the matched SQL/CSV series in the common time-range chart for zone energy, HVAC node/component, and comfort metrics.
 
 ## Fixed
 

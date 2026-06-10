@@ -69,6 +69,9 @@ export function initializeSimulationControls() {
       toggleSimulationResultSections();
     });
   });
+  elements.simulationEnergyDashboard?.addEventListener("click", handleSimulationSeriesInspectClick);
+  elements.simulationHVACLoopResults?.addEventListener("click", handleSimulationSeriesInspectClick);
+  elements.simulationComfortResults?.addEventListener("click", handleSimulationSeriesInspectClick);
   elements.simulationExportPurposeJSON?.addEventListener("click", () => exportPurposeResultJSON());
   elements.simulationExportPurposeHTML?.addEventListener("click", () => exportPurposeResultHTML());
   elements.simulationRefreshEnv?.addEventListener("click", () => loadSimulationEnvironment());
@@ -495,17 +498,21 @@ function renderSimulationHVACLoopResult(loop) {
   const rows = (loop.series || [])
     .slice(0, 80)
     .map(
-      (series) => `
+      (series) => {
+        const nodeName = seriesNodeKey(series.column);
+        const metricName = seriesVariableName(series.column);
+        return `
         <tr>
-          <td>${escapeHTML(seriesNodeKey(series.column))}</td>
-          <td>${escapeHTML(seriesVariableName(series.column))}</td>
+          <td>${escapeHTML(nodeName)}</td>
+          <td>${escapeHTML(metricName)}</td>
           <td>${escapeHTML(series.file || "")}</td>
-          <td>${renderSourceOutputCell(sourceOutputForSeriesColumn(series.column))}</td>
+          <td>${renderSourceInspectorCell(sourceOutputForSeriesColumn(series.column), { series, keyValue: nodeName, variableName: metricName })}</td>
           <td>${escapeHTML(formatNumber(series.min))}</td>
           <td>${escapeHTML(formatNumber(series.max))}</td>
           <td>${escapeHTML(formatNumber(series.average))}</td>
           <td>${escapeHTML(series.points?.length || 0)}</td>
-        </tr>`,
+        </tr>`;
+      },
     )
     .join("");
   return `
@@ -612,17 +619,24 @@ function renderSimulationHVACComponentOperations(components) {
     )
     .slice(0, 120)
     .map(
-      ({ component, metric }) => `
+      ({ component, metric }) => {
+        const series = findComponentMetricSeries(component, metric);
+        return `
         <tr>
           <td>${escapeHTML(component.componentName || "")}</td>
           <td>${escapeHTML(component.componentType || "")}</td>
           <td>${escapeHTML(metric.name || "")}</td>
-          <td>${renderSourceOutputCell(sourceOutputForVariable(component.componentName, metric.name))}</td>
+          <td>${renderSourceInspectorCell(sourceOutputForVariable(component.componentName, metric.name), {
+            series,
+            keyValue: component.componentName,
+            variableName: metric.name,
+          })}</td>
           <td>${escapeHTML(formatValueWithUnit(metric.max, metric.unit))}</td>
           <td>${escapeHTML(formatValueWithUnit(metric.average, metric.unit))}</td>
           <td>${escapeHTML(formatValueWithUnit(metric.total, metric.unit))}</td>
           <td>${escapeHTML(metric.pointCount || 0)}</td>
-        </tr>`,
+        </tr>`;
+      },
     )
     .join("");
   return `
@@ -676,7 +690,7 @@ function renderSimulationComfort(result) {
           <td>${escapeHTML(formatNumber(metric.max))}</td>
           <td>${escapeHTML(formatNumber(metric.average))}</td>
           <td>${escapeHTML(metric.source || "")}</td>
-          <td>${renderSourceOutputCell(sourceOutputForVariable(zoneName, metric.name))}</td>
+          <td>${renderSourceInspectorCell(sourceOutputForVariable(zoneName, metric.name), { keyValue: zoneName, variableName: metric.name })}</td>
           <td>${escapeHTML(metric.points?.length || 0)}</td>
         </tr>`,
     )
@@ -865,7 +879,7 @@ function renderZoneEnergyTable(zones) {
           <td>${escapeHTML(item.metric || "")}</td>
           <td>${escapeHTML(formatEnergyValue(Number(item.total) || 0, item.unit || ""))}</td>
           <td>${escapeHTML(item.source || "")}</td>
-          <td>${renderSourceOutputCell(sourceOutputForVariable(item.zoneName, item.metric))}</td>
+          <td>${renderSourceInspectorCell(sourceOutputForVariable(item.zoneName, item.metric), { keyValue: item.zoneName, variableName: item.metric })}</td>
         </tr>`,
     )
     .join("");
@@ -945,6 +959,88 @@ function renderSourceOutputCell(object) {
   const signature = object.signature || [object.objectType, object.keyValue, object.variableName, object.reportingFrequency].filter(Boolean).join(" / ");
   const stateLabel = outputStateLabel(object.state || "");
   return `<span class="simulation-source-output ${escapeHTML(object.state || "")}" title="${escapeHTML(signature)}">${escapeHTML(stateLabel)}</span><small class="simulation-source-signature" title="${escapeHTML(signature)}">${escapeHTML(signature)}</small>`;
+}
+
+function renderSourceInspectorCell(object, seriesRef = {}) {
+  return `<div class="simulation-source-cell">${renderSourceOutputCell(object)}${renderSeriesInspectButton(seriesRef)}</div>`;
+}
+
+function renderSeriesInspectButton(seriesRef = {}) {
+  const series = seriesRef.series || findSimulationSeriesForMetric(seriesRef.keyValue, seriesRef.variableName);
+  const id = series ? seriesID(series) : "";
+  const label = t("simulation.inspectSeriesAction", {}, "Chart");
+  const title = series
+    ? t("simulation.inspectSeries", {}, "Inspect this output in the common Series chart")
+    : t("simulation.inspectSeriesUnavailable", {}, "No matching SQL/CSV series is available for this row");
+  return `
+    <button
+      type="button"
+      class="simulation-series-inspect"
+      data-simulation-inspect-series="1"
+      data-simulation-series-id="${escapeHTML(id)}"
+      data-simulation-series-key="${escapeHTML(seriesRef.keyValue || "")}"
+      data-simulation-series-metric="${escapeHTML(seriesRef.variableName || "")}"
+      title="${escapeHTML(title)}"
+      ${series ? "" : "disabled"}
+    >${escapeHTML(label)}</button>`;
+}
+
+function handleSimulationSeriesInspectClick(event) {
+  if (!(event.target instanceof Element)) {
+    return;
+  }
+  const button = event.target.closest("[data-simulation-inspect-series]");
+  if (!button || button.disabled) {
+    return;
+  }
+  const series = findSimulationSeriesByID(button.dataset.simulationSeriesId || "")
+    || findSimulationSeriesForMetric(button.dataset.simulationSeriesKey || "", button.dataset.simulationSeriesMetric || "");
+  if (!series) {
+    setStatus(t("simulation.inspectSeriesUnavailable", {}, "No matching SQL/CSV series is available for this row"), "warn");
+    return;
+  }
+  selectSimulationSeries(series);
+}
+
+function selectSimulationSeries(series) {
+  state.simulationSelectedSeries = seriesID(series);
+  state.simulationSeriesRangeStart = 0;
+  state.simulationSeriesRangeEnd = -1;
+  state.simulationActiveResultView = "series";
+  renderSimulationResultTabs(state.simulationResult);
+  toggleSimulationResultSections();
+  renderSimulationSeriesSelect(state.simulationResult || {});
+  renderSimulationChart();
+  setStatus(t("simulation.inspectSeriesOpened", {}, "Series chart opened"), "ok");
+  elements.simulationChart?.scrollIntoView({ block: "nearest" });
+}
+
+function findSimulationSeriesByID(id) {
+  if (!id) {
+    return null;
+  }
+  return (state.simulationResult?.series || []).find((series) => seriesID(series) === id) || null;
+}
+
+function findSimulationSeriesForMetric(keyValue, variableName) {
+  const key = normalizeOutputMatchToken(keyValue);
+  const variable = normalizeOutputMatchToken(variableName);
+  if (!key || !variable) {
+    return null;
+  }
+  return (state.simulationResult?.series || []).find((series) => {
+    return normalizeOutputMatchToken(seriesNodeKey(series.column)) === key
+      && normalizeOutputMatchToken(seriesVariableName(series.column)) === variable;
+  }) || null;
+}
+
+function findComponentMetricSeries(component = {}, metric = {}) {
+  const componentName = normalizeOutputMatchToken(component.componentName);
+  const metricName = normalizeOutputMatchToken(metric.name);
+  return (component.series || []).find((series) => {
+    return normalizeOutputMatchToken(seriesNodeKey(series.column)) === componentName
+      && normalizeOutputMatchToken(seriesVariableName(series.column)) === metricName;
+  }) || null;
 }
 
 function normalizeOutputMatchToken(value) {
