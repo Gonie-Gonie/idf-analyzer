@@ -39,6 +39,7 @@ export function initializeSimulationControls() {
   });
   elements.simulationPurposeZoneNames?.addEventListener("input", () => scheduleSimulationRunPlan());
   elements.simulationPurposeFrequencyPolicy?.addEventListener("change", () => scheduleSimulationRunPlan());
+  elements.simulationPurposeApplyMode?.addEventListener("change", () => updatePurposeApplyButton());
   elements.simulationCustomOutputs?.addEventListener("input", () => {
     saveSimulationCustomOutputsPreset();
     scheduleSimulationRunPlan();
@@ -1244,11 +1245,30 @@ function updatePurposeApplyButton() {
   }
   const hasText = Boolean((elements.idfInput?.value || "").trim());
   const plan = state.simulationPurposePlan;
-  const hasTemporaryOutputs = (plan?.outputObjects || []).some((object) => object.state !== "existing");
-  elements.simulationApplyPurposeOutputs.disabled = state.simulationRunning || state.simulationPurposePlanLoading || !hasText || !plan || !hasTemporaryOutputs;
-  elements.simulationApplyPurposeOutputs.title = hasTemporaryOutputs
+  const mode = purposeOutputApplyMode();
+  const hasApplicableOutputs = (plan?.outputObjects || []).some((object) => purposeOutputAppliesInMode(object, mode));
+  elements.simulationApplyPurposeOutputs.disabled = state.simulationRunning || state.simulationPurposePlanLoading || !hasText || !plan || !hasApplicableOutputs;
+  elements.simulationApplyPurposeOutputs.title = hasApplicableOutputs
     ? t("simulation.makePurposeOutputsPermanent", {}, "Make outputs permanent")
     : t("simulation.noTemporaryOutputs", {}, "No temporary purpose outputs need to be applied.");
+}
+
+function purposeOutputApplyMode() {
+  return elements.simulationPurposeApplyMode?.value || "add_missing_only";
+}
+
+function purposeOutputAppliesInMode(object = {}, mode = purposeOutputApplyMode()) {
+  const stateValue = object.state || "";
+  switch (mode) {
+    case "replace_conflicting":
+      return stateValue === "temporary" || stateValue === "will_be_persisted" || stateValue === "conflict";
+    case "keep_existing_and_add":
+      return stateValue !== "existing";
+    case "remove_purpose_outputs":
+      return Number.isFinite(Number(object.objectIndex));
+    default:
+      return stateValue === "temporary" || stateValue === "will_be_persisted";
+  }
 }
 
 function buildSimulationPurposeRequest() {
@@ -1262,6 +1282,7 @@ function buildSimulationPurposeRequest() {
       customOutputs: parseCustomOutputs(elements.simulationCustomOutputs?.value || ""),
     },
     frequencyPolicy: elements.simulationPurposeFrequencyPolicy?.value || "purpose_default",
+    outputApplyMode: purposeOutputApplyMode(),
     sqlMode: "sql_first",
     persistOutputs: Boolean(elements.simulationPersistOutputs?.checked),
     discoveryAllowed: false,

@@ -30,6 +30,10 @@ const (
 	PurposeOutputStateTemporary             = "temporary"
 	PurposeOutputStateWillPersist           = "will_be_persisted"
 	PurposeOutputStateConflict              = "conflict"
+	PurposeOutputApplyModeAddMissingOnly    = "add_missing_only"
+	PurposeOutputApplyModeReplaceConflicts  = "replace_conflicting"
+	PurposeOutputApplyModeKeepExistingAdd   = "keep_existing_and_add"
+	PurposeOutputApplyModeRemovePurpose     = "remove_purpose_outputs"
 )
 
 type SimulationPurposeRequest struct {
@@ -39,6 +43,7 @@ type SimulationPurposeRequest struct {
 	SQLMode          string                 `json:"sqlMode,omitempty"`
 	PersistOutputs   bool                   `json:"persistOutputs,omitempty"`
 	DiscoveryAllowed bool                   `json:"discoveryAllowed,omitempty"`
+	OutputApplyMode  string                 `json:"outputApplyMode,omitempty"`
 }
 
 type SimulationPurposeScope struct {
@@ -85,6 +90,7 @@ type PurposeOutputObject struct {
 	ReportingFrequency string                 `json:"reportingFrequency,omitempty"`
 	Description        string                 `json:"description,omitempty"`
 	Reason             string                 `json:"reason,omitempty"`
+	ObjectIndex        *int                   `json:"objectIndex,omitempty"`
 }
 
 type PurposeRunWarning struct {
@@ -295,6 +301,7 @@ func NormalizeSimulationPurposeRequest(request *SimulationPurposeRequest) Simula
 	if normalized.SQLMode == "" {
 		normalized.SQLMode = PurposeSQLModeSQLFirst
 	}
+	normalized.OutputApplyMode = normalizePurposeOutputApplyMode(normalized.OutputApplyMode)
 	normalized.Scope.ZoneMode = strings.TrimSpace(normalized.Scope.ZoneMode)
 	if normalized.Scope.ZoneMode == "" {
 		normalized.Scope.ZoneMode = "all"
@@ -310,6 +317,19 @@ func NormalizeSimulationPurposeRequest(request *SimulationPurposeRequest) Simula
 	normalized.Scope.ComponentIDs = normalizePurposeStrings(normalized.Scope.ComponentIDs)
 	normalized.Scope.OutputSignatures = normalizePurposeStrings(normalized.Scope.OutputSignatures)
 	return normalized
+}
+
+func normalizePurposeOutputApplyMode(mode string) string {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case PurposeOutputApplyModeReplaceConflicts:
+		return PurposeOutputApplyModeReplaceConflicts
+	case PurposeOutputApplyModeKeepExistingAdd:
+		return PurposeOutputApplyModeKeepExistingAdd
+	case PurposeOutputApplyModeRemovePurpose:
+		return PurposeOutputApplyModeRemovePurpose
+	default:
+		return PurposeOutputApplyModeAddMissingOnly
+	}
 }
 
 func BuildPurposeRunPlan(doc idf.Document, request SimulationPurposeRequest) PurposeRunPlan {
@@ -335,9 +355,46 @@ func BuildPurposeRunPlan(doc idf.Document, request SimulationPurposeRequest) Pur
 	return builder.plan()
 }
 
-func PurposeRunPlanApplyRequest(plan PurposeRunPlan) idf.OutputApplyRequest {
+func PurposeRunPlanApplyRequest(plan PurposeRunPlan, applyModes ...string) idf.OutputApplyRequest {
+	mode := PurposeOutputApplyModeAddMissingOnly
+	if len(applyModes) > 0 {
+		mode = normalizePurposeOutputApplyMode(applyModes[0])
+	}
 	additions := make([]idf.OutputObjectRequest, 0, len(plan.OutputObjects))
+	updates := []idf.OutputFieldUpdate{}
+	removeIndexes := []int{}
+	removed := map[int]bool{}
 	for _, object := range plan.OutputObjects {
+		switch mode {
+		case PurposeOutputApplyModeRemovePurpose:
+			if object.ObjectIndex != nil && !removed[*object.ObjectIndex] {
+				removeIndexes = append(removeIndexes, *object.ObjectIndex)
+				removed[*object.ObjectIndex] = true
+			}
+			continue
+		case PurposeOutputApplyModeReplaceConflicts:
+			if object.State == PurposeOutputStateConflict && object.ObjectIndex != nil {
+				if fieldIndex, ok := purposeReportingFrequencyFieldIndex(object.Fields); ok {
+					updates = append(updates, idf.OutputFieldUpdate{
+						ObjectIndex: *object.ObjectIndex,
+						FieldIndex:  fieldIndex,
+						Value:       object.ReportingFrequency,
+					})
+				}
+				continue
+			}
+			if object.State == PurposeOutputStateExisting || object.State == PurposeOutputStateConflict {
+				continue
+			}
+		case PurposeOutputApplyModeKeepExistingAdd:
+			if object.State == PurposeOutputStateExisting {
+				continue
+			}
+		default:
+			if object.State == PurposeOutputStateExisting || object.State == PurposeOutputStateConflict {
+				continue
+			}
+		}
 		if object.State == PurposeOutputStateExisting {
 			continue
 		}
@@ -347,7 +404,17 @@ func PurposeRunPlanApplyRequest(plan PurposeRunPlan) idf.OutputApplyRequest {
 			Reason:     object.Reason,
 		})
 	}
-	return idf.OutputApplyRequest{AddObjects: additions}
+	sort.Ints(removeIndexes)
+	return idf.OutputApplyRequest{AddObjects: additions, Updates: updates, RemoveObjectIndexes: removeIndexes}
+}
+
+func purposeReportingFrequencyFieldIndex(fields []idf.OutputFieldValue) (int, bool) {
+	for index, field := range fields {
+		if normalizePurposeFieldName(field.Name) == "reporting frequency" {
+			return index, true
+		}
+	}
+	return -1, false
 }
 
 func PurposeRunPlanTemporaryOutputDiff(plan PurposeRunPlan) string {
@@ -1436,6 +1503,7 @@ func (builder *purposePlanBuilder) addObject(object PurposeOutputObject) {
 	if existing, ok := builder.existing[object.Signature]; ok {
 		object.State = PurposeOutputStateExisting
 		object.Reason = existing.Reason
+		object.ObjectIndex = existing.ObjectIndex
 	} else if conflict, ok := builder.existingBase[purposeOutputBaseSignature(object.ObjectType, object.Fields)]; ok {
 		object = builder.applyFrequencyConflictPolicy(object, conflict)
 	} else if builder.request.PersistOutputs {
@@ -1481,6 +1549,7 @@ func (builder *purposePlanBuilder) applyFrequencyConflictPolicy(requested Purpos
 		return requested
 	default:
 		requested.State = PurposeOutputStateConflict
+		requested.ObjectIndex = existing.ObjectIndex
 		builder.warn("warning", "frequency_conflict", fmt.Sprintf("%s already exists with %s frequency.", purposeOutputLabel(existing), existing.ReportingFrequency), firstPurposeID(requested.PurposeIDs), requested.Signature)
 		return requested
 	}
@@ -1545,6 +1614,7 @@ func collectExistingPurposeOutputs(doc idf.Document) map[string]PurposeOutputObj
 		if _, ok := out[signature]; ok {
 			continue
 		}
+		objectIndex := item.ObjectIndex
 		out[signature] = PurposeOutputObject{
 			ObjectType:         item.ObjectType,
 			Fields:             fields,
@@ -1555,6 +1625,7 @@ func collectExistingPurposeOutputs(doc idf.Document) map[string]PurposeOutputObj
 			VariableName:       item.VariableName,
 			ReportingFrequency: item.ReportingFrequency,
 			Reason:             "Already in IDF",
+			ObjectIndex:        &objectIndex,
 		}
 	}
 	return out

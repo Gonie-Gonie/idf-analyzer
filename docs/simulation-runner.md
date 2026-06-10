@@ -119,7 +119,12 @@ will-be-persisted output requests.
 pipeline. This keeps permanent output edits behind the same preview/apply
 contract as manual Output tab changes. The Output analysis report also annotates
 existing and recommended output requests with purpose tags, and the Output tab
-can filter by purpose.
+can filter by purpose. Permanent purpose-output application supports four modes:
+add missing outputs only, replace conflicting frequencies, keep existing outputs
+and add purpose-specific duplicates, or remove existing outputs that match the
+selected purpose plan. The EnergyPlus run-copy path still keeps existing outputs
+and adds temporary purpose outputs so result parsing can use the requested
+series without editing the source IDF.
 
 ## Output Discovery
 

@@ -272,6 +272,46 @@ Output:Variable,
 	if !purposePlanHasWarning(plan, "frequency_conflict") {
 		t.Fatalf("expected frequency conflict warning in %#v", plan.Warnings)
 	}
+	if output.ObjectIndex == nil {
+		t.Fatalf("conflict output should reference existing object index: %#v", output)
+	}
+}
+
+func TestPurposeRunPlanApplyRequestModes(t *testing.T) {
+	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF+`
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Monthly;
+`)
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeZoneHeatFlow},
+	})
+	conflict := findPurposeOutput(plan, "Output:Variable", "*", "Zone Mean Air Temperature")
+	if conflict == nil || conflict.ObjectIndex == nil {
+		t.Fatalf("missing conflict output with object index: %#v", plan.OutputObjects)
+	}
+
+	defaultRequest := PurposeRunPlanApplyRequest(plan)
+	if hasOutputObjectRequest(defaultRequest.AddObjects, "Output:Variable", "*", "Zone Mean Air Temperature") {
+		t.Fatalf("default apply request should not add conflicting purpose output: %#v", defaultRequest)
+	}
+
+	keepRequest := PurposeRunPlanApplyRequest(plan, PurposeOutputApplyModeKeepExistingAdd)
+	if !hasOutputObjectRequest(keepRequest.AddObjects, "Output:Variable", "*", "Zone Mean Air Temperature") {
+		t.Fatalf("keep-existing apply request should add conflicting purpose output: %#v", keepRequest)
+	}
+
+	replaceRequest := PurposeRunPlanApplyRequest(plan, PurposeOutputApplyModeReplaceConflicts)
+	if len(replaceRequest.Updates) != 1 || replaceRequest.Updates[0].ObjectIndex != *conflict.ObjectIndex || replaceRequest.Updates[0].Value != "Hourly" {
+		t.Fatalf("replace-conflicting apply request = %#v", replaceRequest)
+	}
+
+	removeRequest := PurposeRunPlanApplyRequest(plan, PurposeOutputApplyModeRemovePurpose)
+	if len(removeRequest.RemoveObjectIndexes) != 1 || removeRequest.RemoveObjectIndexes[0] != *conflict.ObjectIndex {
+		t.Fatalf("remove-purpose apply request = %#v", removeRequest)
+	}
 }
 
 func TestBuildPurposeRunPlanPreservesExistingFrequency(t *testing.T) {
@@ -347,6 +387,22 @@ func findPurposeOutput(plan PurposeRunPlan, objectType string, keyValue string, 
 		return &plan.OutputObjects[index]
 	}
 	return nil
+}
+
+func hasOutputObjectRequest(objects []idf.OutputObjectRequest, objectType string, keyValue string, variableName string) bool {
+	for _, object := range objects {
+		if !strings.EqualFold(object.ObjectType, objectType) {
+			continue
+		}
+		if keyValue != "" && purposeFieldValue(object.Fields, "Key Value", "Key Name") != keyValue {
+			continue
+		}
+		if variableName != "" && purposeFieldValue(object.Fields, "Variable Name") != variableName {
+			continue
+		}
+		return true
+	}
+	return false
 }
 
 func purposePlanHasWarning(plan PurposeRunPlan, code string) bool {

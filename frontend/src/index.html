@@ -382,6 +382,15 @@
                       <option value="highest_resolution" data-i18n="simulation.frequencyHighestResolution">Highest resolution</option>
                     </select>
                   </label>
+                  <label>
+                    <span data-i18n="simulation.outputApplyMode">Output apply mode</span>
+                    <select id="simulationPurposeApplyMode">
+                      <option value="add_missing_only" selected data-i18n="simulation.applyAddMissing">Add missing only</option>
+                      <option value="replace_conflicting" data-i18n="simulation.applyReplaceConflicting">Replace conflicting</option>
+                      <option value="keep_existing_and_add" data-i18n="simulation.applyKeepExistingAdd">Keep existing and add</option>
+                      <option value="remove_purpose_outputs" data-i18n="simulation.applyRemovePurpose">Remove purpose outputs</option>
+                    </select>
+                  </label>
                   <label class="simulation-checkbox">
                     <input id="simulationPersistOutputs" type="checkbox" />
                     <span data-i18n="simulation.persistOutputs">Plan as permanent output edits</span>

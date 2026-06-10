@@ -79,6 +79,7 @@ The release script infers bump size from these sections:
 - Purpose result tables now show the matched source output state and run-plan signature for zone energy, comfort, and HVAC loop series rows.
 - Simulation runner documentation now reflects purpose scopes, SQL monthly aggregation, discovery alias/cache states, result source signatures, and run export artifacts.
 - HVAC Loop Check purpose runs now include selected-loop component operation outputs and group parsed fan, pump, coil, chiller, boiler, and cooling-tower series in the HVAC result view.
+- Purpose output permanent apply now has explicit modes for adding missing outputs, replacing conflicts, keeping existing outputs while adding purpose duplicates, or removing selected purpose outputs.
 
 ## Fixed
 

@@ -186,7 +186,7 @@ func (a *App) ApplyPurposeOutputsText(text string, request simulation.Simulation
 	doc := epinput.ToIDFDocument(model)
 	request = simulation.NormalizeSimulationPurposeRequest(&request)
 	plan := simulation.BuildPurposeRunPlan(doc, request)
-	updated, preview := idf.ApplyOutput(doc, simulation.PurposeRunPlanApplyRequest(plan))
+	updated, preview := idf.ApplyOutput(doc, simulation.PurposeRunPlanApplyRequest(plan, request.OutputApplyMode))
 	if !preview.CanApply {
 		return nil, fmt.Errorf("purpose output preview has blocking warnings")
 	}
@@ -283,7 +283,7 @@ func preparePurposeSimulationRequest(request simulation.SimulationRunRequest) (s
 	doc := epinput.ToIDFDocument(model)
 	purposeRequest := simulation.NormalizeSimulationPurposeRequest(request.PurposeRequest)
 	plan := simulation.BuildPurposeRunPlan(doc, purposeRequest)
-	updated, preview := idf.ApplyOutput(doc, simulation.PurposeRunPlanApplyRequest(plan))
+	updated, preview := idf.ApplyOutput(doc, simulation.PurposeRunPlanApplyRequest(plan, simulation.PurposeOutputApplyModeKeepExistingAdd))
 	if !preview.CanApply {
 		return request, fmt.Errorf("purpose output plan has blocking warnings")
 	}
