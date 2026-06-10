@@ -114,6 +114,7 @@ The release script infers bump size from these sections:
 - Integrity purpose results now cross-check SQL tabular zone, surface, construction, and nominal-load rows against static IDF names with exact, normalized, alias, static-only, and SQL-only statuses.
 - SQL and CSV series now carry normalized display units and values so J/Wh energy, W rates, temperatures, mass flow, and humidity ratio render consistently across charts and purpose result tables.
 - HVAC Loop Check results now classify loop operating status and add node-state-derived air/water heat-transfer estimates with reported-vs-derived labels in the viewer and HTML export.
+- Purpose run plans now emit Heavy and Very Heavy output-weight warnings with series/frame counts, with regression coverage for large selected-zone models.
 
 ## Fixed
 

@@ -71,7 +71,8 @@ as selected HVAC scope when HVAC Loop Check is enabled.
 - output objects with purpose tags, signatures, state, and estimated weight
 - overall estimated series count, frame count, and weight
 - SQL and discovery requirements
-- warnings for wildcard scope and frequency conflicts
+- warnings for wildcard scope, frequency conflicts, and Heavy/Very Heavy output
+  estimates based on series count times frame count
 
 Output states:
 

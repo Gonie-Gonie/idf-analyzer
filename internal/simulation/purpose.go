@@ -2638,6 +2638,9 @@ func (builder *purposePlanBuilder) plan() PurposeRunPlan {
 		frameCount = maxInt(frameCount, purposeFrequencyFrames(object.ReportingFrequency, builder.runPeriodDays, builder.timestepsPerHour))
 	}
 	weight := planWeight(seriesCount, frameCount)
+	if warning := builder.outputWeightWarning(weight, seriesCount, frameCount); warning.Code != "" {
+		builder.warnings = append(builder.warnings, warning)
+	}
 	return PurposeRunPlan{
 		Purposes:          append([]SimulationPurposeID(nil), builder.request.Purposes...),
 		OutputObjects:     builder.objects,
@@ -2647,6 +2650,23 @@ func (builder *purposePlanBuilder) plan() PurposeRunPlan {
 		RequiresSQL:       true,
 		RequiresDiscovery: builder.request.DiscoveryAllowed,
 		Warnings:          builder.warnings,
+	}
+}
+
+func (builder *purposePlanBuilder) outputWeightWarning(weight string, seriesCount int, frameCount int) PurposeRunWarning {
+	normalized := strings.ToLower(strings.TrimSpace(weight))
+	if normalized != "heavy" && normalized != "very heavy" {
+		return PurposeRunWarning{}
+	}
+	code := "output_weight_heavy"
+	if normalized == "very heavy" {
+		code = "output_weight_very_heavy"
+	}
+	return PurposeRunWarning{
+		Severity:  "warning",
+		Code:      code,
+		PurposeID: firstPurposeID(builder.request.Purposes),
+		Message:   fmt.Sprintf("%s output estimate: %d series x %d frames. Consider selected scope or lower frequency if runtime becomes too high.", weight, seriesCount, frameCount),
 	}
 }
 

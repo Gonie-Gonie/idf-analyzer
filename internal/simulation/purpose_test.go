@@ -427,6 +427,7 @@ output|Output:Variable|Office|Zone Mean Air Temperature|Hourly|temporary|zone_he
 			},
 			want: `requires_sql=true requires_discovery=false weight=Heavy frames=8760
 warning|info|hvac_scope_selected|hvac_loop_check
+warning|warning|output_weight_heavy|hvac_loop_check
 output|Output:SQLite||||temporary|hvac_loop_check
 output|Output:Variable|Air Demand Inlet|System Node Enthalpy|Hourly|temporary|hvac_loop_check
 output|Output:Variable|Air Demand Inlet|System Node Humidity Ratio|Hourly|temporary|hvac_loop_check
@@ -478,6 +479,33 @@ output|OutputControl:Table:Style||||temporary|integrity_check
 				t.Fatalf("purpose plan snapshot mismatch\nwant:\n%s\ngot:\n%s", tc.want, got)
 			}
 		})
+	}
+}
+
+func TestBuildPurposeRunPlanLargeModelWeightWarning(t *testing.T) {
+	var builder strings.Builder
+	builder.WriteString("Version, 24.1;\n\n")
+	var zones []string
+	for index := 1; index <= 80; index++ {
+		name := fmt.Sprintf("Zone %02d", index)
+		zones = append(zones, name)
+		fmt.Fprintf(&builder, "Zone,\n  %s;\n\n", name)
+	}
+	doc := parsePurposePlanFixture(t, builder.String())
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes: []SimulationPurposeID{SimulationPurposeZoneHeatFlow},
+		Scope: SimulationPurposeScope{
+			ZoneMode:  "selected",
+			ZoneNames: zones,
+		},
+	})
+
+	if plan.EstimatedWeight != "Very Heavy" {
+		t.Fatalf("estimated weight = %q, want Very Heavy (series=%d frames=%d)", plan.EstimatedWeight, plan.EstimatedSeries, plan.EstimatedFrames)
+	}
+	if !purposePlanHasWarning(plan, "output_weight_very_heavy") {
+		t.Fatalf("expected very-heavy output weight warning in %#v", plan.Warnings)
 	}
 }
 
