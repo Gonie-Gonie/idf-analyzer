@@ -463,6 +463,57 @@ func TestAnalyzeHVACBuildsSpaceHVACRelation(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACKeepsFourPipeFanCoilAsZoneEquipment(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office", Comment: "Zone Name"},
+			{Value: "Office Equipment", Comment: "Zone Conditioning Equipment List Name"},
+			{Value: "Office Supply Inlet", Comment: "Zone Air Inlet Node or NodeList Name"},
+			{Value: "", Comment: "Zone Air Exhaust Node or NodeList Name"},
+			{Value: "Office Zone Air Node", Comment: "Zone Air Node Name"},
+			{Value: "", Comment: "Zone Return Air Node or NodeList Name"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment", Comment: "Name"},
+			{Value: "ZoneHVAC:FourPipeFanCoil", Comment: "Zone Equipment 1 Object Type"},
+			{Value: "Office FPFC", Comment: "Zone Equipment 1 Name"},
+			{Value: "1", Comment: "Zone Equipment 1 Cooling Sequence"},
+			{Value: "1", Comment: "Zone Equipment 1 Heating or No-Load Sequence"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:FourPipeFanCoil", Fields: []Field{
+			{Value: "Office FPFC", Comment: "Name"},
+			{Value: "", Comment: "Availability Schedule Name"},
+			{Value: "Autosize", Comment: "Maximum Supply Air Flow Rate"},
+			{Value: "Office Supply Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Zone Air Node", Comment: "Air Outlet Node Name"},
+			{Value: "HW Inlet", Comment: "Hot Water Inlet Node Name"},
+			{Value: "HW Outlet", Comment: "Hot Water Outlet Node Name"},
+			{Value: "CHW Inlet", Comment: "Chilled Water Inlet Node Name"},
+			{Value: "CHW Outlet", Comment: "Chilled Water Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil {
+		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("four-pipe fan coil relation inferred air terminal/loop: %#v", relation)
+	}
+	if len(relation.ZoneEquipment) != 1 {
+		t.Fatalf("zone equipment = %#v, want one four-pipe fan coil", relation.ZoneEquipment)
+	}
+	equipment := relation.ZoneEquipment[0]
+	if equipment.ObjectType != "ZoneHVAC:FourPipeFanCoil" || equipment.RoleHere != "zone_equipment" || !equipment.ListedInZoneEquipment {
+		t.Fatalf("zone equipment metadata = %#v, want listed zone equipment", equipment)
+	}
+	if equipment.SourceOwnerType != "ZoneHVAC:EquipmentList" || equipment.TypeFieldIndex != 1 || equipment.NameFieldIndex != 2 {
+		t.Fatalf("zone equipment source metadata = %#v, want equipment list fields", equipment)
+	}
+}
+
 func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "AirLoopHVAC", Fields: []Field{
@@ -647,6 +698,57 @@ func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.
 		if !strings.Contains(projection.Text, expected) {
 			t.Fatalf("semantic component references missing %q:\n%s", expected, projection.Text)
 		}
+	}
+}
+
+func TestAnalyzeHVACServiceWaterLoopWarningIsNotice(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "PlantLoop", Fields: []Field{
+			{Value: "Service Hot Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "SHW Setpoint"},
+			{Value: "90"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "SHW Supply Inlet"},
+			{Value: "SHW Supply Outlet"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "SHW Demand Inlet"},
+			{Value: "SHW Demand Outlet"},
+			{Value: "SHW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 1, Type: "BranchList", Fields: []Field{
+			{Value: "SHW Demand Branches"},
+			{Value: "Service Coil Branch"},
+		}},
+		{Index: 2, Type: "Branch", Fields: []Field{
+			{Value: "Service Coil Branch"},
+			{Value: ""},
+			{Value: "Coil:Heating:Water"},
+			{Value: "Service Coil"},
+			{Value: "SHW Demand Inlet"},
+			{Value: "SHW Demand Outlet"},
+		}},
+		{Index: 3, Type: "Coil:Heating:Water", Fields: []Field{
+			{Value: "Service Coil", Comment: "Name"},
+			{Value: "SHW Demand Inlet", Comment: "Water Inlet Node Name"},
+			{Value: "SHW Demand Outlet", Comment: "Water Outlet Node Name"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	warning := findHVACWarningByCode(report.Warnings, "plant_demand_component_without_air_or_zone_use")
+	if warning == nil {
+		t.Fatalf("warnings = %#v, want service loop plant-demand notice", report.Warnings)
+	}
+	if warning.Severity != "notice" {
+		t.Fatalf("service loop warning severity = %q, want notice: %#v", warning.Severity, *warning)
 	}
 }
 
