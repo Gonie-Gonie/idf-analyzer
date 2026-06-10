@@ -2161,14 +2161,20 @@ function renderSimulationSummary(result, stale) {
   const staleBadge = stale ? `<span class="simulation-badge stale">${escapeHTML(t("simulation.stale", {}, "Stale"))}</span>` : "";
   const statusBadge = `<span class="simulation-badge ${escapeHTML(result.status || "unknown")}">${escapeHTML(statusText(result.status))}</span>`;
   const issueSummary = simulationIssueSummary(err.issues || []);
-  const issueRows = (err.issues || [])
+  const issueRows = errIssueGroups(err.issues || [])
     .slice(0, 16)
     .map(
-      (issue) => `
+      (group) => `
         <tr>
-          <td><span class="simulation-severity ${escapeHTML(issue.severity)}">${escapeHTML(issue.severity)}</span></td>
-          <td>${escapeHTML(issue.message)}</td>
-          <td>${escapeHTML(issue.line)}</td>
+          <td><span class="simulation-severity ${escapeHTML(group.severity)}">${escapeHTML(group.severity)}</span></td>
+          <td>
+            <details ${group.count === 1 ? "open" : ""}>
+              <summary>${escapeHTML(group.message)}</summary>
+              <small>${escapeHTML(t("common.line", {}, "Line"))}: ${escapeHTML(group.lines.join(", "))}</small>
+            </details>
+          </td>
+          <td>${escapeHTML(group.count)}</td>
+          <td>${escapeHTML(group.lines[0] || "")}</td>
         </tr>`,
     )
     .join("");
@@ -2201,8 +2207,8 @@ function renderSimulationSummary(result, stale) {
         <h4>${escapeHTML(t("simulation.errIssues", {}, "ERR issues"))}</h4>
         <div class="output-table-wrap">
           <table class="output-table">
-            <thead><tr><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.message", {}, "Message"))}</th><th>${escapeHTML(t("common.line", {}, "Line"))}</th></tr></thead>
-            <tbody>${issueRows || `<tr><td colspan="3">${escapeHTML(t("simulation.noErrIssues", {}, "No ERR warnings or errors parsed."))}</td></tr>`}</tbody>
+            <thead><tr><th>${escapeHTML(t("common.type", {}, "Type"))}</th><th>${escapeHTML(t("common.message", {}, "Message"))}</th><th>${escapeHTML(t("common.count", {}, "Count"))}</th><th>${escapeHTML(t("common.firstLine", {}, "First line"))}</th></tr></thead>
+            <tbody>${issueRows || `<tr><td colspan="4">${escapeHTML(t("simulation.noErrIssues", {}, "No ERR warnings or errors parsed."))}</td></tr>`}</tbody>
           </table>
         </div>
       </section>
@@ -2217,6 +2223,44 @@ function renderSimulationSummary(result, stale) {
       </section>
     </div>
     ${renderIntegritySQLDetails(sqlIssues, tabularReports)}`;
+}
+
+function errIssueGroups(issues = []) {
+  const groups = new Map();
+  for (const issue of issues) {
+    const severity = issue.severity || "info";
+    const message = issue.message || "";
+    const key = `${severity}|${normalizeOutputMatchToken(message)}`;
+    const group = groups.get(key) || { severity, message, count: 0, lines: [] };
+    group.count += 1;
+    if (issue.line) {
+      group.lines.push(issue.line);
+    }
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((left, right) => {
+    const severityDelta = errSeverityRank(right.severity) - errSeverityRank(left.severity);
+    if (severityDelta !== 0) {
+      return severityDelta;
+    }
+    if (left.count !== right.count) {
+      return right.count - left.count;
+    }
+    return (left.lines[0] || 0) - (right.lines[0] || 0);
+  });
+}
+
+function errSeverityRank(severity) {
+  switch (String(severity || "").toLowerCase()) {
+    case "fatal":
+      return 3;
+    case "severe":
+      return 2;
+    case "warning":
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 function renderIntegritySQLDetails(sqlIssues = [], tabularReports = []) {
