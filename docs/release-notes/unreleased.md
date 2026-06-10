@@ -29,6 +29,7 @@ The release script infers bump size from these sections:
 - HVAC plant relation inference now uses a typed component reference graph with source field metadata instead of blindly scanning every component field.
 - Heat-flow simulation now adds a mini timeline brush with reset/day/week/month/run-period shortcuts and Shift+wheel panning for visible frame ranges.
 - Summary rows now switch long, inferred, advanced, and readiness metrics into compact two-line rows for narrow analysis panes.
+- Diagnose regression tests now include golden snapshots for valid baseline, design-day RunPeriod notices, output wildcard/environment keys, and Schedule:Compact tokens.
 
 ## Fixed
 
