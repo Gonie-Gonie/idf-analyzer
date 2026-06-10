@@ -6,6 +6,7 @@ let progressListenerRegistered = false;
 let heatFlowPlayTimer = 0;
 
 export function initializeSimulationControls() {
+  state.simulationHeatFlowInspectorCollapsed = readHeatFlowInspectorCollapsed();
   if (elements.simulationStandardOutput) {
     elements.simulationStandardOutput.checked = state.simulationStandardOutput !== false;
   }
@@ -757,7 +758,8 @@ function renderSimulationHeatFlow() {
   elements.simulationHeatFlow.innerHTML = `
     ${renderHeatFlowGuide()}
     ${renderHeatFlowTimelineBrush(dataset, zoneMap.get(normalizeHeatFlowName(selectedZone)), visibleRange, frameIndex)}
-    <div class="heatflow-layout">
+    ${renderHeatFlowSpatialToolbar()}
+    <div class="heatflow-layout ${state.simulationHeatFlowInspectorCollapsed ? "inspector-collapsed" : ""}">
       <div class="heatflow-floor-grid">
         ${visibleHeatFlowStories(geometry).map((story) => renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex)).join("")}
       </div>
@@ -769,12 +771,43 @@ function renderSimulationHeatFlow() {
   bindHeatFlowInteractions(dataset, geometry, zoneMap);
 }
 
+function readHeatFlowInspectorCollapsed() {
+  try {
+    return localStorage.getItem("idfAnalyzer.heatFlowInspectorCollapsed") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeHeatFlowInspectorCollapsed(collapsed) {
+  try {
+    localStorage.setItem("idfAnalyzer.heatFlowInspectorCollapsed", collapsed ? "1" : "0");
+  } catch {
+    // localStorage can be unavailable in hardened webview settings.
+  }
+}
+
 function renderHeatFlowGuide() {
   return `
     <div class="heatflow-reading-guide">
       <span><i class="heatflow-guide-fill"></i>${escapeHTML(t("simulation.heatFlowGuideFill", {}, "Zone fill shows the selected overlay: net heat flow or temperature."))}</span>
       <span><i class="heatflow-guide-stack"></i>${escapeHTML(t("simulation.heatFlowGuideStack", {}, "Stack bars show each heat-flow category; up is heat entering, down is heat leaving."))}</span>
       <span><i class="heatflow-guide-ring"></i>${escapeHTML(t("simulation.heatFlowGuideRing", {}, "The +/- ring marks the zone's net direction and relative magnitude. Click a zone for the ledger."))}</span>
+    </div>`;
+}
+
+function renderHeatFlowSpatialToolbar() {
+  const collapsed = Boolean(state.simulationHeatFlowInspectorCollapsed);
+  return `
+    <div class="heatflow-spatial-toolbar">
+      <div class="heatflow-plan-actions" role="group" aria-label="${escapeHTML(t("simulation.heatFlowPlanView", {}, "Heat-flow plan view"))}">
+        <button type="button" data-heatflow-plan-zoom="out" title="${escapeHTML(t("action.zoomOut", {}, "Zoom out"))}">-</button>
+        <button type="button" data-heatflow-plan-zoom="reset">${escapeHTML(t("action.fit", {}, "Fit"))}</button>
+        <button type="button" data-heatflow-plan-zoom="in" title="${escapeHTML(t("action.zoomIn", {}, "Zoom in"))}">+</button>
+      </div>
+      <button class="heatflow-inspector-toggle ${collapsed ? "" : "active"}" type="button" data-heatflow-inspector-toggle aria-expanded="${collapsed ? "false" : "true"}">
+        ${escapeHTML(collapsed ? t("simulation.showHeatFlowLedger", {}, "Show ledger") : t("simulation.hideHeatFlowLedger", {}, "Hide ledger"))}
+      </button>
     </div>`;
 }
 
@@ -980,8 +1013,10 @@ function renderHeatFlowStoryCard(geometry, story, dataset, zoneMap, frameIndex) 
   return `
     <article class="heatflow-floor-card">
       <h4>${escapeHTML(story.name || `Level ${story.index + 1}`)}</h4>
-      <svg class="heatflow-floor-plan" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(story.name || "Floor")} heat-flow plan">
-        ${shapes.join("")}
+      <svg class="heatflow-floor-plan" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHTML(story.name || "Floor")} heat-flow plan" data-heatflow-plan="1">
+        <g class="heatflow-plan-content" data-heatflow-plan-content transform="${escapeHTML(heatFlowPlanTransform())}">
+          ${shapes.join("")}
+        </g>
       </svg>
     </article>`;
 }
@@ -1118,7 +1153,16 @@ function bindHeatFlowInteractions(dataset, geometry, zoneMap) {
   host.querySelectorAll("[data-heatflow-range-preset]").forEach((button) => {
     button.addEventListener("click", () => applyHeatFlowRangePreset(dataset, button.dataset.heatflowRangePreset || "fit"));
   });
+  host.querySelectorAll("[data-heatflow-plan-zoom]").forEach((button) => {
+    button.addEventListener("click", () => applyHeatFlowPlanZoomButton(host, button.dataset.heatflowPlanZoom || "reset"));
+  });
+  host.querySelector("[data-heatflow-inspector-toggle]")?.addEventListener("click", () => {
+    state.simulationHeatFlowInspectorCollapsed = !state.simulationHeatFlowInspectorCollapsed;
+    writeHeatFlowInspectorCollapsed(state.simulationHeatFlowInspectorCollapsed);
+    renderSimulationHeatFlow();
+  });
   bindHeatFlowTimelineBrush(host, dataset);
+  bindHeatFlowPlanInteractions(host);
   host.querySelectorAll("[data-heat-zone]").forEach((shape) => {
     shape.addEventListener("pointerenter", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
     shape.addEventListener("pointermove", (event) => showHeatFlowTooltip(event, shape.dataset.heatZone, dataset, zoneMap, tooltip));
@@ -1157,6 +1201,108 @@ function bindHeatFlowInteractions(dataset, geometry, zoneMap) {
     renderSimulationHeatFlow();
   });
   void geometry;
+}
+
+function heatFlowPlanTransform() {
+  const scale = clampNumber(Number(state.simulationHeatFlowPlanScale) || 1, 0.5, 4);
+  state.simulationHeatFlowPlanScale = scale;
+  const panX = Number(state.simulationHeatFlowPlanPanX) || 0;
+  const panY = Number(state.simulationHeatFlowPlanPanY) || 0;
+  return `translate(${roundSVG(panX)} ${roundSVG(panY)}) scale(${roundSVG(scale)})`;
+}
+
+function bindHeatFlowPlanInteractions(host) {
+  host.querySelectorAll("[data-heatflow-plan]").forEach((svg) => {
+    svg.addEventListener(
+      "wheel",
+      (event) => {
+        event.preventDefault();
+        applyHeatFlowPlanZoom(host, event.deltaY < 0 ? 1.18 : 1 / 1.18, heatFlowSVGPoint(svg, event));
+      },
+      { passive: false },
+    );
+    svg.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      resetHeatFlowPlanTransform(host);
+    });
+    svg.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || event.target.closest("[data-heat-zone]")) {
+        return;
+      }
+      event.preventDefault();
+      const rect = svg.getBoundingClientRect();
+      const viewBox = svg.viewBox.baseVal;
+      const unitsPerPixelX = viewBox.width / Math.max(rect.width, 1);
+      const unitsPerPixelY = viewBox.height / Math.max(rect.height, 1);
+      const start = {
+        x: event.clientX,
+        y: event.clientY,
+        panX: Number(state.simulationHeatFlowPlanPanX) || 0,
+        panY: Number(state.simulationHeatFlowPlanPanY) || 0,
+      };
+      const move = (moveEvent) => {
+        state.simulationHeatFlowPlanPanX = start.panX + (moveEvent.clientX - start.x) * unitsPerPixelX;
+        state.simulationHeatFlowPlanPanY = start.panY + (moveEvent.clientY - start.y) * unitsPerPixelY;
+        updateHeatFlowPlanTransformNodes(host);
+      };
+      const end = (endEvent) => {
+        svg.classList.remove("panning");
+        svg.releasePointerCapture?.(endEvent.pointerId);
+        svg.removeEventListener("pointermove", move);
+      };
+      svg.classList.add("panning");
+      svg.setPointerCapture?.(event.pointerId);
+      svg.addEventListener("pointermove", move);
+      svg.addEventListener("pointerup", end, { once: true });
+      svg.addEventListener("pointercancel", end, { once: true });
+    });
+  });
+}
+
+function applyHeatFlowPlanZoomButton(host, action) {
+  if (action === "reset") {
+    resetHeatFlowPlanTransform(host);
+    return;
+  }
+  const svg = host.querySelector("[data-heatflow-plan]");
+  const viewBox = svg?.viewBox?.baseVal;
+  const anchor = viewBox
+    ? { x: viewBox.x + viewBox.width / 2, y: viewBox.y + viewBox.height / 2 }
+    : { x: 230, y: 120 };
+  applyHeatFlowPlanZoom(host, action === "in" ? 1.25 : 0.8, anchor);
+}
+
+function applyHeatFlowPlanZoom(host, factor, anchor) {
+  const previousScale = clampNumber(Number(state.simulationHeatFlowPlanScale) || 1, 0.5, 4);
+  const nextScale = clampNumber(previousScale * factor, 0.5, 4);
+  const ratio = nextScale / previousScale;
+  const panX = Number(state.simulationHeatFlowPlanPanX) || 0;
+  const panY = Number(state.simulationHeatFlowPlanPanY) || 0;
+  state.simulationHeatFlowPlanScale = nextScale;
+  state.simulationHeatFlowPlanPanX = anchor.x - (anchor.x - panX) * ratio;
+  state.simulationHeatFlowPlanPanY = anchor.y - (anchor.y - panY) * ratio;
+  updateHeatFlowPlanTransformNodes(host);
+}
+
+function resetHeatFlowPlanTransform(host) {
+  state.simulationHeatFlowPlanScale = 1;
+  state.simulationHeatFlowPlanPanX = 0;
+  state.simulationHeatFlowPlanPanY = 0;
+  updateHeatFlowPlanTransformNodes(host);
+}
+
+function updateHeatFlowPlanTransformNodes(host) {
+  const transform = heatFlowPlanTransform();
+  host.querySelectorAll("[data-heatflow-plan-content]").forEach((node) => node.setAttribute("transform", transform));
+}
+
+function heatFlowSVGPoint(svg, event) {
+  const rect = svg.getBoundingClientRect();
+  const viewBox = svg.viewBox.baseVal;
+  return {
+    x: viewBox.x + clampNumber((event.clientX - rect.left) / Math.max(rect.width, 1), 0, 1) * viewBox.width,
+    y: viewBox.y + clampNumber((event.clientY - rect.top) / Math.max(rect.height, 1), 0, 1) * viewBox.height,
+  };
 }
 
 function zoomHeatFlowRange(event, dataset) {

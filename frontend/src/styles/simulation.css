@@ -540,6 +540,45 @@
   align-items: start;
 }
 
+.heatflow-layout.inspector-collapsed {
+  grid-template-columns: minmax(320px, 1fr);
+}
+
+.heatflow-layout.inspector-collapsed .heatflow-inspector {
+  display: none;
+}
+
+.heatflow-spatial-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px 8px;
+}
+
+.heatflow-plan-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.heatflow-plan-actions button,
+.heatflow-inspector-toggle {
+  min-height: 28px;
+  padding-inline: 9px;
+  font-size: 12px;
+}
+
+.heatflow-inspector-toggle.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
 .heatflow-floor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -569,6 +608,16 @@
   min-height: 180px;
   border-radius: 4px;
   background: #080c12;
+  cursor: grab;
+  touch-action: none;
+}
+
+.heatflow-floor-plan.panning {
+  cursor: grabbing;
+}
+
+.heatflow-plan-content {
+  transform-origin: 0 0;
 }
 
 .heatflow-floor-empty {

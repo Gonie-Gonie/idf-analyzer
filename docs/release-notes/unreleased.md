@@ -32,6 +32,7 @@ The release script infers bump size from these sections:
 - Diagnose regression tests now include golden snapshots for valid baseline, design-day RunPeriod notices, output wildcard/environment keys, and Schedule:Compact tokens.
 - HVAC loop and relation graphs now include Fit, 100%, and Compact scale controls for narrow panes and detailed graph inspection.
 - HVAC inspector panels can now be collapsed from the toolbar, and component labels expose full tooltips with direct inspector selection.
+- Heat-flow floor plans now support independent spatial zoom/pan controls and a collapsible zone ledger inspector.
 
 ## Fixed
 
