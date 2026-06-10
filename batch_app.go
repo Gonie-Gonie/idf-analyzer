@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/simulation"
+	"github.com/Gonie-Gonie/idf-analyzer/internal/tabular"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -57,6 +59,7 @@ type BatchIssueCodeSummary struct {
 	Severity   string         `json:"severity,omitempty"`
 	Category   string         `json:"category,omitempty"`
 	Source     string         `json:"source,omitempty"`
+	Confidence string         `json:"confidence,omitempty"`
 	Count      int            `json:"count"`
 	FileCounts map[string]int `json:"fileCounts,omitempty"`
 }
@@ -133,6 +136,39 @@ type BatchConvertExportFile struct {
 	MIME       string `json:"mime,omitempty"`
 }
 
+type BatchSummaryXLSXExportRequest struct {
+	Result        MultiSummaryResult `json:"result"`
+	Orientation   string             `json:"orientation"`
+	BaselineIndex int                `json:"baselineIndex"`
+	CompareIndex  int                `json:"compareIndex"`
+}
+
+type BatchSimulationPlanPreviewResult struct {
+	Total             int                              `json:"total"`
+	Completed         int                              `json:"completed"`
+	Succeeded         int                              `json:"succeeded"`
+	Failed            int                              `json:"failed"`
+	Purposes          []simulation.SimulationPurposeID `json:"purposes"`
+	WorkerCount       int                              `json:"workerCount"`
+	WeatherMode       string                           `json:"weatherMode,omitempty"`
+	WeatherPath       string                           `json:"weatherPath,omitempty"`
+	CommonOutputCount int                              `json:"commonOutputCount"`
+	HeavyFileCount    int                              `json:"heavyFileCount"`
+	Files             []BatchSimulationPlanPreviewFile `json:"files"`
+}
+
+type BatchSimulationPlanPreviewFile struct {
+	BatchFileResult
+	OutputCount          int                            `json:"outputCount"`
+	TemporaryOutputCount int                            `json:"temporaryOutputCount"`
+	ExistingOutputCount  int                            `json:"existingOutputCount"`
+	EstimatedWeight      string                         `json:"estimatedWeight,omitempty"`
+	EstimatedSeries      int                            `json:"estimatedSeries"`
+	EstimatedFrames      int                            `json:"estimatedFrames"`
+	RequiresSQL          bool                           `json:"requiresSql"`
+	Warnings             []simulation.PurposeRunWarning `json:"warnings,omitempty"`
+}
+
 func (a *App) RunBatchDiagnose(runID string) (*BatchDiagnoseResult, error) {
 	paths, canceled, err := a.selectBatchInputFiles("Open EnergyPlus inputs for Batch Diagnose")
 	if err != nil || canceled {
@@ -175,6 +211,37 @@ func (a *App) RunBatchConvertExport(targetFormat string, overwritePolicy string)
 		OutputDirectory: outputDirectory,
 		OverwritePolicy: overwritePolicy,
 	}), nil
+}
+
+func (a *App) SaveBatchSummaryXLSX(request BatchSummaryXLSXExportRequest) (*SaveFileResult, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("desktop runtime is not ready")
+	}
+	var b bytes.Buffer
+	if err := tabular.WriteWorkbookXLSX(&b, batchSummaryWorkbookSheets(request)); err != nil {
+		return nil, err
+	}
+	path, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		Title:           "Save Batch Summary workbook",
+		DefaultFilename: "batch-summary.xlsx",
+		Filters: []wailsruntime.FileFilter{
+			{DisplayName: "Excel workbook (*.xlsx)", Pattern: "*.xlsx"},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if path == "" {
+		return &SaveFileResult{Canceled: true}, nil
+	}
+	if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
+		return nil, err
+	}
+	return &SaveFileResult{Path: path, Filename: filepath.Base(path)}, nil
+}
+
+func (a *App) PreviewBatchSimulationPlan(request simulation.MultiSimulationRequest) (*BatchSimulationPlanPreviewResult, error) {
+	return AnalyzeBatchSimulationPlan(request), nil
 }
 
 func (a *App) CreateBatchSafeCleanedCopies(paths []string) (*BatchConvertExportResult, error) {
@@ -237,7 +304,7 @@ func AnalyzeBatchDiagnosePaths(request BatchJobRequest) *BatchDiagnoseResult {
 			result.Failed++
 		}
 		for _, issue := range file.Issues {
-			key := strings.Join([]string{issue.Code, issue.Severity, issue.Category, issue.Source}, "\x00")
+			key := strings.Join([]string{issue.Code, issue.Severity, issue.Category, issue.Source, issue.Confidence}, "\x00")
 			summary := codeCounts[key]
 			if summary == nil {
 				summary = &BatchIssueCodeSummary{
@@ -245,6 +312,7 @@ func AnalyzeBatchDiagnosePaths(request BatchJobRequest) *BatchDiagnoseResult {
 					Severity:   issue.Severity,
 					Category:   issue.Category,
 					Source:     issue.Source,
+					Confidence: issue.Confidence,
 					FileCounts: map[string]int{},
 				}
 				codeCounts[key] = summary
@@ -305,6 +373,82 @@ func AnalyzeBatchOutputQAPaths(request BatchJobRequest) *BatchOutputQAResult {
 		}
 	}
 	return result
+}
+
+func AnalyzeBatchSimulationPlan(request simulation.MultiSimulationRequest) *BatchSimulationPlanPreviewResult {
+	paths := normalizeBatchPaths(request.InputPaths)
+	purposeRequest := simulation.NormalizeSimulationPurposeRequest(request.PurposeRequest)
+	result := &BatchSimulationPlanPreviewResult{
+		Total:       len(paths),
+		Purposes:    purposeRequest.Purposes,
+		WorkerCount: request.WorkerCount,
+		WeatherMode: request.WeatherMode,
+		WeatherPath: request.WeatherPath,
+	}
+	common := map[string]int{}
+	for index, path := range paths {
+		file := analyzeBatchSimulationPlanFile(index, path, purposeRequest)
+		result.Files = append(result.Files, file)
+		result.Completed++
+		if file.Status == "ok" {
+			result.Succeeded++
+			if strings.EqualFold(file.EstimatedWeight, "Heavy") || strings.EqualFold(file.EstimatedWeight, "Very Heavy") || len(file.Warnings) > 0 {
+				result.HeavyFileCount++
+			}
+			model, doc, err := parseBatchInput(path)
+			if err == nil {
+				_ = model
+				plan := simulation.BuildPurposeRunPlan(doc, purposeRequest)
+				seen := map[string]bool{}
+				for _, object := range plan.OutputObjects {
+					if !seen[object.Signature] {
+						common[object.Signature]++
+						seen[object.Signature] = true
+					}
+				}
+			}
+		} else {
+			result.Failed++
+		}
+	}
+	for _, count := range common {
+		if count == result.Succeeded && result.Succeeded > 0 {
+			result.CommonOutputCount++
+		}
+	}
+	return result
+}
+
+func analyzeBatchSimulationPlanFile(index int, path string, purposeRequest simulation.SimulationPurposeRequest) BatchSimulationPlanPreviewFile {
+	base := newBatchFileResult(index, path)
+	model, doc, err := parseBatchInput(path)
+	if err != nil {
+		base.Status = "error"
+		base.Error = err.Error()
+		return BatchSimulationPlanPreviewFile{BatchFileResult: base}
+	}
+	plan := simulation.BuildPurposeRunPlan(doc, purposeRequest)
+	file := BatchSimulationPlanPreviewFile{
+		BatchFileResult: base,
+		OutputCount:     len(plan.OutputObjects),
+		EstimatedWeight: plan.EstimatedWeight,
+		EstimatedSeries: plan.EstimatedSeries,
+		EstimatedFrames: plan.EstimatedFrames,
+		RequiresSQL:     plan.RequiresSQL,
+		Warnings:        plan.Warnings,
+	}
+	base.Status = "ok"
+	file.BatchFileResult = base
+	file.Format = string(model.Format)
+	file.Version = model.Version.Raw
+	for _, object := range plan.OutputObjects {
+		if object.State == simulation.PurposeOutputStateExisting {
+			file.ExistingOutputCount++
+		} else {
+			file.TemporaryOutputCount++
+		}
+	}
+	return file
 }
 
 func analyzeBatchOutputQAFile(index int, path string) BatchOutputQAFile {
@@ -528,7 +672,7 @@ func convertExportBatchFile(index int, path string, request BatchConvertExportRe
 		base.Error = err.Error()
 		return BatchConvertExportFile{BatchFileResult: base}
 	}
-	outputText, extension, mime, err := batchExportText(model, doc, request.TargetFormat)
+	outputContent, extension, mime, err := batchExportContent(model, doc, request.TargetFormat)
 	if err != nil {
 		base.Status = "error"
 		base.Error = err.Error()
@@ -553,7 +697,7 @@ func convertExportBatchFile(index int, path string, request BatchConvertExportRe
 		base.Error = err.Error()
 		return BatchConvertExportFile{BatchFileResult: base}
 	}
-	if err := os.WriteFile(outputPath, []byte(outputText), 0o644); err != nil {
+	if err := os.WriteFile(outputPath, outputContent, 0o644); err != nil {
 		base.Status = "error"
 		base.Error = err.Error()
 		return BatchConvertExportFile{BatchFileResult: base}
@@ -564,27 +708,206 @@ func convertExportBatchFile(index int, path string, request BatchConvertExportRe
 	return BatchConvertExportFile{BatchFileResult: base, OutputPath: outputPath, MIME: mime}
 }
 
-func batchExportText(model *epinput.Model, doc idf.Document, targetFormat string) (string, string, string, error) {
+func batchExportContent(model *epinput.Model, doc idf.Document, targetFormat string) ([]byte, string, string, error) {
 	switch strings.ToLower(strings.TrimSpace(targetFormat)) {
 	case "", "idf":
 		output, err := epinput.Write(model, epinput.FormatIDF)
-		return output, ".idf", "text/plain", err
+		return []byte(output), ".idf", "text/plain", err
 	case "epjson", "json":
 		output, err := epinput.Write(model, epinput.FormatEPJSON)
-		return output, ".epjson", "application/json", err
+		return []byte(output), ".epjson", "application/json", err
 	case "semantic-yaml", "semantic_yaml", "yaml", "yml":
 		projection := semanticProjectionForModelDoc(model, doc)
 		if projection == nil {
-			return "", ".semantic.yaml", "application/x-yaml", fmt.Errorf("semantic projection unavailable")
+			return nil, ".semantic.yaml", "application/x-yaml", fmt.Errorf("semantic projection unavailable")
 		}
-		return projection.Text, ".semantic.yaml", "application/x-yaml", nil
+		return []byte(projection.Text), ".semantic.yaml", "application/x-yaml", nil
+	case "xlsx", "table", "tables":
+		var b bytes.Buffer
+		if err := tabular.WriteOneSheetXLSX(&b, "IDF Tables", idf.ObjectTableSections(doc)); err != nil {
+			return nil, ".tables.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", err
+		}
+		return b.Bytes(), ".tables.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", nil
 	case "analysis-json", "analysis_json", "report-json":
 		report := idf.Analyze(doc)
 		payload, err := json.MarshalIndent(report, "", "  ")
-		return string(payload) + "\n", ".analysis.json", "application/json", err
+		return append(payload, '\n'), ".analysis.json", "application/json", err
 	default:
-		return "", "", "", fmt.Errorf("unsupported batch export format %q", targetFormat)
+		return nil, "", "", fmt.Errorf("unsupported batch export format %q", targetFormat)
 	}
+}
+
+func batchSummaryWorkbookSheets(request BatchSummaryXLSXExportRequest) []tabular.WorkbookSheet {
+	raw := batchSummaryRawSection(request.Result, request.Orientation)
+	sheets := []tabular.WorkbookSheet{{Name: "Raw", Sections: []tabular.Section{raw}}}
+	delta := batchSummaryDeltaSection(request.Result, request.BaselineIndex, request.CompareIndex)
+	if len(delta.Rows) > 0 {
+		sheets = append(sheets, tabular.WorkbookSheet{Name: "Delta", Sections: []tabular.Section{delta}})
+	}
+	return sheets
+}
+
+func batchSummaryRawSection(result MultiSummaryResult, orientation string) tabular.Section {
+	orientation = strings.ToLower(strings.TrimSpace(orientation))
+	if orientation == "files" {
+		headers := []string{"file", "status"}
+		for _, metric := range result.Metrics {
+			headers = append(headers, firstNonEmpty(metric.CSVName, metric.ID))
+		}
+		rows := make([][]string, 0, len(result.Files))
+		for _, file := range result.Files {
+			row := []string{firstNonEmpty(file.Label, file.Filename), file.Status}
+			for _, metric := range result.Metrics {
+				row = append(row, batchSummaryValue(file, metric.ID))
+			}
+			rows = append(rows, row)
+		}
+		return tabular.Section{Title: "raw_files", Headers: headers, Rows: rows}
+	}
+	headers := []string{"metric", "category", "unit"}
+	for _, file := range result.Files {
+		headers = append(headers, firstNonEmpty(file.Label, file.Filename))
+	}
+	rows := make([][]string, 0, len(result.Metrics))
+	for _, metric := range result.Metrics {
+		row := []string{firstNonEmpty(metric.CSVName, metric.ID), metric.Category, metric.Unit}
+		for _, file := range result.Files {
+			row = append(row, batchSummaryValue(file, metric.ID))
+		}
+		rows = append(rows, row)
+	}
+	return tabular.Section{Title: "raw_metrics", Headers: headers, Rows: rows}
+}
+
+func batchSummaryDeltaSection(result MultiSummaryResult, baselineIndex int, compareIndex int) tabular.Section {
+	section := tabular.Section{
+		Title:   "selected_delta",
+		Headers: []string{"metric", "category", "unit", "A", "B", "delta", "percent", "status"},
+	}
+	baseline, baselineOK := batchSummaryFileByIndex(result.Files, baselineIndex)
+	compare, compareOK := batchSummaryFileByIndex(result.Files, compareIndex)
+	if !baselineOK || !compareOK {
+		return section
+	}
+	section.Rows = append(section.Rows,
+		[]string{"baseline", firstNonEmpty(baseline.Label, baseline.Filename), "", "", "", "", "", ""},
+		[]string{"compare", firstNonEmpty(compare.Label, compare.Filename), "", "", "", "", "", ""},
+	)
+	for _, metric := range result.Metrics {
+		row := batchSummaryDeltaRow(metric, baseline, compare)
+		section.Rows = append(section.Rows, row)
+	}
+	return section
+}
+
+func batchSummaryDeltaRow(metric MultiSummaryMetric, baseline MultiSummaryFile, compare MultiSummaryFile) []string {
+	a := baseline.MetricValues[metric.ID]
+	b := compare.MetricValues[metric.ID]
+	aNumber, aOK := parseBatchSummaryNumber(a.DisplayValue)
+	bNumber, bOK := parseBatchSummaryNumber(b.DisplayValue)
+	status := firstNonEmpty(a.Status, "missing") + " -> " + firstNonEmpty(b.Status, "missing")
+	if aOK && bOK && batchSummaryUnit(metric, a.DisplayValue) == batchSummaryUnit(metric, b.DisplayValue) {
+		delta := bNumber - aNumber
+		percent := "N/A"
+		if aNumber != 0 {
+			percent = formatBatchSummaryNumber((delta/aNumber)*100) + "%"
+		}
+		return []string{
+			firstNonEmpty(metric.CSVName, metric.ID),
+			metric.Category,
+			metric.Unit,
+			a.DisplayValue,
+			b.DisplayValue,
+			formatBatchSummaryDelta(delta, metric.Unit),
+			percent,
+			status,
+		}
+	}
+	change := "unchanged"
+	if a.DisplayValue != b.DisplayValue {
+		change = "changed"
+	}
+	return []string{firstNonEmpty(metric.CSVName, metric.ID), metric.Category, metric.Unit, a.DisplayValue, b.DisplayValue, change, "N/A", status}
+}
+
+func batchSummaryFileByIndex(files []MultiSummaryFile, index int) (MultiSummaryFile, bool) {
+	for _, file := range files {
+		if file.Index == index {
+			return file, true
+		}
+	}
+	return MultiSummaryFile{}, false
+}
+
+func batchSummaryValue(file MultiSummaryFile, metricID string) string {
+	if file.Status != "ok" {
+		return ""
+	}
+	if value, ok := file.MetricValues[metricID]; ok {
+		return value.DisplayValue
+	}
+	return "N/A"
+}
+
+func parseBatchSummaryNumber(value string) (float64, bool) {
+	text := strings.TrimSpace(value)
+	if text == "" {
+		return 0, false
+	}
+	end := 0
+	for index, r := range text {
+		if (r >= '0' && r <= '9') || r == '-' || r == '+' || r == '.' || r == 'e' || r == 'E' {
+			end = index + len(string(r))
+			continue
+		}
+		break
+	}
+	if end == 0 {
+		return 0, false
+	}
+	var valueNumber float64
+	if _, err := fmt.Sscanf(text[:end], "%f", &valueNumber); err != nil {
+		return 0, false
+	}
+	return valueNumber, true
+}
+
+func batchSummaryUnit(metric MultiSummaryMetric, displayValue string) string {
+	if strings.TrimSpace(metric.Unit) != "" {
+		return strings.TrimSpace(metric.Unit)
+	}
+	_, ok := parseBatchSummaryNumber(displayValue)
+	if !ok {
+		return ""
+	}
+	return strings.TrimLeft(strings.TrimSpace(displayValue), "+-0123456789.eE ")
+}
+
+func formatBatchSummaryDelta(value float64, unit string) string {
+	sign := ""
+	if value > 0 {
+		sign = "+"
+	}
+	suffix := ""
+	if unit == "%" {
+		suffix = " pt"
+	} else if strings.TrimSpace(unit) != "" && unit != "-" {
+		suffix = " " + unit
+	}
+	return sign + formatBatchSummaryNumber(value) + suffix
+}
+
+func formatBatchSummaryNumber(value float64) string {
+	return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", value), "0"), ".")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseBatchInput(path string) (*epinput.Model, idf.Document, error) {

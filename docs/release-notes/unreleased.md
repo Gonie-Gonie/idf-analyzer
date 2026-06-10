@@ -15,6 +15,7 @@ The release script infers bump size from these sections:
 ## Added
 
 - Batch now includes Summary delta comparison, Diagnose matrix, Output QA, Convert / Export, Batch Simulation purpose controls, and Cleanup Report surfaces.
+- Batch Summary can now export raw and selected-delta workbook sheets, Batch Diagnose adds category/confidence filters with common issue summaries, and Batch Simulation previews purpose output weight before running.
 - Semantic YAML now exposes EnergyPlus compatibility adapter metadata, split ZoneList/SpaceList/ZoneGroup views, zone Spaces, richer output attachment resolution, and expanded HVAC loop metadata.
 - Diagnose, Summary, HVAC, and semantic exports now expose source, confidence, and evidence metadata for inferred or analyzer-limited results.
 

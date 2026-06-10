@@ -15,17 +15,28 @@ type Section struct {
 	Rows    [][]string
 }
 
+type WorkbookSheet struct {
+	Name     string
+	Sections []Section
+}
+
 func WriteOneSheetXLSX(w io.Writer, sheetName string, sections []Section) error {
+	return WriteWorkbookXLSX(w, []WorkbookSheet{{Name: sheetName, Sections: sections}})
+}
+
+func WriteWorkbookXLSX(w io.Writer, sheets []WorkbookSheet) error {
+	if len(sheets) == 0 {
+		sheets = []WorkbookSheet{{Name: "Sheet1"}}
+	}
 	archive := zip.NewWriter(w)
 	files := map[string]string{
-		"[Content_Types].xml":        contentTypesXML(),
+		"[Content_Types].xml":        contentTypesXMLForSheetCount(len(sheets)),
 		"_rels/.rels":                packageRelsXML(),
-		"docProps/app.xml":           appPropsXML(sheetName),
+		"docProps/app.xml":           appPropsXMLForSheets(sheets),
 		"docProps/core.xml":          corePropsXML(),
-		"xl/workbook.xml":            workbookXML(sheetName),
-		"xl/_rels/workbook.xml.rels": workbookRelsXML(),
+		"xl/workbook.xml":            workbookXMLForSheets(sheets),
+		"xl/_rels/workbook.xml.rels": workbookRelsXMLForSheets(sheets),
 		"xl/styles.xml":              stylesXML(),
-		"xl/worksheets/sheet1.xml":   worksheetXML(sheetName, sections),
 	}
 	order := []string{
 		"[Content_Types].xml",
@@ -35,7 +46,11 @@ func WriteOneSheetXLSX(w io.Writer, sheetName string, sections []Section) error 
 		"xl/workbook.xml",
 		"xl/_rels/workbook.xml.rels",
 		"xl/styles.xml",
-		"xl/worksheets/sheet1.xml",
+	}
+	for index, sheet := range sheets {
+		path := fmt.Sprintf("xl/worksheets/sheet%d.xml", index+1)
+		files[path] = worksheetXML(sheet.Name, sheet.Sections)
+		order = append(order, path)
 	}
 	for _, name := range order {
 		file, err := archive.Create(name)
@@ -157,6 +172,14 @@ func columnName(index int) string {
 }
 
 func contentTypesXML() string {
+	return contentTypesXMLForSheetCount(1)
+}
+
+func contentTypesXMLForSheetCount(sheetCount int) string {
+	var worksheets strings.Builder
+	for index := 1; index <= max(1, sheetCount); index++ {
+		fmt.Fprintf(&worksheets, `<Override PartName="/xl/worksheets/sheet%d.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`, index)
+	}
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
 		`<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
@@ -164,7 +187,7 @@ func contentTypesXML() string {
 		`<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>` +
 		`<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>` +
 		`<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>` +
-		`<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>` +
+		worksheets.String() +
 		`<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>` +
 		`</Types>`
 }
@@ -179,17 +202,36 @@ func packageRelsXML() string {
 }
 
 func workbookXML(sheetName string) string {
+	return workbookXMLForSheets([]WorkbookSheet{{Name: sheetName}})
+}
+
+func workbookXMLForSheets(sheets []WorkbookSheet) string {
+	var sheetXML strings.Builder
+	used := map[string]int{}
+	for index, sheet := range sheets {
+		name := uniqueExcelSheetName(sheet.Name, used)
+		fmt.Fprintf(&sheetXML, `<sheet name="%s" sheetId="%d" r:id="rId%d"/>`, xmlEscape(name), index+1, index+1)
+	}
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-		`<sheets><sheet name="` + xmlEscape(excelSheetName(sheetName)) + `" sheetId="1" r:id="rId1"/></sheets>` +
+		`<sheets>` + sheetXML.String() + `</sheets>` +
 		`</workbook>`
 }
 
 func workbookRelsXML() string {
+	return workbookRelsXMLForSheets([]WorkbookSheet{{Name: "Sheet1"}})
+}
+
+func workbookRelsXMLForSheets(sheets []WorkbookSheet) string {
+	var rels strings.Builder
+	for index := range sheets {
+		fmt.Fprintf(&rels, `<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet%d.xml"/>`, index+1, index+1)
+	}
+	styleID := len(sheets) + 1
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-		`<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>` +
-		`<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>` +
+		rels.String() +
+		fmt.Sprintf(`<Relationship Id="rId%d" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>`, styleID) +
 		`</Relationships>`
 }
 
@@ -206,11 +248,22 @@ func stylesXML() string {
 }
 
 func appPropsXML(sheetName string) string {
+	return appPropsXMLForSheets([]WorkbookSheet{{Name: sheetName}})
+}
+
+func appPropsXMLForSheets(sheets []WorkbookSheet) string {
+	var titles strings.Builder
+	used := map[string]int{}
+	for _, sheet := range sheets {
+		titles.WriteString(`<vt:lpstr>`)
+		titles.WriteString(xmlEscape(uniqueExcelSheetName(sheet.Name, used)))
+		titles.WriteString(`</vt:lpstr>`)
+	}
 	return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
 		`<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">` +
 		`<Application>IDF Analyzer</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop>` +
-		`<HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>1</vt:i4></vt:variant></vt:vector></HeadingPairs>` +
-		`<TitlesOfParts><vt:vector size="1" baseType="lpstr"><vt:lpstr>` + xmlEscape(sheetName) + `</vt:lpstr></vt:vector></TitlesOfParts>` +
+		fmt.Sprintf(`<HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>%d</vt:i4></vt:variant></vt:vector></HeadingPairs>`, max(1, len(sheets))) +
+		fmt.Sprintf(`<TitlesOfParts><vt:vector size="%d" baseType="lpstr">%s</vt:vector></TitlesOfParts>`, max(1, len(sheets)), titles.String()) +
 		`</Properties>`
 }
 
@@ -239,6 +292,21 @@ func excelSheetName(value string) string {
 		return "Sheet1"
 	}
 	return value
+}
+
+func uniqueExcelSheetName(value string, used map[string]int) string {
+	name := excelSheetName(value)
+	count := used[strings.ToLower(name)]
+	used[strings.ToLower(name)] = count + 1
+	if count == 0 {
+		return name
+	}
+	suffix := fmt.Sprintf(" %d", count+1)
+	limit := 31 - len(suffix)
+	if len(name) > limit {
+		name = name[:limit]
+	}
+	return name + suffix
 }
 
 func needsPreserveSpace(value string) bool {

@@ -13,6 +13,7 @@ const state = {
   orientation: "metrics",
   metricGroup: "all",
   statusFilter: "all",
+  deltaSort: "table",
   deltaBaselineIndex: null,
   deltaCompareIndex: null,
   running: false,
@@ -20,6 +21,8 @@ const state = {
   progressListenerRegistered: false,
   batchDiagnose: null,
   batchDiagnoseSource: "all",
+  batchDiagnoseCategory: "all",
+  batchDiagnoseConfidence: "all",
   batchDiagnoseSeverity: "all",
   batchOutputQA: null,
   batchCleanupReport: null,
@@ -44,6 +47,7 @@ const elements = {
   batchPanels: document.querySelectorAll("[data-batch-panel]"),
   selectButton: document.querySelector("#multiSummarySelect"),
   exportButton: document.querySelector("#multiSummaryExport"),
+  exportXLSXButton: document.querySelector("#multiSummaryExportXLSX"),
   stats: document.querySelector("#multiSummaryStats"),
   status: document.querySelector("#multiSummaryStatus"),
   percent: document.querySelector("#multiSummaryPercent"),
@@ -53,12 +57,16 @@ const elements = {
   orientationButtons: document.querySelectorAll("[data-summary-orientation]"),
   metricGroup: document.querySelector("#batchSummaryMetricGroup"),
   statusFilter: document.querySelector("#batchSummaryStatusFilter"),
+  deltaSort: document.querySelector("#batchSummaryDeltaSort"),
   delta: document.querySelector("#batchSummaryDelta"),
   batchDiagnoseSelect: document.querySelector("#batchDiagnoseSelect"),
   batchDiagnoseExport: document.querySelector("#batchDiagnoseExport"),
   batchDiagnoseSourceFilter: document.querySelector("#batchDiagnoseSourceFilter"),
+  batchDiagnoseCategoryFilter: document.querySelector("#batchDiagnoseCategoryFilter"),
+  batchDiagnoseConfidenceFilter: document.querySelector("#batchDiagnoseConfidenceFilter"),
   batchDiagnoseSeverityFilter: document.querySelector("#batchDiagnoseSeverityFilter"),
   batchDiagnoseStats: document.querySelector("#batchDiagnoseStats"),
+  batchDiagnoseSummary: document.querySelector("#batchDiagnoseSummary"),
   batchDiagnoseTable: document.querySelector("#batchDiagnoseTable"),
   batchOutputQASelect: document.querySelector("#batchOutputQASelect"),
   batchOutputQAExport: document.querySelector("#batchOutputQAExport"),
@@ -79,6 +87,7 @@ const elements = {
   multiSimulationWeather: document.querySelector("#multiSimulationWeather"),
   multiSimulationWeatherMode: document.querySelector("#multiSimulationWeatherMode"),
   multiSimulationWorkers: document.querySelector("#multiSimulationWorkers"),
+  multiSimulationViewMode: document.querySelector("#multiSimulationViewMode"),
   multiSimulationRecursive: document.querySelector("#multiSimulationRecursive"),
   multiSimulationStats: document.querySelector("#multiSimulationStats"),
   multiSimulationSort: document.querySelector("#multiSimulationSort"),
@@ -89,6 +98,7 @@ const elements = {
   multiSimulationMetric: document.querySelector("#multiSimulationMetric"),
   multiSimulationChart: document.querySelector("#multiSimulationChart"),
   multiSimulationTable: document.querySelector("#multiSimulationTable"),
+  batchSimulationPlanPreview: document.querySelector("#batchSimulationPlanPreview"),
 };
 
 function appAPI() {
@@ -169,6 +179,9 @@ function setRunning(running) {
   state.running = running;
   elements.selectButton.disabled = running;
   elements.exportButton.disabled = running || !state.result;
+  if (elements.exportXLSXButton) {
+    elements.exportXLSXButton.disabled = running || !state.result;
+  }
 }
 
 async function runMultiSummary() {
@@ -242,6 +255,9 @@ function renderResult() {
   renderFileList(result.files || []);
   renderTable();
   elements.exportButton.disabled = state.running || !result.metrics?.length;
+  if (elements.exportXLSXButton) {
+    elements.exportXLSXButton.disabled = state.running || !result.metrics?.length;
+  }
 }
 
 function renderFileList(files) {
@@ -441,7 +457,7 @@ function renderDeltaDrawer(metrics, files) {
     elements.delta.innerHTML = `<div class="empty">${escapeHTML(t("batch.deltaHelp", {}, "Click two file columns to compare baseline and target deltas."))}</div>`;
     return;
   }
-  const rows = metrics.map((metric) => summaryDeltaRow(metric, baseline, compare));
+  const rows = sortSummaryDeltaRows(metrics.map((metric) => summaryDeltaRow(metric, baseline, compare)));
   elements.delta.innerHTML = `
     <div class="batch-delta-head">
       <div>
@@ -478,17 +494,23 @@ function summaryDeltaRow(metric, baseline, compare) {
   const b = compare.metricValues?.[metric.id];
   const aNumber = parseSummaryNumber(a?.displayValue);
   const bNumber = parseSummaryNumber(b?.displayValue);
+  const aStatus = summaryValueStatus(baseline, metric.id);
+  const bStatus = summaryValueStatus(compare, metric.id);
   const sameUnit = summaryUnit(metric, a?.displayValue) === summaryUnit(metric, b?.displayValue);
-  const status = [summaryValueStatus(baseline, metric.id), summaryValueStatus(compare, metric.id)].join(" -> ");
+  const status = [aStatus, bStatus].join(" -> ");
   if (aNumber.ok && bNumber.ok && sameUnit) {
     const delta = bNumber.value - aNumber.value;
-    const percent = aNumber.value === 0 ? "" : (delta / aNumber.value) * 100;
+    const percentValue = aNumber.value === 0 ? null : (delta / aNumber.value) * 100;
     return {
       metric,
       a: a?.displayValue ?? t("common.notAvailable"),
       b: b?.displayValue ?? t("common.notAvailable"),
       delta: formatDelta(delta, metric.unit),
-      percent: percent === "" ? t("common.notAvailable") : `${formatNumber(percent)}%`,
+      percent: percentValue === null ? t("common.notAvailable") : `${formatNumber(percentValue)}%`,
+      deltaValue: delta,
+      percentValue,
+      missing: aStatus === "missing" || bStatus === "missing",
+      statusChanged: aStatus !== bStatus,
       status,
     };
   }
@@ -499,8 +521,39 @@ function summaryDeltaRow(metric, baseline, compare) {
     b: b?.displayValue ?? t("common.notAvailable"),
     delta: changed,
     percent: t("common.notAvailable"),
+    deltaValue: null,
+    percentValue: null,
+    missing: aStatus === "missing" || bStatus === "missing",
+    statusChanged: aStatus !== bStatus || changed !== t("batch.unchanged", {}, "unchanged"),
     status,
   };
+}
+
+function sortSummaryDeltaRows(rows) {
+  const mode = state.deltaSort || "table";
+  if (mode === "table") {
+    return rows;
+  }
+  return rows.slice().sort((a, b) => {
+    if (mode === "absolute") {
+      return sortableAbs(b.deltaValue) - sortableAbs(a.deltaValue);
+    }
+    if (mode === "percent") {
+      return sortableAbs(b.percentValue) - sortableAbs(a.percentValue);
+    }
+    if (mode === "status") {
+      return Number(b.statusChanged) - Number(a.statusChanged);
+    }
+    if (mode === "missing") {
+      return Number(b.missing) - Number(a.missing);
+    }
+    return 0;
+  });
+}
+
+function sortableAbs(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.abs(number) : -1;
 }
 
 function renderSummaryDeltaRow(row) {
@@ -585,6 +638,32 @@ function exportCSV() {
   URL.revokeObjectURL(url);
 }
 
+async function exportXLSX() {
+  const result = state.result;
+  if (!result) {
+    return;
+  }
+  const api = await waitForAppAPI("SaveBatchSummaryXLSX");
+  if (!api) {
+    elements.status.textContent = t("tools.desktopOnly");
+    return;
+  }
+  elements.status.textContent = t("common.loadingSettings", {}, "Loading");
+  try {
+    const saved = await api.SaveBatchSummaryXLSX({
+      result,
+      orientation: state.orientation,
+      baselineIndex: state.deltaBaselineIndex ?? -1,
+      compareIndex: state.deltaCompareIndex ?? -1,
+    });
+    if (!saved?.canceled) {
+      elements.status.textContent = t("status.savedNamed", { name: saved?.filename || "batch-summary.xlsx" }, `Saved ${saved?.filename || "batch-summary.xlsx"}`);
+    }
+  } catch (error) {
+    elements.status.textContent = error?.message || String(error);
+  }
+}
+
 function csvCell(value) {
   const text = String(value ?? "");
   return /[",\r\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
@@ -602,6 +681,7 @@ async function runBatchDiagnose() {
       return;
     }
     state.batchDiagnose = result;
+    renderBatchDiagnoseFilterOptions();
     renderBatchDiagnose();
   } catch (error) {
     elements.batchDiagnoseStats.textContent = error?.message || String(error);
@@ -623,6 +703,7 @@ function renderBatchDiagnose() {
     workers: 0,
   });
   elements.batchDiagnoseExport.disabled = !codes.length;
+  renderBatchDiagnoseSummary(files, codes);
   if (!codes.length) {
     elements.batchDiagnoseTable.innerHTML = `<div class="empty">${escapeHTML(t("diagnose.noDiagnostics", {}, "No diagnostics found"))}</div>`;
     return;
@@ -634,6 +715,7 @@ function renderBatchDiagnose() {
           <th class="tool-sticky-col">${escapeHTML(t("common.key"))}</th>
           <th>${escapeHTML(t("common.type"))}</th>
           <th>${escapeHTML(t("common.source"))}</th>
+          <th>${escapeHTML(t("common.confidence", {}, "Confidence"))}</th>
           ${files.map((file) => `<th>${escapeHTML(file.label || file.filename)}</th>`).join("")}
           <th>${escapeHTML(t("common.total", {}, "Total"))}</th>
         </tr>
@@ -649,6 +731,7 @@ function renderBatchDiagnose() {
                 </th>
                 <td>${escapeHTML(item.severity || "")}</td>
                 <td>${escapeHTML(item.source || "")}</td>
+                <td>${escapeHTML(item.confidence || "")}</td>
                 ${files.map((file) => `<td>${escapeHTML(item.fileCounts?.[file.label || file.filename] || 0)}</td>`).join("")}
                 <td>${escapeHTML(item.count || 0)}</td>
               </tr>`,
@@ -658,9 +741,54 @@ function renderBatchDiagnose() {
     </table>`;
 }
 
+function renderBatchDiagnoseFilterOptions() {
+  const codes = state.batchDiagnose?.issueCodes || [];
+  renderSelectOptions(elements.batchDiagnoseCategoryFilter, uniqueValues(codes.map((item) => item.category)));
+  renderSelectOptions(elements.batchDiagnoseConfidenceFilter, uniqueValues(codes.map((item) => item.confidence)));
+  state.batchDiagnoseCategory = elements.batchDiagnoseCategoryFilter?.value || "all";
+  state.batchDiagnoseConfidence = elements.batchDiagnoseConfidenceFilter?.value || "all";
+}
+
+function renderSelectOptions(select, values) {
+  if (!select) {
+    return;
+  }
+  const current = select.value || "all";
+  select.innerHTML = [`<option value="all">${escapeHTML(t("common.all"))}</option>`, ...values.map((value) => `<option value="${escapeHTML(value)}">${escapeHTML(value)}</option>`)].join("");
+  select.value = values.includes(current) ? current : "all";
+}
+
+function uniqueValues(values) {
+  return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function renderBatchDiagnoseSummary(files, codes) {
+  if (!elements.batchDiagnoseSummary) {
+    return;
+  }
+  if (!files.length || !codes.length) {
+    elements.batchDiagnoseSummary.innerHTML = "";
+    return;
+  }
+  const fileLabels = files.map((file) => file.label || file.filename);
+  const common = codes.filter((item) => fileLabels.every((label) => (item.fileCounts?.[label] || 0) > 0));
+  const specific = codes.filter((item) => fileLabels.some((label) => (item.fileCounts?.[label] || 0) > 0) && !fileLabels.every((label) => (item.fileCounts?.[label] || 0) > 0));
+  const top = codes.slice(0, 5).map((item) => `${item.code} (${item.count || 0})`).join(", ") || t("common.notAvailable");
+  elements.batchDiagnoseSummary.innerHTML = `
+    <div><span>${escapeHTML(t("batch.commonIssues", {}, "Common issues"))}</span><strong>${escapeHTML(common.length)}</strong></div>
+    <div><span>${escapeHTML(t("batch.fileSpecificIssues", {}, "File-specific issues"))}</span><strong>${escapeHTML(specific.length)}</strong></div>
+    <div class="batch-summary-wide"><span>Top</span><strong>${escapeHTML(top)}</strong></div>`;
+}
+
 function filteredBatchIssueCodes(codes) {
   return codes.filter((item) => {
     if (state.batchDiagnoseSource !== "all" && item.source !== state.batchDiagnoseSource) {
+      return false;
+    }
+    if (state.batchDiagnoseCategory !== "all" && item.category !== state.batchDiagnoseCategory) {
+      return false;
+    }
+    if (state.batchDiagnoseConfidence !== "all" && item.confidence !== state.batchDiagnoseConfidence) {
       return false;
     }
     if (state.batchDiagnoseSeverity !== "all" && item.severity !== state.batchDiagnoseSeverity) {
@@ -677,12 +805,13 @@ function exportBatchDiagnoseCSV() {
   }
   const files = result.files || [];
   const rows = [
-    ["code", "severity", "category", "source", ...files.map((file) => file.label || file.filename), "total"],
+    ["code", "severity", "category", "source", "confidence", ...files.map((file) => file.label || file.filename), "total"],
     ...filteredBatchIssueCodes(result.issueCodes || []).map((item) => [
       item.code,
       item.severity,
       item.category,
       item.source,
+      item.confidence,
       ...files.map((file) => item.fileCounts?.[file.label || file.filename] || 0),
       item.count || 0,
     ]),
@@ -968,6 +1097,7 @@ multiSimulationTool = initializeMultiSimulationTool({
 });
 elements.selectButton.addEventListener("click", runMultiSummary);
 elements.exportButton.addEventListener("click", exportCSV);
+elements.exportXLSXButton?.addEventListener("click", exportXLSX);
 
 elements.batchNavButtons.forEach((button) => {
   button.addEventListener("click", () => switchBatchTab(button.dataset.batchTab));
@@ -987,10 +1117,22 @@ elements.statusFilter?.addEventListener("change", () => {
   state.statusFilter = elements.statusFilter.value || "all";
   renderTable();
 });
+elements.deltaSort?.addEventListener("change", () => {
+  state.deltaSort = elements.deltaSort.value || "table";
+  renderTable();
+});
 elements.batchDiagnoseSelect?.addEventListener("click", runBatchDiagnose);
 elements.batchDiagnoseExport?.addEventListener("click", exportBatchDiagnoseCSV);
 elements.batchDiagnoseSourceFilter?.addEventListener("change", () => {
   state.batchDiagnoseSource = elements.batchDiagnoseSourceFilter.value || "all";
+  renderBatchDiagnose();
+});
+elements.batchDiagnoseCategoryFilter?.addEventListener("change", () => {
+  state.batchDiagnoseCategory = elements.batchDiagnoseCategoryFilter.value || "all";
+  renderBatchDiagnose();
+});
+elements.batchDiagnoseConfidenceFilter?.addEventListener("change", () => {
+  state.batchDiagnoseConfidence = elements.batchDiagnoseConfidenceFilter.value || "all";
   renderBatchDiagnose();
 });
 elements.batchDiagnoseSeverityFilter?.addEventListener("change", () => {

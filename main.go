@@ -552,6 +552,19 @@ func appAssetHandler(app *App) http.Handler {
 			if err := json.NewEncoder(w).Encode(CreateBatchSafeCleanupCopies(request)); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
+		case "/api/batch-simulation-plan":
+			if r.Method != http.MethodPost {
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			var request MultiSimulationRequest
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := json.NewEncoder(w).Encode(AnalyzeBatchSimulationPlan(request)); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 		case "/api/batch-simulation-run", "/api/multi-simulation-run":
 			if r.Method != http.MethodPost {
 				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)

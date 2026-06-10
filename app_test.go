@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -118,6 +119,64 @@ func TestConvertExportBatchRenamePolicyPreservesExistingOutput(t *testing.T) {
 	}
 }
 
+func TestConvertExportBatchWritesXLSXTables(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "model.idf")
+	if err := os.WriteFile(path, []byte(appSummaryIDF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result := ConvertExportBatch(BatchConvertExportRequest{
+		BatchJobRequest: BatchJobRequest{RunID: "convert-xlsx-test", InputPaths: []string{path}},
+		TargetFormat:    "xlsx",
+		OutputDirectory: dir,
+		OverwritePolicy: "fail",
+	})
+	if result.Succeeded != 1 || len(result.Files) != 1 {
+		t.Fatalf("xlsx convert result = %+v", result)
+	}
+	if filepath.Ext(result.Files[0].OutputPath) != ".xlsx" {
+		t.Fatalf("xlsx output path = %q", result.Files[0].OutputPath)
+	}
+	archive, err := zip.OpenReader(result.Files[0].OutputPath)
+	if err != nil {
+		t.Fatalf("open xlsx archive: %v", err)
+	}
+	defer archive.Close()
+	foundSheet := false
+	for _, file := range archive.File {
+		if file.Name == "xl/worksheets/sheet1.xml" {
+			foundSheet = true
+			break
+		}
+	}
+	if !foundSheet {
+		t.Fatalf("xlsx archive missing sheet1.xml")
+	}
+}
+
+func TestBatchSummaryWorkbookSheetsIncludeDelta(t *testing.T) {
+	result := MultiSummaryResult{
+		Metrics: []MultiSummaryMetric{{ID: "total_wwr", CSVName: "total_wwr [%]", Category: "Envelope", Unit: "%"}},
+		Files: []MultiSummaryFile{
+			{Index: 0, Filename: "a.idf", Label: "a.idf", Status: "ok", MetricValues: map[string]MultiSummaryValue{"total_wwr": {DisplayValue: "10", Status: "ok"}}},
+			{Index: 1, Filename: "b.idf", Label: "b.idf", Status: "ok", MetricValues: map[string]MultiSummaryValue{"total_wwr": {DisplayValue: "15", Status: "ok"}}},
+		},
+	}
+	sheets := batchSummaryWorkbookSheets(BatchSummaryXLSXExportRequest{
+		Result:        result,
+		Orientation:   "metrics",
+		BaselineIndex: 0,
+		CompareIndex:  1,
+	})
+	if len(sheets) != 2 || sheets[0].Name != "Raw" || sheets[1].Name != "Delta" {
+		t.Fatalf("workbook sheets = %#v", sheets)
+	}
+	deltaRows := sheets[1].Sections[0].Rows
+	if len(deltaRows) < 3 || deltaRows[2][5] != "+5 pt" || deltaRows[2][6] != "50%" {
+		t.Fatalf("delta rows = %#v", deltaRows)
+	}
+}
+
 func TestCreateBatchSafeCleanupCopiesWritesCleanedCopyOnly(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cleanup.idf")
@@ -151,6 +210,30 @@ Schedule:Constant,
 	}
 	if strings.Contains(string(cleaned), "Unused") {
 		t.Fatalf("cleaned copy still contains unused schedule:\n%s", string(cleaned))
+	}
+}
+
+func TestAnalyzeBatchSimulationPlanReportsPurposeWeight(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "model.idf")
+	if err := os.WriteFile(path, []byte(appSummaryIDF), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	purpose := simulation.NormalizeSimulationPurposeRequest(&simulation.SimulationPurposeRequest{
+		Purposes: []simulation.SimulationPurposeID{simulation.SimulationPurposeBasicEnergy},
+	})
+	result := AnalyzeBatchSimulationPlan(simulation.MultiSimulationRequest{
+		InputPaths:     []string{path},
+		WorkerCount:    1,
+		WeatherMode:    "same",
+		PurposeRequest: &purpose,
+	})
+	if result.Total != 1 || result.Succeeded != 1 || len(result.Files) != 1 {
+		t.Fatalf("plan preview result = %+v", result)
+	}
+	file := result.Files[0]
+	if file.OutputCount == 0 || file.TemporaryOutputCount == 0 || result.CommonOutputCount == 0 {
+		t.Fatalf("plan preview file = %+v common=%d", file, result.CommonOutputCount)
 	}
 }
 

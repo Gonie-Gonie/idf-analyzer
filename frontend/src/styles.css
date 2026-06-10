@@ -6215,6 +6215,56 @@ th.input-jump-highlight {
   font-weight: 700;
 }
 
+.batch-summary-strip,
+.batch-plan-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.batch-summary-strip > div,
+.batch-plan-summary > div {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.batch-summary-strip span,
+.batch-summary-strip strong,
+.batch-plan-summary span,
+.batch-plan-summary strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.batch-summary-strip span,
+.batch-plan-summary span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.batch-summary-strip strong,
+.batch-plan-summary strong {
+  margin-top: 3px;
+  font-size: 13px;
+}
+
+.batch-summary-wide {
+  grid-column: span 2;
+}
+
+.batch-plan-preview {
+  margin: 10px 0 12px;
+}
+
 .batch-purpose-fieldset {
   border: 1px solid var(--line);
   border-radius: var(--radius);
