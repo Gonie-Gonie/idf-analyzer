@@ -150,8 +150,18 @@
 }
 
 .simulation-scope-controls input,
-.simulation-scope-controls select {
+.simulation-scope-controls select,
+.simulation-scope-controls textarea {
   min-width: 0;
+}
+
+.simulation-custom-output-field {
+  grid-column: 1 / -1;
+}
+
+.simulation-custom-output-field textarea {
+  width: 100%;
+  resize: vertical;
 }
 
 .simulation-plan-actions {

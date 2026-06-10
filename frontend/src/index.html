@@ -377,6 +377,16 @@
                     <input id="simulationPersistOutputs" type="checkbox" />
                     <span data-i18n="simulation.persistOutputs">Plan as permanent output edits</span>
                   </label>
+                  <label class="simulation-custom-output-field">
+                    <span data-i18n="simulation.customOutputs">Custom outputs</span>
+                    <textarea
+                      id="simulationCustomOutputs"
+                      rows="3"
+                      spellcheck="false"
+                      placeholder="Output:Variable | Office | Zone Mean Air Temperature | Hourly&#10;Output:Meter | Electricity:Facility | Monthly"
+                      data-i18n-placeholder="simulation.customOutputsPlaceholder"
+                    ></textarea>
+                  </label>
                   <div class="simulation-plan-actions">
                     <button id="simulationRefreshPlan" type="button" data-i18n="simulation.refreshPlan">Refresh plan</button>
                     <button id="simulationApplyPurposeOutputs" type="button" data-i18n="simulation.makePurposeOutputsPermanent">Make outputs permanent</button>

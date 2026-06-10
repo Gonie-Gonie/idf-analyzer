@@ -630,6 +630,8 @@ const dictionaries = {
     "simulation.idle": "Ready",
     "simulation.advancedRunOptions": "Advanced run options",
     "simulation.applyingPurposeOutputs": "Applying purpose outputs",
+    "simulation.customOutputs": "Custom outputs",
+    "simulation.customOutputsPlaceholder": "Output:Variable | Office | Zone Mean Air Temperature | Hourly\nOutput:Meter | Electricity:Facility | Monthly",
     "simulation.estimatedFrames": "{count} frames",
     "simulation.estimatedSeries": "{count} series",
     "simulation.frequencyHighestResolution": "Highest resolution",

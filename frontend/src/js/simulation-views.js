@@ -36,6 +36,7 @@ export function initializeSimulationControls() {
   });
   elements.simulationPurposeZoneNames?.addEventListener("input", () => scheduleSimulationRunPlan());
   elements.simulationPurposeFrequencyPolicy?.addEventListener("change", () => scheduleSimulationRunPlan());
+  elements.simulationCustomOutputs?.addEventListener("input", () => scheduleSimulationRunPlan());
   elements.simulationPersistOutputs?.addEventListener("change", () => scheduleSimulationRunPlan());
   elements.simulationRefreshPlan?.addEventListener("click", () => refreshSimulationRunPlan({ force: true }));
   elements.simulationApplyPurposeOutputs?.addEventListener("click", () => applyPurposeOutputsToCurrentIDF());
@@ -253,6 +254,11 @@ function renderSimulationPurposeSetup() {
     const selectedMode = elements.simulationPurposeZoneMode?.value === "selected";
     elements.simulationPurposeZoneNames.disabled = !selectedMode;
     elements.simulationPurposeZoneNames.closest("label")?.classList.toggle("disabled", !selectedMode);
+  }
+  if (elements.simulationCustomOutputs) {
+    const customSelected = selected.includes("custom_outputs");
+    elements.simulationCustomOutputs.disabled = !customSelected;
+    elements.simulationCustomOutputs.closest("label")?.classList.toggle("disabled", !customSelected);
   }
   renderSimulationRunPlanPreview();
 }
@@ -711,6 +717,7 @@ function buildSimulationPurposeRequest() {
     scope: {
       zoneMode: elements.simulationPurposeZoneMode?.value || "all",
       zoneNames: parseCommaList(elements.simulationPurposeZoneNames?.value || ""),
+      customOutputs: parseCustomOutputs(elements.simulationCustomOutputs?.value || ""),
     },
     frequencyPolicy: elements.simulationPurposeFrequencyPolicy?.value || "purpose_default",
     sqlMode: "sql_first",
@@ -758,6 +765,87 @@ function parseCommaList(value) {
       }
     });
   return out;
+}
+
+function parseCustomOutputs(value) {
+  const outputs = [];
+  const seen = new Set();
+  String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .forEach((line) => {
+      const tokens = line
+        .split(line.includes("|") ? "|" : ",")
+        .map((token) => token.trim())
+        .filter(Boolean);
+      const output = customOutputFromTokens(tokens);
+      if (!output) {
+        return;
+      }
+      const key = [
+        output.objectType,
+        output.keyValue || "",
+        output.variableName || "",
+        output.meterName || "",
+        output.reportingFrequency || "",
+      ]
+        .map((token) => token.toLowerCase())
+        .join("|");
+      if (!seen.has(key)) {
+        seen.add(key);
+        outputs.push(output);
+      }
+    });
+  return outputs;
+}
+
+function customOutputFromTokens(tokens) {
+  if (!tokens.length) {
+    return null;
+  }
+  const first = tokens[0].toLowerCase();
+  if (first === "output:meter" || first === "meter") {
+    const meterName = tokens[1] || "";
+    if (!meterName) {
+      return null;
+    }
+    return {
+      objectType: "Output:Meter",
+      meterName,
+      reportingFrequency: tokens[2] || "Hourly",
+    };
+  }
+  if (first === "output:variable" || first === "variable") {
+    const hasExplicitKey = tokens.length >= 4;
+    const keyValue = hasExplicitKey ? tokens[1] : "*";
+    const variableName = hasExplicitKey ? tokens[2] : tokens[1] || "";
+    if (!variableName) {
+      return null;
+    }
+    return {
+      objectType: "Output:Variable",
+      keyValue,
+      variableName,
+      reportingFrequency: hasExplicitKey ? tokens[3] || "Hourly" : tokens[2] || "Hourly",
+    };
+  }
+  if (tokens.length >= 3) {
+    return {
+      objectType: "Output:Variable",
+      keyValue: tokens[0] || "*",
+      variableName: tokens[1],
+      reportingFrequency: tokens[2] || "Hourly",
+    };
+  }
+  if (tokens.length === 2) {
+    return {
+      objectType: "Output:Meter",
+      meterName: tokens[0],
+      reportingFrequency: tokens[1] || "Hourly",
+    };
+  }
+  return null;
 }
 
 function purposeLabel(value) {

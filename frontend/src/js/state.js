@@ -190,6 +190,7 @@ export const elements = {
   simulationPurposeZoneMode: document.querySelector("#simulationPurposeZoneMode"),
   simulationPurposeZoneNames: document.querySelector("#simulationPurposeZoneNames"),
   simulationPurposeFrequencyPolicy: document.querySelector("#simulationPurposeFrequencyPolicy"),
+  simulationCustomOutputs: document.querySelector("#simulationCustomOutputs"),
   simulationPersistOutputs: document.querySelector("#simulationPersistOutputs"),
   simulationRefreshPlan: document.querySelector("#simulationRefreshPlan"),
   simulationApplyPurposeOutputs: document.querySelector("#simulationApplyPurposeOutputs"),

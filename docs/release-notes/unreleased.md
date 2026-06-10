@@ -62,6 +62,7 @@ The release script infers bump size from these sections:
 - HVAC Loop Check results now group SQL/CSV system-node state series into a dedicated HVAC Loops tab with per-variable completeness badges.
 - Comfort Check now has purpose-scoped zone outputs, a comfort result bundle, and a dedicated Comfort tab for temperature, setpoint, PMV, and PPD series summaries.
 - Simulation output discovery now exposes a SQL/RDD/MDD-backed catalog API with purpose-plan fallback entries for future custom output picking.
+- Custom Outputs purpose runs can now include user-entered Output:Variable and Output:Meter requests in the run-plan preview and simulation request.
 
 ## Fixed
 
