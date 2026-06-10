@@ -402,7 +402,7 @@ function simulationResultViewAvailability(result) {
   return {
     energy: Boolean((energy.facilityMonthly || []).length || (energy.endUseMonthly || []).length || (energy.zoneMonthly || []).length),
     zone_heat_flow: Boolean((result.heatFlow?.zones || []).length),
-    hvac_loops: Boolean(hvacLoops.some((loop) => (loop.series || []).length)),
+    hvac_loops: Boolean(hvacLoops.some((loop) => (loop.series || []).length || hvacComponentSeriesCount(loop.components || []))),
     comfort: Boolean((comfort.zones || []).length || (comfort.series || []).length),
     integrity: true,
     series: Boolean((result.series || []).length),
