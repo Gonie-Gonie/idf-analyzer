@@ -47,6 +47,7 @@ The release script infers bump size from these sections:
 - Unresolved HVAC branch and zone equipment components now retain source owner and type/name field metadata across reports, semantic YAML, and the UI.
 - HVAC regression coverage now includes zone-only four-pipe fan coil equipment and service/process plant loop notice behavior.
 - Summary WWR and skylight metrics now distinguish computed azimuth evidence from unresolved fenestration base-surface cases.
+- Semantic YAML Basic mode now enforces a 250-line budget for large models, with backend line-count metadata and regression coverage.
 
 ## Fixed
 

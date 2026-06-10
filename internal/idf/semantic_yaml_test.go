@@ -88,6 +88,25 @@ Schedule:Compact,
 	}
 }
 
+func TestSemanticYAMLBasicLineBudget(t *testing.T) {
+	text, err := os.ReadFile("../../frontend/src/samples/RefBldgLargeOfficeNew2004_Chicago.idf")
+	if err != nil {
+		t.Fatalf("read reference sample: %v", err)
+	}
+	doc, err := Parse(string(text))
+	if err != nil {
+		t.Fatalf("parse reference sample: %v", err)
+	}
+
+	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
+	if projection.BasicVisibleLineCount != len(basicSemanticYAMLLines(projection.Lines)) {
+		t.Fatalf("basic line count = %d, helper returned %d", projection.BasicVisibleLineCount, len(basicSemanticYAMLLines(projection.Lines)))
+	}
+	if projection.BasicVisibleLineCount < 150 || projection.BasicVisibleLineCount > 250 {
+		t.Fatalf("basic semantic visible lines = %d, want 150..250 line budget", projection.BasicVisibleLineCount)
+	}
+}
+
 func TestSemanticYAMLQuantityDisplayIsReadonlyPatchSafe(t *testing.T) {
 	doc, err := Parse(`
 Zone,

@@ -5,6 +5,7 @@ import (
 )
 
 const semanticYAMLSchema = "eplus-semantic/0.2"
+const semanticYAMLBasicLineBudget = 250
 
 type SemanticYAMLMetadata struct {
 	EnergyPlusVersion string
@@ -12,13 +13,14 @@ type SemanticYAMLMetadata struct {
 }
 
 type SemanticYAMLProjection struct {
-	Schema              string                       `json:"schema"`
-	EnergyPlusVersion   string                       `json:"energyplusVersion,omitempty"`
-	SourceFormat        string                       `json:"sourceFormat,omitempty"`
-	Text                string                       `json:"text"`
-	Lines               []SemanticYAMLLine           `json:"lines"`
-	SourceNameConflicts []SemanticSourceNameConflict `json:"sourceNameConflicts,omitempty"`
-	ObjectCount         int                          `json:"objectCount"`
+	Schema                string                       `json:"schema"`
+	EnergyPlusVersion     string                       `json:"energyplusVersion,omitempty"`
+	SourceFormat          string                       `json:"sourceFormat,omitempty"`
+	Text                  string                       `json:"text"`
+	Lines                 []SemanticYAMLLine           `json:"lines"`
+	BasicVisibleLineCount int                          `json:"basicVisibleLineCount"`
+	SourceNameConflicts   []SemanticSourceNameConflict `json:"sourceNameConflicts,omitempty"`
+	ObjectCount           int                          `json:"objectCount"`
 }
 
 type SemanticYAMLLine struct {
@@ -104,15 +106,157 @@ type SemanticOccurrence struct {
 
 func BuildSemanticYAMLProjection(doc Document, metadata SemanticYAMLMetadata) SemanticYAMLProjection {
 	model := BuildSemanticModel(doc, metadata)
+	lines := BuildSemanticLines(model)
 	return SemanticYAMLProjection{
-		Schema:              model.Schema,
-		EnergyPlusVersion:   model.EnergyPlusVersion,
-		SourceFormat:        model.SourceFormat,
-		Text:                RenderSemanticYAML(model),
-		Lines:               BuildSemanticLines(model),
-		SourceNameConflicts: model.Source.NameConflicts,
-		ObjectCount:         model.Source.ObjectCount,
+		Schema:                model.Schema,
+		EnergyPlusVersion:     model.EnergyPlusVersion,
+		SourceFormat:          model.SourceFormat,
+		Text:                  RenderSemanticYAML(model),
+		Lines:                 lines,
+		BasicVisibleLineCount: len(basicSemanticYAMLLines(lines)),
+		SourceNameConflicts:   model.Source.NameConflicts,
+		ObjectCount:           model.Source.ObjectCount,
 	}
+}
+
+func basicSemanticYAMLLines(lines []SemanticYAMLLine) []SemanticYAMLLine {
+	hiddenBlocks := map[string]bool{
+		"duplicated_as":       true,
+		"also_shown_in":       true,
+		"sync_policy":         true,
+		"source_relations":    true,
+		"source_preservation": true,
+		"raw":                 true,
+		"computed":            true,
+		"vertices":            true,
+	}
+	keepKeys := map[string]bool{
+		"schema":          true,
+		"name":            true,
+		"class":           true,
+		"type":            true,
+		"family":          true,
+		"family_label":    true,
+		"display_label":   true,
+		"role_here":       true,
+		"source":          true,
+		"confidence":      true,
+		"status":          true,
+		"value":           true,
+		"zone":            true,
+		"space":           true,
+		"schedule":        true,
+		"air_loop":        true,
+		"plant_loop":      true,
+		"air_loops":       true,
+		"plant_loops":     true,
+		"condenser_loops": true,
+		"terminal_units":  true,
+		"zone_equipment":  true,
+		"outputs":         true,
+		"diagnostics":     true,
+	}
+	var out []SemanticYAMLLine
+	hideUntilIndent := -1
+	for _, line := range lines {
+		indent := line.Indent
+		if hideUntilIndent >= 0 && indent > hideUntilIndent {
+			continue
+		}
+		hideUntilIndent = -1
+		key := strings.TrimSpace(line.Key)
+		if hiddenBlocks[key] {
+			hideUntilIndent = indent
+			continue
+		}
+		text := strings.TrimLeft(line.Text, " \t")
+		if semanticYAMLBasicKeepsSyntax(line) {
+			out = append(out, line)
+			continue
+		}
+		if strings.HasPrefix(text, "- name:") && indent <= 4 && semanticYAMLBasicKeepsObjectName(line) {
+			out = append(out, line)
+			continue
+		}
+		if semanticYAMLLineHasValue(line) && indent <= 4 && keepKeys[key] && semanticYAMLBasicKeepsValueLine(line) {
+			out = append(out, line)
+		}
+	}
+	if len(out) > semanticYAMLBasicLineBudget {
+		return out[:semanticYAMLBasicLineBudget]
+	}
+	return out
+}
+
+func semanticYAMLBasicKeepsSyntax(line SemanticYAMLLine) bool {
+	if line.Text == "semantic_energyplus_model:" {
+		return true
+	}
+	if line.Role != "syntax" {
+		return false
+	}
+	if line.Indent <= 1 {
+		return true
+	}
+	if line.Indent != 2 {
+		return false
+	}
+	key := semanticYAMLLineKeyToken(line)
+	switch key {
+	case "definitions", "zones", "air_loops", "plant_loops", "condenser_loops", "zone_relations", "files", "variables", "meters", "diagnostics":
+		return true
+	default:
+		return false
+	}
+}
+
+func semanticYAMLBasicKeepsObjectName(line SemanticYAMLLine) bool {
+	objectType := strings.ToLower(strings.TrimSpace(line.ObjectType))
+	switch {
+	case objectType == "zone" || objectType == "space":
+		return true
+	case objectType == "airloophvac" || objectType == "plantloop" || objectType == "condenserloop":
+		return true
+	default:
+		return false
+	}
+}
+
+func semanticYAMLBasicKeepsValueLine(line SemanticYAMLLine) bool {
+	if line.SourceKind == "summary" && line.Indent <= 2 {
+		return true
+	}
+	if semanticYAMLBasicKeepsObjectName(line) {
+		return true
+	}
+	key := semanticYAMLLineKeyToken(line)
+	switch key {
+	case "source", "confidence", "status", "value", "air_loops", "plant_loops", "condenser_loops", "terminal_units", "zone_equipment", "outputs", "diagnostics":
+		return line.Indent <= 4
+	default:
+		return false
+	}
+}
+
+func semanticYAMLLineKeyToken(line SemanticYAMLLine) string {
+	if key := strings.TrimSpace(line.Key); key != "" {
+		return key
+	}
+	text := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line.Text), "- "))
+	if index := strings.Index(text, ":"); index >= 0 {
+		return strings.TrimSpace(text[:index])
+	}
+	return text
+}
+
+func semanticYAMLLineHasValue(line SemanticYAMLLine) bool {
+	return strings.TrimSpace(line.Key) != "" &&
+		(line.Editable ||
+			line.DisplayValue != "" ||
+			line.Value != "" ||
+			line.Role == "metadata" ||
+			line.Role == "object" ||
+			line.Role == "field")
 }
 
 func BuildSemanticModel(doc Document, metadata SemanticYAMLMetadata) SemanticModel {

@@ -2,6 +2,8 @@ import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from
 import { t } from "./i18n.js";
 import { recordViewHistory } from "./view-history.js";
 
+const SEMANTIC_BASIC_LINE_BUDGET = 250;
+
 let analyzeCallback = async () => {};
 let renderReportCallback = () => renderInputViews();
 let jumpIndexCache = { report: null, definitions: new Map(), references: new Map() };
@@ -361,19 +363,58 @@ function basicSemanticLines(lines) {
       continue;
     }
     const text = String(line.text || "").trimStart();
-    if (line.text === "semantic_energyplus_model:" || (line.role === "syntax" && indent <= 2)) {
+    if (semanticBasicKeepsSyntax(line)) {
       out.push(line);
       continue;
     }
-    if (text.startsWith("- name:") && indent <= 4) {
+    if (text.startsWith("- name:") && indent <= 4 && semanticBasicKeepsObjectName(line)) {
       out.push(line);
       continue;
     }
-    if (semanticLineHasValue(line) && indent <= 4 && keepKeys.has(key)) {
+    if (semanticLineHasValue(line) && indent <= 4 && keepKeys.has(key) && semanticBasicKeepsValueLine(line)) {
       out.push(line);
     }
   }
-  return out;
+  return out.length > SEMANTIC_BASIC_LINE_BUDGET ? out.slice(0, SEMANTIC_BASIC_LINE_BUDGET) : out;
+}
+
+function semanticBasicKeepsSyntax(line = {}) {
+  if (line.text === "semantic_energyplus_model:") {
+    return true;
+  }
+  const indent = Number(line.indent || 0);
+  if (line.role !== "syntax") {
+    return false;
+  }
+  if (indent <= 1) {
+    return true;
+  }
+  if (indent !== 2) {
+    return false;
+  }
+  return ["definitions", "zones", "air_loops", "plant_loops", "condenser_loops", "zone_relations", "files", "variables", "meters", "diagnostics"].includes(semanticLineKeyToken(line));
+}
+
+function semanticBasicKeepsObjectName(line = {}) {
+  const objectType = String(line.objectType || "").trim().toLowerCase();
+  return (
+    objectType === "zone" ||
+    objectType === "space" ||
+    objectType === "airloophvac" ||
+    objectType === "plantloop" ||
+    objectType === "condenserloop"
+  );
+}
+
+function semanticBasicKeepsValueLine(line = {}) {
+  const indent = Number(line.indent || 0);
+  if (line.sourceKind === "summary" && indent <= 2) {
+    return true;
+  }
+  if (semanticBasicKeepsObjectName(line)) {
+    return true;
+  }
+  return ["source", "confidence", "status", "value", "air_loops", "plant_loops", "condenser_loops", "terminal_units", "zone_equipment", "outputs", "diagnostics"].includes(semanticLineKeyToken(line)) && indent <= 4;
 }
 
 function compactSemanticLines(lines) {
