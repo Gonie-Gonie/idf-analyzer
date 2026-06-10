@@ -403,6 +403,21 @@
   opacity: 0.45;
 }
 
+.simulation-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.simulation-section-actions .tool-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .simulation-running-notice {
   display: flex;
   align-items: center;

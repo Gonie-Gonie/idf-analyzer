@@ -62,6 +62,7 @@ export function initializeSimulationControls() {
       toggleSimulationResultSections();
     });
   });
+  elements.simulationExportPurposeJSON?.addEventListener("click", () => exportPurposeResultJSON());
   elements.simulationRefreshEnv?.addEventListener("click", () => loadSimulationEnvironment());
   elements.simulationRunButton?.addEventListener("click", () => runCurrentSimulation({ silent: false }));
   elements.simulationEnergyPlusSelect?.addEventListener("change", () => renderSimulation());
@@ -1190,12 +1191,24 @@ function updateSimulationControls() {
   if (elements.simulationRefreshPlan) {
     elements.simulationRefreshPlan.disabled = state.simulationRunning || !hasText;
   }
+  updatePurposeExportButton();
   if (elements.simulationPurposeInputs?.length) {
     elements.simulationPurposeInputs.forEach((input) => {
       input.disabled = state.simulationRunning;
     });
   }
   updatePurposeApplyButton();
+}
+
+function updatePurposeExportButton() {
+  if (!elements.simulationExportPurposeJSON) {
+    return;
+  }
+  const canExport = Boolean(state.simulationResult?.purposeResults);
+  elements.simulationExportPurposeJSON.disabled = state.simulationRunning || !canExport;
+  elements.simulationExportPurposeJSON.title = canExport
+    ? t("action.exportPurposeJson", {}, "Export Purpose JSON")
+    : t("simulation.noPurposeResultExport", {}, "No purpose results to export yet.");
 }
 
 function simulationVersionIssue() {
@@ -2682,6 +2695,51 @@ function renderSimulationFiles(result) {
         <tbody>${rows || `<tr><td colspan="3">${escapeHTML(t("simulation.noFiles", {}, "No output files yet"))}</td></tr>`}</tbody>
       </table>
     </div>`;
+}
+
+function exportPurposeResultJSON() {
+  const result = state.simulationResult;
+  if (!result?.purposeResults) {
+    return;
+  }
+  const payload = {
+    runId: result.runId || "",
+    status: result.status || "",
+    filename: result.filename || "",
+    inputPath: result.inputPath || "",
+    weatherPath: result.weatherPath || "",
+    energyPlusExecutablePath: result.energyPlusExecutablePath || "",
+    outputDirectory: result.outputDirectory || "",
+    startedAt: result.startedAt || "",
+    finishedAt: result.finishedAt || "",
+    durationMs: result.durationMs || 0,
+    purposeRunPlan: result.purposeRunPlan || null,
+    purposeResults: result.purposeResults,
+    files: result.files || [],
+  };
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = purposeResultExportFilename(result);
+  link.click();
+  URL.revokeObjectURL(url);
+  setStatus(t("status.purposeResultsExported", {}, "Purpose result JSON exported"), "ok");
+}
+
+function purposeResultExportFilename(result) {
+  const base = String(result.filename || result.runId || "purpose-results").replace(/\.[^.]+$/, "");
+  return `${sanitizeExportFilename(base)}-purpose-results.json`;
+}
+
+function sanitizeExportFilename(value) {
+  const safe = String(value || "")
+    .replace(/[<>:"/\\|?*\x00-\x1f]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80);
+  return safe || "purpose-results";
 }
 
 async function runCurrentSimulation({ silent = false, auto = false } = {}) {
