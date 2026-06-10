@@ -139,6 +139,56 @@ Output:Variable,
 	}
 }
 
+func TestBuildPurposeRunPlanPreservesExistingFrequency(t *testing.T) {
+	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF+`
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Monthly;
+`)
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes:        []SimulationPurposeID{SimulationPurposeZoneHeatFlow},
+		FrequencyPolicy: PurposeFrequencyPolicyPreserve,
+	})
+
+	output := findPurposeOutput(plan, "Output:Variable", "*", "Zone Mean Air Temperature")
+	if output == nil {
+		t.Fatalf("missing preserved zone mean air temperature output")
+	}
+	if output.State != PurposeOutputStateExisting || output.ReportingFrequency != "Monthly" {
+		t.Fatalf("preserved output = %+v, want existing Monthly", output)
+	}
+	if !purposePlanHasWarning(plan, "frequency_preserved") {
+		t.Fatalf("expected frequency preserved warning in %#v", plan.Warnings)
+	}
+}
+
+func TestBuildPurposeRunPlanHighestResolutionAddsRequestedFrequency(t *testing.T) {
+	doc := parsePurposePlanFixture(t, purposePlanFixtureIDF+`
+Output:Variable,
+  *,
+  Zone Mean Air Temperature,
+  Monthly;
+`)
+
+	plan := BuildPurposeRunPlan(doc, SimulationPurposeRequest{
+		Purposes:        []SimulationPurposeID{SimulationPurposeZoneHeatFlow},
+		FrequencyPolicy: PurposeFrequencyPolicyHighestResolution,
+	})
+
+	output := findPurposeOutput(plan, "Output:Variable", "*", "Zone Mean Air Temperature")
+	if output == nil {
+		t.Fatalf("missing promoted zone mean air temperature output")
+	}
+	if output.State != PurposeOutputStateTemporary || output.ReportingFrequency != "Hourly" {
+		t.Fatalf("promoted output = %+v, want temporary Hourly", output)
+	}
+	if !purposePlanHasWarning(plan, "frequency_promoted") {
+		t.Fatalf("expected frequency promoted warning in %#v", plan.Warnings)
+	}
+}
+
 func parsePurposePlanFixture(t *testing.T, text string) idf.Document {
 	t.Helper()
 	doc, err := idf.Parse(text)

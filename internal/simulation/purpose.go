@@ -566,8 +566,7 @@ func (builder *purposePlanBuilder) addObject(object PurposeOutputObject) {
 		object.State = PurposeOutputStateExisting
 		object.Reason = existing.Reason
 	} else if conflict, ok := builder.existingBase[purposeOutputBaseSignature(object.ObjectType, object.Fields)]; ok {
-		object.State = PurposeOutputStateConflict
-		builder.warn("warning", "frequency_conflict", fmt.Sprintf("%s already exists with %s frequency.", purposeOutputLabel(conflict), conflict.ReportingFrequency), firstPurposeID(object.PurposeIDs), object.Signature)
+		object = builder.applyFrequencyConflictPolicy(object, conflict)
 	} else if builder.request.PersistOutputs {
 		object.State = PurposeOutputStateWillPersist
 	} else {
@@ -583,6 +582,37 @@ func (builder *purposePlanBuilder) addObject(object PurposeOutputObject) {
 	}
 	builder.bySignature[object.Signature] = len(builder.objects)
 	builder.objects = append(builder.objects, object)
+}
+
+func (builder *purposePlanBuilder) applyFrequencyConflictPolicy(requested PurposeOutputObject, existing PurposeOutputObject) PurposeOutputObject {
+	policy := strings.ToLower(strings.TrimSpace(builder.request.FrequencyPolicy))
+	switch policy {
+	case PurposeFrequencyPolicyPreserve:
+		preserved := existing
+		preserved.PurposeIDs = requested.PurposeIDs
+		preserved.Description = requested.Description
+		preserved.State = PurposeOutputStateExisting
+		preserved.Reason = "Existing output frequency preserved"
+		builder.warn("info", "frequency_preserved", fmt.Sprintf("%s is reused with existing %s frequency.", purposeOutputLabel(existing), existing.ReportingFrequency), firstPurposeID(requested.PurposeIDs), existing.Signature)
+		return preserved
+	case PurposeFrequencyPolicyHighestResolution:
+		if purposeFrequencyRank(existing.ReportingFrequency) >= purposeFrequencyRank(requested.ReportingFrequency) {
+			preserved := existing
+			preserved.PurposeIDs = requested.PurposeIDs
+			preserved.Description = requested.Description
+			preserved.State = PurposeOutputStateExisting
+			preserved.Reason = "Existing higher-resolution output reused"
+			builder.warn("info", "frequency_existing_higher_resolution", fmt.Sprintf("%s already exists at %s frequency.", purposeOutputLabel(existing), existing.ReportingFrequency), firstPurposeID(requested.PurposeIDs), existing.Signature)
+			return preserved
+		}
+		requested.State = purposeTemporaryState(builder.request)
+		builder.warn("warning", "frequency_promoted", fmt.Sprintf("%s exists at %s frequency; adding %s for the selected purpose.", purposeOutputLabel(existing), existing.ReportingFrequency, requested.ReportingFrequency), firstPurposeID(requested.PurposeIDs), requested.Signature)
+		return requested
+	default:
+		requested.State = PurposeOutputStateConflict
+		builder.warn("warning", "frequency_conflict", fmt.Sprintf("%s already exists with %s frequency.", purposeOutputLabel(existing), existing.ReportingFrequency), firstPurposeID(requested.PurposeIDs), requested.Signature)
+		return requested
+	}
 }
 
 func (builder *purposePlanBuilder) warn(severity string, code string, message string, purposeID SimulationPurposeID, signature string) {
@@ -742,6 +772,32 @@ func purposeWeight(objectType string, fields []idf.OutputFieldValue) string {
 		return "medium"
 	default:
 		return "light"
+	}
+}
+
+func purposeTemporaryState(request SimulationPurposeRequest) string {
+	if request.PersistOutputs {
+		return PurposeOutputStateWillPersist
+	}
+	return PurposeOutputStateTemporary
+}
+
+func purposeFrequencyRank(frequency string) int {
+	switch strings.ToLower(canonicalPurposeFrequency(frequency)) {
+	case "detailed":
+		return 6
+	case "timestep":
+		return 5
+	case "hourly":
+		return 4
+	case "daily":
+		return 3
+	case "monthly":
+		return 2
+	case "runperiod", "annual":
+		return 1
+	default:
+		return 0
 	}
 }
 
