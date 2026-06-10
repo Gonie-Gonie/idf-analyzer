@@ -523,6 +523,18 @@
                   <span id="simulationSeriesStats" class="tool-muted">No SQL/CSV series</span>
                   <select id="simulationSeriesSelect" aria-label="SQL/CSV series"></select>
                 </div>
+                <div class="simulation-series-controls" aria-label="Series time range controls">
+                  <button id="simulationSeriesRangeAll" type="button" data-i18n="simulation.seriesRangeAll">All</button>
+                  <label>
+                    <span>Start</span>
+                    <input id="simulationSeriesRangeStart" type="range" min="0" max="0" value="0" aria-label="Series visible range start" />
+                  </label>
+                  <label>
+                    <span>End</span>
+                    <input id="simulationSeriesRangeEnd" type="range" min="0" max="0" value="0" aria-label="Series visible range end" />
+                  </label>
+                  <output id="simulationSeriesRangeLabel">No range</output>
+                </div>
                 <div id="simulationChart" class="simulation-chart"></div>
               </section>
               <section class="simulation-section" data-simulation-result-view="files">

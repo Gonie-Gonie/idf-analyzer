@@ -737,6 +737,8 @@ const dictionaries = {
     "simulation.seriesAvailable": "Purpose outputs selected: SQL/CSV time-series graph will be available after this run.",
     "simulation.seriesMaybeUnavailableStandardOff": "No purpose outputs are selected; graph depends on existing output requests.",
     "simulation.series": "Series",
+    "simulation.seriesRangeAll": "All",
+    "simulation.seriesRangeEmpty": "No range",
     "simulation.seriesStats": "{count} SQL/CSV series",
     "simulation.speed": "Speed",
     "simulation.standardOutputRun": "Use standard outputs for this run",

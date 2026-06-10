@@ -1015,6 +1015,46 @@
   overflow-x: auto;
 }
 
+.simulation-series-controls {
+  display: grid;
+  grid-template-columns: auto minmax(150px, 1fr) minmax(150px, 1fr) minmax(180px, auto);
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.simulation-series-controls button {
+  min-height: 30px;
+  padding-inline: 10px;
+  font-size: 12px;
+}
+
+.simulation-series-controls label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.simulation-series-controls input[type="range"] {
+  min-width: 96px;
+}
+
+.simulation-series-controls output {
+  overflow: hidden;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text);
+  padding: 6px 8px;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .simulation-svg {
   width: 100%;
   min-width: 680px;
@@ -1550,7 +1590,8 @@
     grid-template-columns: 1fr;
   }
 
-  .simulation-heatflow-controls {
+  .simulation-heatflow-controls,
+  .simulation-series-controls {
     grid-template-columns: 1fr;
   }
 

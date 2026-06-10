@@ -88,6 +88,13 @@ export function initializeSimulationControls() {
     state.simulationSeriesRangeEnd = -1;
     renderSimulationChart();
   });
+  elements.simulationSeriesRangeAll?.addEventListener("click", () => {
+    state.simulationSeriesRangeStart = 0;
+    state.simulationSeriesRangeEnd = -1;
+    renderSimulationChart();
+  });
+  elements.simulationSeriesRangeStart?.addEventListener("input", () => updateSimulationSeriesRangeFromControls("start"));
+  elements.simulationSeriesRangeEnd?.addEventListener("input", () => updateSimulationSeriesRangeFromControls("end"));
   elements.simulationHeatFlowSlider?.addEventListener("input", () => {
     state.simulationHeatFlowFrameIndex = Number(elements.simulationHeatFlowSlider.value) || 0;
     normalizeHeatFlowFrameRange();
@@ -208,6 +215,7 @@ function renderSimulationEmpty() {
   renderSimulationPurposeSetup();
   updateSimulationControls();
   setSimulationPreviewMode(!state.simulationRunning);
+  renderSimulationSeriesRangeControls(null);
   const installCount = state.simulationEnvironment?.installations?.length || 0;
   const hasText = Boolean((elements.idfInput?.value || "").trim());
   const blockingIssue = simulationBlockingIssue();
@@ -2046,6 +2054,7 @@ function renderSimulationSeriesSelect(result) {
   if (!series.length) {
     state.simulationSelectedSeries = "";
     elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.noSeries", {}, "No SQL/CSV series"))}</option>`;
+    renderSimulationSeriesRangeControls(null);
     if (elements.simulationSeriesStats) {
       elements.simulationSeriesStats.textContent = t("simulation.noSeries", {}, "No SQL/CSV series");
     }
@@ -2069,12 +2078,14 @@ function renderSimulationSeriesSelect(result) {
 
 function renderSimulationChart() {
   const result = state.simulationResult;
-  const series = (result?.series || []).find((item) => seriesID(item) === state.simulationSelectedSeries);
+  const series = currentSimulationSeries();
   if (!series || !series.points?.length) {
+    renderSimulationSeriesRangeControls(null);
     elements.simulationChart.innerHTML = `<div class="empty">${t("simulation.noGraph", {}, "SQL/CSV graph will appear after a run with numeric output.")}</div>`;
     return;
   }
   const visibleRange = normalizeSimulationSeriesRange(series.points.length);
+  renderSimulationSeriesRangeControls(series, visibleRange);
   const visiblePoints = series.points.slice(visibleRange.start, visibleRange.end + 1);
   const width = 900;
   const height = 260;
@@ -2120,7 +2131,59 @@ function renderSimulationChart() {
   bindSimulationChartInteractions(series);
 }
 
-function normalizeSimulationSeriesRange(pointCount = 0) {
+function currentSimulationSeries() {
+  const result = state.simulationResult;
+  return (result?.series || []).find((item) => seriesID(item) === state.simulationSelectedSeries) || null;
+}
+
+function renderSimulationSeriesRangeControls(series, visibleRange = null) {
+  if (!elements.simulationSeriesRangeStart || !elements.simulationSeriesRangeEnd || !elements.simulationSeriesRangeLabel) {
+    return;
+  }
+  const pointCount = series?.points?.length || 0;
+  const disabled = pointCount <= 1;
+  const maxIndex = Math.max(0, pointCount - 1);
+  const range = pointCount > 0 ? (visibleRange || normalizeSimulationSeriesRange(pointCount)) : { start: 0, end: 0 };
+  for (const input of [elements.simulationSeriesRangeStart, elements.simulationSeriesRangeEnd]) {
+    input.min = "0";
+    input.max = String(maxIndex);
+    input.disabled = disabled;
+  }
+  elements.simulationSeriesRangeStart.value = String(range.start);
+  elements.simulationSeriesRangeEnd.value = String(range.end);
+  if (elements.simulationSeriesRangeAll) {
+    elements.simulationSeriesRangeAll.disabled = pointCount <= 0 || (range.start === 0 && range.end === maxIndex);
+  }
+  elements.simulationSeriesRangeLabel.value = pointCount > 0
+    ? seriesRangeLabel(series, range)
+    : t("simulation.seriesRangeEmpty", {}, "No range");
+}
+
+function seriesRangeLabel(series, range) {
+  const pointCount = series?.points?.length || 0;
+  if (!pointCount) {
+    return t("simulation.seriesRangeEmpty", {}, "No range");
+  }
+  const startPoint = series.points[range.start] || {};
+  const endPoint = series.points[range.end] || {};
+  const labels = [startPoint.label, endPoint.label].filter(Boolean);
+  const indexLabel = `${range.start + 1}-${range.end + 1} / ${pointCount}`;
+  return labels.length === 2 ? `${indexLabel} (${labels[0]} - ${labels[1]})` : indexLabel;
+}
+
+function updateSimulationSeriesRangeFromControls(changed) {
+  const series = currentSimulationSeries();
+  if (!series?.points?.length) {
+    renderSimulationSeriesRangeControls(null);
+    return;
+  }
+  state.simulationSeriesRangeStart = Number(elements.simulationSeriesRangeStart?.value) || 0;
+  state.simulationSeriesRangeEnd = Number(elements.simulationSeriesRangeEnd?.value) || 0;
+  normalizeSimulationSeriesRange(series.points.length, changed);
+  renderSimulationChart();
+}
+
+function normalizeSimulationSeriesRange(pointCount = 0, changed = "") {
   const maxIndex = Math.max(0, Number(pointCount) - 1);
   let start = Math.round(clampNumber(state.simulationSeriesRangeStart, 0, maxIndex));
   let end = Number(state.simulationSeriesRangeEnd);
@@ -2129,7 +2192,11 @@ function normalizeSimulationSeriesRange(pointCount = 0) {
   }
   end = Math.round(clampNumber(end, 0, maxIndex));
   if (start > end) {
-    start = end;
+    if (changed === "start") {
+      end = start;
+    } else {
+      start = end;
+    }
   }
   state.simulationSeriesRangeStart = start;
   state.simulationSeriesRangeEnd = end;
