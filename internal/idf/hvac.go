@@ -2622,7 +2622,7 @@ func hvacNodeFieldRole(obj Object, fieldIndex int, field Field) string {
 		return "node_list_member"
 	}
 	catalogRole := catalogFieldRole(obj, fieldIndex)
-	comment := normalizeFieldName(field.Comment)
+	comment := normalizeFieldName(firstNonEmpty(field.Comment, catalogFieldName(obj, fieldIndex)))
 	hasNodeWords := strings.Contains(comment, "node") && (strings.Contains(comment, "name") || strings.Contains(comment, "list"))
 	if catalogRole != fieldRoleNodeRef && catalogRole != fieldRoleNodeListRef && !hasNodeWords {
 		return ""

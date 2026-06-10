@@ -127,6 +127,85 @@ Output:Variable,
 	}
 }
 
+func TestHVACNodeDiagnosticsUseLoopScopedTypedGraph(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Heating Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Inlet"},
+			{Value: "HW Outlet"},
+			{Value: "HW Branches"},
+		}},
+		{Index: 1, Type: "BranchList", Fields: []Field{{Value: "HW Branches"}, {Value: "HW Branch"}}},
+		{Index: 2, Type: "Branch", Fields: []Field{
+			{Value: "HW Branch"},
+			{Value: ""},
+			{Value: "Pipe:Adiabatic"},
+			{Value: "HW Pipe"},
+			{Value: "HW Inlet"},
+			{Value: "HW Outlet"},
+		}},
+		{Index: 3, Type: "Pipe:Adiabatic", Fields: []Field{{Value: "HW Pipe"}}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Cooling Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Cooling Setpoint"},
+			{Value: "12"},
+			{Value: "6"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "CHW Inlet"},
+			{Value: "CHW Outlet"},
+			{Value: "CHW Branches"},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{{Value: "CHW Branches"}, {Value: "CHW Branch"}}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "CHW Branch"},
+			{Value: ""},
+			{Value: "Pipe:Adiabatic"},
+			{Value: "CHW Pipe"},
+			{Value: "CHW Inlet"},
+			{Value: "CHW Outlet"},
+		}},
+		{Index: 7, Type: "Pipe:Adiabatic", Fields: []Field{{Value: "CHW Pipe"}}},
+	}}
+
+	for _, diagnostic := range hvacNodeDiagnostics(doc) {
+		if diagnostic.Code == "disconnected_node_graph" {
+			t.Fatalf("independent loops should not create a global disconnected graph notice: %#v", diagnostic)
+		}
+	}
+}
+
+func TestHVACNodeDiagnosticsIgnoreOutdoorReliefBoundaryNodes(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "OutdoorAir:Mixer", Fields: []Field{
+			{Value: "OA Mixer"},
+			{Value: "Mixed Air Node"},
+			{Value: "Outdoor Air Node"},
+			{Value: "Relief Air Node"},
+			{Value: "Return Air Node"},
+		}},
+	}}
+
+	for _, diagnostic := range hvacNodeDiagnostics(doc) {
+		if diagnostic.Code == "unconnected_node" && (diagnostic.Value == "Outdoor Air Node" || diagnostic.Value == "Relief Air Node") {
+			t.Fatalf("boundary node was reported as unconnected: %#v", diagnostic)
+		}
+	}
+}
+
 func TestDiagnosticsTagOrphansAsUserQualityNotice(t *testing.T) {
 	doc, err := Parse(`
 Version, 24.1;

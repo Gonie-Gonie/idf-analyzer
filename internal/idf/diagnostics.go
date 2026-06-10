@@ -306,31 +306,39 @@ func hvacNodeDiagnostics(doc Document) []Diagnostic {
 	nodeRefs := map[string][]HVACNodeUsage{}
 	degree := map[string]int{}
 	graph := map[string]map[string]bool{}
+	var diagnostics []Diagnostic
 
 	for _, usage := range report.NodeUsages {
 		nodeRefs[normalizeName(usage.NodeName)] = append(nodeRefs[normalizeName(usage.NodeName)], usage)
 	}
-	for _, obj := range doc.Objects {
-		for _, connection := range extractHVACConnections(obj) {
-			from := normalizeName(connection.FromNode)
-			to := normalizeName(connection.ToNode)
-			if from == "" || to == "" {
-				continue
+	for _, loop := range report.Loops {
+		loopGraph := map[string]map[string]bool{}
+		addHVACLoopSideDiagnosticEdges(loopGraph, degree, loop.SupplySide)
+		addHVACLoopSideDiagnosticEdges(loopGraph, degree, loop.DemandSide)
+		for node, edges := range loopGraph {
+			if graph[node] == nil {
+				graph[node] = map[string]bool{}
 			}
-			degree[from]++
-			degree[to]++
-			if graph[from] == nil {
-				graph[from] = map[string]bool{}
+			for edge := range edges {
+				graph[node][edge] = true
 			}
-			if graph[to] == nil {
-				graph[to] = map[string]bool{}
-			}
-			graph[from][to] = true
-			graph[to][from] = true
+		}
+		if components := graphComponentCount(loopGraph); components > 1 {
+			diagnostics = append(diagnostics, Diagnostic{
+				Severity:    DiagnosticNotice,
+				Category:    "HVAC Node",
+				Code:        "disconnected_node_graph",
+				Source:      "heuristic_inference",
+				Confidence:  "low",
+				Message:     fmt.Sprintf("%s %q inferred node graph has %d disconnected components.", loop.Type, loop.Name, components),
+				ObjectIndex: loop.ObjectIndex,
+				ObjectType:  loop.Type,
+				ObjectName:  loop.Name,
+				Evidence:    "Computed per HVAC loop from typed branch component inlet/outlet nodes.",
+			})
 		}
 	}
 
-	var diagnostics []Diagnostic
 	for node, usages := range nodeRefs {
 		if degree[node] == 0 && len(usages) == 1 && !isTerminalHVACBoundaryNode(usages[0]) {
 			usage := usages[0]
@@ -352,18 +360,34 @@ func hvacNodeDiagnostics(doc Document) []Diagnostic {
 		}
 	}
 
-	if components := graphComponentCount(graph); components > 1 {
-		diagnostics = append(diagnostics, Diagnostic{
-			Severity:   DiagnosticNotice,
-			Category:   "HVAC Node",
-			Code:       "disconnected_node_graph",
-			Source:     "heuristic_inference",
-			Confidence: "low",
-			Message:    fmt.Sprintf("Inferred HVAC node graph has %d disconnected components.", components),
-			Evidence:   "Computed from inlet/outlet field pairs, not a full EnergyPlus topology solve.",
-		})
-	}
 	return diagnostics
+}
+
+func addHVACLoopSideDiagnosticEdges(graph map[string]map[string]bool, degree map[string]int, side HVACLoopSide) {
+	for _, branch := range side.Branches {
+		for _, component := range branch.Components {
+			addHVACDiagnosticNodeEdge(graph, degree, component.InletNode, component.OutletNode)
+			addHVACDiagnosticNodeEdge(graph, degree, component.WaterInletNode, component.WaterOutletNode)
+		}
+	}
+}
+
+func addHVACDiagnosticNodeEdge(graph map[string]map[string]bool, degree map[string]int, fromNode string, toNode string) {
+	from := normalizeName(fromNode)
+	to := normalizeName(toNode)
+	if from == "" || to == "" {
+		return
+	}
+	degree[from]++
+	degree[to]++
+	if graph[from] == nil {
+		graph[from] = map[string]bool{}
+	}
+	if graph[to] == nil {
+		graph[to] = map[string]bool{}
+	}
+	graph[from][to] = true
+	graph[to][from] = true
 }
 
 func graphComponentCount(graph map[string]map[string]bool) int {
