@@ -254,7 +254,7 @@ function renderSimulationEmpty() {
     elements.simulationStats.textContent = t("simulation.runningStats", {}, "Simulation running in background");
     elements.simulationResultMeta.textContent = t("simulation.backgroundRun", {}, "EnergyPlus is running in the background");
     elements.simulationResultSummary.innerHTML = renderRunningNotice();
-    renderSimulationHeatFlowEmpty(t("simulation.heatFlowAfterRun", {}, "The heat-flow ledger will appear when standard heat-balance SQL/CSV output is available."));
+    renderSimulationHeatFlowEmpty(t("simulation.heatFlowAfterRun", {}, "The heat-flow ledger will appear when Zone Heat Flow SQL/CSV output is available."));
     setSimulationSeriesGroupUnavailable();
     renderSimulationCustomSeriesLinks(null);
     elements.simulationSeriesSelect.innerHTML = `<option value="">${escapeHTML(t("simulation.waitingForCSV", {}, "Waiting for SQL/CSV output"))}</option>`;
@@ -301,7 +301,7 @@ function renderSimulationEmpty() {
   elements.simulationStatus.classList.remove("status-loading");
   elements.simulationPercent.textContent = "0%";
   elements.simulationProgressBar.style.width = "0%";
-  elements.simulationResultSummary.innerHTML = `<div class="empty">${t("simulation.noResult", {}, "Run a simulation to inspect ERR and CSV outputs.")}</div>`;
+  elements.simulationResultSummary.innerHTML = `<div class="empty">${t("simulation.noResult", {}, "Run & Inspect will show purpose results, integrity diagnostics, and SQL/CSV outputs.")}</div>`;
   renderSimulationResultTabs(null);
   renderSimulationEnergyEmpty(t("simulation.noEnergyResult", {}, "Run Basic Energy to inspect monthly energy results."));
   renderSimulationHVACLoopEmpty(t("simulation.noHVACLoopResult", {}, "Run HVAC Loop Check to inspect node state series."));

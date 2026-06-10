@@ -118,6 +118,7 @@ The release script infers bump size from these sections:
 - HVAC Loop Check frame snapshots now include a compact node schematic with live temperature/flow labels before the detailed node and component cards.
 - HVAC Loop Check results now provide snapshot/chart panel toggles and variable-group filters for the normalized multi-series chart and node/component result tables.
 - HVAC Loop Check results can now open the selected HVAC tab loop topology using the shared `renderHVACLoopDiagram` renderer while keeping live frame overlays in the compact simulation schematic.
+- Simulation empty-state text now frames the tab as Run & Inspect with purpose results, integrity diagnostics, and SQL/CSV outputs instead of a legacy standard-output run.
 
 ## Fixed
 
