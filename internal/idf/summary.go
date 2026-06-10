@@ -227,7 +227,7 @@ func AnalyzeSummary(doc Document) SummaryReport {
 			Confidence:   summaryMetricConfidence(definition.ID, value.Status),
 			Visibility:   summaryMetricVisibility(definition.ID),
 			Badges:       summaryMetricBadges(definition.ID, value.Status),
-			Evidence:     definition.Method,
+			Evidence:     summaryMetricEvidence(definition.ID, definition.Method, facts),
 		}
 		if index, ok := categoryIndexes[definition.CategoryID]; ok {
 			categories[index].Metrics = append(categories[index].Metrics, metric)
@@ -520,6 +520,11 @@ type summaryFacts struct {
 	doorArea                    float64
 	hasDoorArea                 bool
 	skylightArea                float64
+	fenestrationMissingBase     int
+	orientationFieldCount       int
+	orientationComputedCount    int
+	orientationMissingCount     int
+	windowBaseOrientationCount  int
 	wallAreaByOrientation       map[string]float64
 	windowAreaByOrientation     map[string]float64
 	bounds                      geometryBounds
@@ -549,18 +554,19 @@ func (b *geometryBounds) add(point point3) {
 }
 
 type surfaceInfo struct {
-	name        string
-	surfaceType string
-	zoneName    string
-	outside     string
-	area        float64
-	azimuth     float64
-	orientation string
-	minZ        float64
-	maxZ        float64
-	avgZ        float64
-	exterior    bool
-	ground      bool
+	name          string
+	surfaceType   string
+	zoneName      string
+	outside       string
+	area          float64
+	azimuth       float64
+	azimuthSource string
+	orientation   string
+	minZ          float64
+	maxZ          float64
+	avgZ          float64
+	exterior      bool
+	ground        bool
 }
 
 func collectSummaryFacts(doc Document) summaryFacts {
@@ -822,6 +828,7 @@ func (facts *summaryFacts) captureSurface(surface surfaceInfo) {
 			if surface.orientation != "" {
 				facts.wallAreaByOrientation[surface.orientation] += surface.area
 			}
+			facts.recordOrientationSource(surface.azimuthSource)
 		}
 	case "roof", "roofceiling", "ceiling":
 		if surface.exterior {
@@ -1012,10 +1019,18 @@ func (facts *summaryFacts) captureFenestration(obj Object, surfaceByName map[str
 			if strings.EqualFold(baseSurface.surfaceType, "roof") || strings.EqualFold(baseSurface.surfaceType, "roofceiling") || strings.EqualFold(baseSurface.surfaceType, "ceiling") {
 				facts.skylightArea += area
 			}
+			if orientation != "" {
+				facts.windowBaseOrientationCount++
+			}
+		} else {
+			facts.fenestrationMissingBase++
 		}
 		if orientation == "" {
-			if azimuth, ok := facts.objectAzimuth(obj, ""); ok {
+			if azimuth, source, ok := facts.objectAzimuthSource(obj, ""); ok {
 				orientation = orientationFromAzimuth(azimuth)
+				facts.recordOrientationSource(source)
+			} else {
+				facts.orientationMissingCount++
 			}
 		}
 		if orientation != "" {
@@ -1150,7 +1165,7 @@ func (facts summaryFacts) metricValues() map[string]summaryMetricValue {
 	}
 	if facts.hasRoofArea {
 		values["roof_area_m2"] = numberSummaryValue(facts.roofArea, precisionFor("roof_area_m2"), summaryStatusOK)
-		values["skylight_roof_ratio_percent"] = percentSummaryValue(facts.skylightArea, facts.roofArea, precisionFor("skylight_roof_ratio_percent"), partialIf(facts.skylightArea == 0))
+		values["skylight_roof_ratio_percent"] = percentSummaryValue(facts.skylightArea, facts.roofArea, precisionFor("skylight_roof_ratio_percent"), partialIf(facts.fenestrationMissingBase > 0))
 	}
 	if facts.hasGroundFloorArea {
 		values["ground_floor_area_m2"] = numberSummaryValue(facts.groundFloorArea, precisionFor("ground_floor_area_m2"), summaryStatusOK)
@@ -1164,7 +1179,7 @@ func (facts summaryFacts) metricValues() map[string]summaryMetricValue {
 	for _, orientation := range []string{"north", "east", "south", "west"} {
 		id := orientation + "_wwr_percent"
 		if facts.wallAreaByOrientation[orientation] > 0 {
-			values[id] = percentSummaryValue(facts.windowAreaByOrientation[orientation], facts.wallAreaByOrientation[orientation], precisionFor(id), partialIf(facts.windowAreaByOrientation[orientation] == 0))
+			values[id] = percentSummaryValue(facts.windowAreaByOrientation[orientation], facts.wallAreaByOrientation[orientation], precisionFor(id), partialIf(facts.orientationMissingCount > 0))
 		}
 	}
 	if facts.hasLightingPower {
@@ -1236,6 +1251,10 @@ func summaryMetricSource(metricID string, definitionSource string) string {
 	switch metricID {
 	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
 		return "analyzer_readiness"
+	case "north_wwr_percent", "east_wwr_percent", "south_wwr_percent", "west_wwr_percent":
+		return "surface_azimuth"
+	case "skylight_roof_ratio_percent":
+		return "base_surface_resolution"
 	case "bounding_box_area_m2":
 		return "analyzer_inference"
 	case "internal_load_method_coverage":
@@ -1261,6 +1280,11 @@ func summaryMetricConfidence(metricID string, status string) string {
 			return "partial"
 		}
 		return "inferred"
+	case "north_wwr_percent", "east_wwr_percent", "south_wwr_percent", "west_wwr_percent", "skylight_roof_ratio_percent":
+		if status == summaryStatusPartial {
+			return "partial"
+		}
+		return "computed"
 	case "bounding_box_area_m2", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h":
 		if status == summaryStatusPartial {
 			return "partial"
@@ -1298,12 +1322,33 @@ func summaryMetricBadges(metricID string, status string) []string {
 	switch metricID {
 	case "conditioned_floor_area_m2", "unconditioned_floor_area_m2", "conditioned_zone_count", "conditioned_zone_evidence_breakdown", "bounding_box_area_m2", "building_long_side_m", "building_short_side_m", "footprint_aspect_ratio", "model_operating_hours_h", "average_schedule_operating_hours_h", "hvac_relation_confidence":
 		badges = append(badges, "inferred")
+	case "north_wwr_percent", "east_wwr_percent", "south_wwr_percent", "west_wwr_percent":
+		badges = append(badges, "orientation")
+	case "skylight_roof_ratio_percent":
+		badges = append(badges, "base-surface")
 	case "geometry_coverage_percent", "profile_coverage_percent", "output_readiness_percent":
 		badges = append(badges, "readiness")
 	case "diagnostics_by_source":
 		badges = append(badges, "diagnostic")
 	}
 	return badges
+}
+
+func summaryMetricEvidence(metricID string, defaultMethod string, facts summaryFacts) string {
+	switch metricID {
+	case "north_wwr_percent", "east_wwr_percent", "south_wwr_percent", "west_wwr_percent":
+		return fmt.Sprintf("%s Orientation sources: field_azimuth:%d, computed_normal:%d, base_surface:%d, missing:%d.",
+			defaultMethod,
+			facts.orientationFieldCount,
+			facts.orientationComputedCount,
+			facts.windowBaseOrientationCount,
+			facts.orientationMissingCount,
+		)
+	case "skylight_roof_ratio_percent":
+		return fmt.Sprintf("%s Fenestration base surfaces unresolved:%d.", defaultMethod, facts.fenestrationMissingBase)
+	default:
+		return defaultMethod
+	}
 }
 
 func summarySourceCountsDisplay(counts map[string]int) string {
@@ -1427,7 +1472,7 @@ func (facts *summaryFacts) surfaceInfo(obj Object) (surfaceInfo, bool) {
 	multiplier := zoneMultiplierFor(facts.zoneMultipliers, zoneName)
 	area *= multiplier
 	minZ, maxZ, avgZ := verticesZStats(vertices)
-	azimuth, hasAzimuth := facts.objectAzimuth(obj, zoneName)
+	azimuth, azimuthSource, hasAzimuth := facts.objectAzimuthSource(obj, zoneName)
 	orientation := ""
 	if hasAzimuth {
 		orientation = orientationFromAzimuth(azimuth)
@@ -1435,32 +1480,38 @@ func (facts *summaryFacts) surfaceInfo(obj Object) (surfaceInfo, bool) {
 	outside := findFieldByCommentWords(obj, "outside", "boundary", "condition")
 	surfaceType := buildingSurfaceType(obj)
 	return surfaceInfo{
-		name:        objectName(obj),
-		surfaceType: surfaceType,
-		zoneName:    zoneName,
-		outside:     outside,
-		area:        area,
-		azimuth:     azimuth,
-		orientation: orientation,
-		minZ:        minZ,
-		maxZ:        maxZ,
-		avgZ:        avgZ,
-		exterior:    isExteriorSurface(obj.Type, outside),
-		ground:      isGroundSurface(outside),
+		name:          objectName(obj),
+		surfaceType:   surfaceType,
+		zoneName:      zoneName,
+		outside:       outside,
+		area:          area,
+		azimuth:       azimuth,
+		azimuthSource: azimuthSource,
+		orientation:   orientation,
+		minZ:          minZ,
+		maxZ:          maxZ,
+		avgZ:          avgZ,
+		exterior:      isExteriorSurface(obj.Type, outside),
+		ground:        isGroundSurface(outside),
 	}, true
 }
 
 func (facts summaryFacts) objectAzimuth(obj Object, zoneName string) (float64, bool) {
+	azimuth, _, ok := facts.objectAzimuthSource(obj, zoneName)
+	return azimuth, ok
+}
+
+func (facts summaryFacts) objectAzimuthSource(obj Object, zoneName string) (float64, string, bool) {
 	if value, ok := parseFloatField(findFieldByCommentWords(obj, "azimuth")); ok {
-		return normalizeDegrees(value + facts.azimuthRotation(zoneName)), true
+		return normalizeDegrees(value + facts.azimuthRotation(zoneName)), "field_azimuth", true
 	}
 	vertices, ok := detailedVertices(obj)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
 	normal, ok := polygonNormal(vertices)
 	if !ok {
-		return 0, false
+		return 0, "", false
 	}
 	if strings.EqualFold(facts.vertexEntryDirection, "clockwise") {
 		normal.x *= -1
@@ -1469,10 +1520,21 @@ func (facts summaryFacts) objectAzimuth(obj Object, zoneName string) (float64, b
 	}
 	horizontalLength := math.Hypot(normal.x, normal.y)
 	if horizontalLength <= 1e-9 {
-		return 0, false
+		return 0, "", false
 	}
 	azimuth := math.Atan2(normal.x, normal.y) * 180 / math.Pi
-	return normalizeDegrees(azimuth + facts.azimuthRotation(zoneName)), true
+	return normalizeDegrees(azimuth + facts.azimuthRotation(zoneName)), "computed_normal", true
+}
+
+func (facts *summaryFacts) recordOrientationSource(source string) {
+	switch source {
+	case "field_azimuth":
+		facts.orientationFieldCount++
+	case "computed_normal":
+		facts.orientationComputedCount++
+	case "":
+		facts.orientationMissingCount++
+	}
 }
 
 func (facts summaryFacts) azimuthRotation(zoneName string) float64 {

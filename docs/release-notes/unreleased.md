@@ -46,6 +46,7 @@ The release script infers bump size from these sections:
 - HVAC terminal inlet mismatch warnings now expose relation edge ids, source field indexes, expected/actual nodes, and fix targets for UI inspection.
 - Unresolved HVAC branch and zone equipment components now retain source owner and type/name field metadata across reports, semantic YAML, and the UI.
 - HVAC regression coverage now includes zone-only four-pipe fan coil equipment and service/process plant loop notice behavior.
+- Summary WWR and skylight metrics now distinguish computed azimuth evidence from unresolved fenestration base-surface cases.
 
 ## Fixed
 

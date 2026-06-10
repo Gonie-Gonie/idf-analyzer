@@ -282,6 +282,66 @@ Fan:ConstantVolume,
   Outlet Node;             !- Air Outlet Node Name
 `
 
+const summarySkylightMissingBaseFixtureIDF = `
+Version,
+  24.1;
+
+GlobalGeometryRules,
+  UpperLeftCorner,
+  CounterClockWise,
+  World;
+
+Zone,
+  Zone 1;
+
+BuildingSurface:Detailed,
+  Zone Roof,                !- Name
+  Roof,                     !- Surface Type
+  Roof Construction,        !- Construction Name
+  Zone 1,                   !- Zone Name
+  Outdoors,                 !- Outside Boundary Condition
+  ,                         !- Outside Boundary Condition Object
+  SunExposed,               !- Sun Exposure
+  WindExposed,              !- Wind Exposure
+  0.5,                      !- View Factor to Ground
+  4,                        !- Number of Vertices
+  0,                        !- Vertex 1 X-coordinate
+  0,                        !- Vertex 1 Y-coordinate
+  3,                        !- Vertex 1 Z-coordinate
+  10,                       !- Vertex 2 X-coordinate
+  0,                        !- Vertex 2 Y-coordinate
+  3,                        !- Vertex 2 Z-coordinate
+  10,                       !- Vertex 3 X-coordinate
+  10,                       !- Vertex 3 Y-coordinate
+  3,                        !- Vertex 3 Z-coordinate
+  0,                        !- Vertex 4 X-coordinate
+  10,                       !- Vertex 4 Y-coordinate
+  3;                        !- Vertex 4 Z-coordinate
+
+FenestrationSurface:Detailed,
+  Orphan Roof Window,       !- Name
+  Window,                   !- Surface Type
+  Window Construction,      !- Construction Name
+  Missing Roof Surface,     !- Building Surface Name
+  ,                         !- Outside Boundary Condition Object
+  0.5,                      !- View Factor to Ground
+  ,                         !- Frame and Divider Name
+  1,                        !- Multiplier
+  4,                        !- Number of Vertices
+  2,                        !- Vertex 1 X-coordinate
+  2,                        !- Vertex 1 Y-coordinate
+  3,                        !- Vertex 1 Z-coordinate
+  4,                        !- Vertex 2 X-coordinate
+  2,                        !- Vertex 2 Y-coordinate
+  3,                        !- Vertex 2 Z-coordinate
+  4,                        !- Vertex 3 X-coordinate
+  4,                        !- Vertex 3 Y-coordinate
+  3,                        !- Vertex 3 Z-coordinate
+  2,                        !- Vertex 4 X-coordinate
+  4,                        !- Vertex 4 Y-coordinate
+  3;                        !- Vertex 4 Z-coordinate
+`
+
 func TestSummaryRegistryAndGuideCoverage(t *testing.T) {
 	definitions := SummaryDefinitions()
 	guides := SummaryGuides()
@@ -342,6 +402,13 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	assertMetricClose(t, summary, "south_wwr_percent", 6.7, 0.05)
 	assertMetricClose(t, summary, "north_wwr_percent", 0, 0.001)
 	assertMetricClose(t, summary, "west_wwr_percent", 0, 0.001)
+	eastWWR := metricByID(t, summary, "east_wwr_percent")
+	if eastWWR.Source != "surface_azimuth" || eastWWR.Confidence != "computed" || !stringSliceContainsFold(eastWWR.Badges, "orientation") {
+		t.Fatalf("east WWR metadata = source %q confidence %q badges %#v, want orientation metadata", eastWWR.Source, eastWWR.Confidence, eastWWR.Badges)
+	}
+	if !strings.Contains(eastWWR.Evidence, "computed_normal") || !strings.Contains(eastWWR.Evidence, "base_surface") {
+		t.Fatalf("east WWR evidence = %q, want azimuth source summary", eastWWR.Evidence)
+	}
 	assertMetricClose(t, summary, "total_lighting_power_w", 1000, 0.001)
 	assertMetricClose(t, summary, "average_lighting_power_density_w_per_m2", 5, 0.001)
 	assertMetricClose(t, summary, "total_equipment_power_w", 2000, 0.001)
@@ -453,6 +520,21 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	}
 	if got := csvValues["total_wwr [%]"]; got != "3.3" {
 		t.Fatalf("CSV total WWR = %q, want 3.3", got)
+	}
+}
+
+func TestAnalyzeSummarySkylightBaseSurfaceResolution(t *testing.T) {
+	doc, err := Parse(summarySkylightMissingBaseFixtureIDF)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	summary := AnalyzeSummary(doc)
+	skylight := metricByID(t, summary, "skylight_roof_ratio_percent")
+	if skylight.Status != summaryStatusPartial || skylight.Confidence != "partial" || skylight.Source != "base_surface_resolution" {
+		t.Fatalf("skylight metadata = status %q confidence %q source %q, want partial base surface resolution", skylight.Status, skylight.Confidence, skylight.Source)
+	}
+	if !strings.Contains(skylight.Evidence, "unresolved:1") || !stringSliceContainsFold(skylight.Badges, "base-surface") {
+		t.Fatalf("skylight evidence/badges = %q %#v, want unresolved base surface evidence", skylight.Evidence, skylight.Badges)
 	}
 }
 
