@@ -100,7 +100,9 @@ can still feed monthly dashboards.
 `parseSimulationSQL` is the combined SQLite entrypoint. It gathers generic
 time-series rows, Basic Energy dashboard data, SQL heat-flow data, Integrity
 diagnostics/tabular reports, and Comfort unmet-hours rows into one parse result,
-while keeping partial results when one SQL feature is absent or malformed.
+while keeping partial results when one SQL feature is absent or malformed. The
+entrypoint uses a timeout-aware context wrapper and checks cancellation between
+parser phases so oversized SQL files do not monopolize the runner indefinitely.
 
 Purpose result viewers now include:
 

@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"math"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -18,6 +20,7 @@ const (
 	maxIntegrityTabularReports  = 12
 	maxIntegrityTabularRowCells = 80
 	maxComfortUnmetRows         = 240
+	defaultSQLParseTimeout      = 20 * time.Second
 )
 
 type sqlOutputDictionaryRow struct {
@@ -66,15 +69,27 @@ type SQLParseResult struct {
 }
 
 func parseSimulationSQL(path string, plan PurposeRunPlan) (SQLParseResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultSQLParseTimeout)
+	defer cancel()
+	return parseSimulationSQLWithContext(ctx, path, plan)
+}
+
+func parseSimulationSQLWithContext(ctx context.Context, path string, plan PurposeRunPlan) (SQLParseResult, error) {
 	result := SQLParseResult{
 		SourceFile: filepath.Base(path),
 		Purposes:   append([]SimulationPurposeID(nil), plan.Purposes...),
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
 	}
 	var firstErr error
 	if series, err := parseSimulationSQLSeries(path); err != nil {
 		firstErr = err
 	} else {
 		result.Series = series
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
 	}
 	if energy, err := parseSimulationEnergySQL(path); err != nil {
 		if firstErr == nil {
@@ -83,6 +98,9 @@ func parseSimulationSQL(path string, plan PurposeRunPlan) (SQLParseResult, error
 	} else {
 		result.Energy = energy
 	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if heatFlow, err := parseSimulationHeatFlowSQL(path); err != nil {
 		if firstErr == nil {
 			firstErr = err
@@ -90,12 +108,18 @@ func parseSimulationSQL(path string, plan PurposeRunPlan) (SQLParseResult, error
 	} else {
 		result.HeatFlow = heatFlow
 	}
+	if err := ctx.Err(); err != nil {
+		return result, err
+	}
 	if integrity, err := parseSimulationIntegritySQL(path); err != nil {
 		if firstErr == nil {
 			firstErr = err
 		}
 	} else {
 		result.Integrity = integrity
+	}
+	if err := ctx.Err(); err != nil {
+		return result, err
 	}
 	if unmet, err := parseComfortUnmetSQL(path); err != nil {
 		if firstErr == nil {

@@ -1,6 +1,7 @@
 package simulation
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"os"
@@ -136,6 +137,15 @@ func TestParseSimulationSQLEntrypointBuildsCombinedResult(t *testing.T) {
 	}
 	if len(result.Series) == 0 || len(result.HeatFlow.Zones) == 0 {
 		t.Fatalf("entrypoint parsed result = %#v", result)
+	}
+}
+
+func TestParseSimulationSQLWithContextHonorsCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result, err := parseSimulationSQLWithContext(ctx, filepath.Join(t.TempDir(), "eplusout.sql"), PurposeRunPlan{})
+	if err == nil {
+		t.Fatalf("expected cancellation error, got result %#v", result)
 	}
 }
 
