@@ -1,8 +1,8 @@
 export const bundledAppInfo = {
   name: "IDF Analyzer",
-  version: "0.3.0",
-  title: "IDF Analyzer v0.3.0",
-  outputFilename: "idf-analyzer-v0.3.0",
+  version: "0.4.0",
+  title: "IDF Analyzer v0.4.0",
+  outputFilename: "idf-analyzer-v0.4.0",
 };
 
 let cachedAppInfo = null;
