@@ -1705,7 +1705,7 @@ func spaceZoneEquipmentSplitterEvidence(ctx *hvacContext, relation HVACZoneChain
 	}
 	var evidence []string
 	for _, splitter := range ctx.objectsByType[normalizeFieldCatalogKey("SpaceHVAC:ZoneEquipmentSplitter")] {
-		if objectMentionsValue(splitter, relation.SpaceName) || objectMentionsValue(splitter, relation.ZoneName) {
+		if spaceZoneEquipmentSplitterMatchesRelation(splitter, relation) {
 			label := objectLabel(splitter)
 			if label == "" {
 				label = "SpaceHVAC:ZoneEquipmentSplitter"
@@ -1716,17 +1716,28 @@ func spaceZoneEquipmentSplitterEvidence(ctx *hvacContext, relation HVACZoneChain
 	return evidence
 }
 
-func objectMentionsValue(obj Object, value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return false
+func spaceZoneEquipmentSplitterMatchesRelation(splitter Object, relation HVACZoneChain) bool {
+	zoneMatches := false
+	if relation.ZoneName != "" {
+		zoneMatches = strings.EqualFold(fieldValueByCatalogName(splitter, "Zone Name"), relation.ZoneName)
 	}
-	for _, field := range obj.Fields {
-		if strings.EqualFold(strings.TrimSpace(field.Value), value) {
-			return true
+	spaceMatches := false
+	if relation.SpaceName != "" {
+		if strings.EqualFold(fieldValueByCatalogName(splitter, "Control Space Name"), relation.SpaceName) {
+			spaceMatches = true
+		}
+		for _, group := range hvacExtensibleFieldGroups(splitter, "spaces") {
+			spaceIndex := hvacGroupFieldIndexByName(group, "Space Name")
+			if spaceIndex >= 0 && spaceIndex < len(splitter.Fields) && strings.EqualFold(strings.TrimSpace(splitter.Fields[spaceIndex].Value), relation.SpaceName) {
+				spaceMatches = true
+				break
+			}
 		}
 	}
-	return false
+	if relation.ZoneName != "" && relation.SpaceName != "" {
+		return zoneMatches && spaceMatches
+	}
+	return zoneMatches || spaceMatches
 }
 
 func terminalsByZoneInlet(ctx *hvacContext, zoneInletNodes []string) []HVACComponent {

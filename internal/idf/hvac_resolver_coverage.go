@@ -32,7 +32,7 @@ func HVACResolverCoverageMatrix() []HVACResolverCoverageItem {
 		{ObjectType: "ZoneHVAC:EquipmentList", Family: "zone_hvac", Resolver: "zoneEquipmentReferences", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "SpaceHVAC:EquipmentConnections", Family: "space_hvac", Resolver: "buildHVACSpaceRelation", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "SpaceHVAC:EquipmentList", Family: "space_hvac", Resolver: "zoneEquipmentReferences", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
-		{ObjectType: "SpaceHVAC:ZoneEquipmentSplitter", Family: "space_hvac", Resolver: "spaceZoneEquipmentSplitterEvidence", Status: hvacResolverDone},
+		{ObjectType: "SpaceHVAC:ZoneEquipmentSplitter", Family: "space_hvac", Resolver: "spaceZoneEquipmentSplitterEvidence", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:AirDistributionUnit", Family: "air_terminal", Resolver: "resolveAirDistributionUnitTerminal", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "AirTerminal:SingleDuct:ConstantVolume:Reheat", Family: "air_terminal", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "AirTerminal:SingleDuct:ConstantVolume:NoReheat", Family: "air_terminal", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},

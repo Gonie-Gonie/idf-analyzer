@@ -490,7 +490,15 @@ func TestAnalyzeHVACBuildsSpaceHVACRelation(t *testing.T) {
 		{Index: 6, Type: "SpaceHVAC:ZoneEquipmentSplitter", Fields: []Field{
 			{Value: "Open Office Splitter"},
 			{Value: "Open Office"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat"},
+			{Value: "Open Office Space Terminal"},
+			{Value: "Open Office Space Supply Inlet"},
+			{Value: "Ideal"},
+			{Value: ""},
+			{Value: "FloorArea"},
 			{Value: "Open Office Space"},
+			{Value: "1.0"},
+			{Value: "Open Office Space Supply Inlet"},
 		}},
 	}}
 
@@ -525,6 +533,9 @@ func TestAnalyzeHVACBuildsSpaceHVACRelation(t *testing.T) {
 	}
 	if !stringSliceContainsFold(relation.RuleTrace, "Open Office Splitter") {
 		t.Fatalf("space rule trace = %#v, want splitter trace", relation.RuleTrace)
+	}
+	if !stringSliceContainsFold(relation.RuleIDs, "space.zone_equipment_splitter") {
+		t.Fatalf("space rule ids = %#v, want splitter rule", relation.RuleIDs)
 	}
 }
 

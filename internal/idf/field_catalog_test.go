@@ -430,6 +430,30 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			fieldName:  "Zone Terminal Unit Name",
 			role:       fieldRoleObjectRef,
 		},
+		{
+			objectType: "SpaceHVAC:ZoneEquipmentSplitter",
+			fieldIndex: 2,
+			fieldName:  "Zone Equipment Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "SpaceHVAC:ZoneEquipmentSplitter",
+			fieldIndex: 8,
+			fieldName:  "Space Name",
+			role:       fieldRoleSpaceRef,
+		},
+		{
+			objectType: "SpaceHVAC:ZoneEquipmentSplitter",
+			fieldIndex: 10,
+			fieldName:  "Space Supply Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "SpaceHVAC:ZoneEquipmentSplitter",
+			fieldIndex: 11,
+			fieldName:  "Space Name",
+			role:       fieldRoleSpaceRef,
+		},
 	}
 
 	for _, test := range tests {
