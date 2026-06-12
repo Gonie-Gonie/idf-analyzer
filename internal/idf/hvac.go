@@ -21,6 +21,7 @@ type HVACReport struct {
 	NodeOutputMonitors  []HVACNodeOutputMonitor  `json:"nodeOutputMonitors,omitempty"`
 	NodeEdges           []HVACNodeEdge           `json:"nodeEdges,omitempty"`
 	ComponentReferences []HVACComponentReference `json:"componentReferences,omitempty"`
+	RuleGraph           HVACRuleGraph            `json:"ruleGraph,omitempty"`
 	Warnings            []HVACWarning            `json:"warnings"`
 }
 
@@ -220,6 +221,7 @@ type HVACZoneNodeSource struct {
 	ObjectType  string   `json:"objectType,omitempty"`
 	ObjectName  string   `json:"objectName,omitempty"`
 	ObjectIndex int      `json:"objectIndex,omitempty"`
+	FieldIndex  int      `json:"fieldIndex,omitempty"`
 	Field       string   `json:"field,omitempty"`
 }
 
@@ -373,6 +375,7 @@ func AnalyzeHVAC(doc Document) HVACReport {
 		NodeOutputMonitors:  hvacNodeOutputMonitors(doc),
 		NodeEdges:           buildHVACNodeEdges(loops),
 		ComponentReferences: append([]HVACComponentReference(nil), ctx.componentReferences...),
+		RuleGraph:           buildHVACRuleGraph(ctx, loops, relations),
 	}
 	report.LoopCount = len(report.Loops)
 	report.ZoneRelationCount = len(report.ZoneRelations)
@@ -1686,6 +1689,7 @@ func zoneNodeSources(ctx *hvacContext, connectionObj Object) []HVACZoneNodeSourc
 			ObjectType:  sourceObjectType,
 			ObjectName:  sourceObjectName,
 			ObjectIndex: sourceObjectIndex,
+			FieldIndex:  fieldIndex,
 			Field:       catalogFieldName(connectionObj, fieldIndex),
 		})
 	}

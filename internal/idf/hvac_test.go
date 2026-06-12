@@ -146,6 +146,27 @@ func TestAnalyzeHVACBuildsLoopAndZoneRelations(t *testing.T) {
 	if hasHVACWarningCode(report.Warnings, "water_coil_missing_plant_loop") {
 		t.Fatalf("unexpected water coil warning: %#v", report.Warnings)
 	}
+	if len(report.RuleGraph.Nodes) == 0 || len(report.RuleGraph.Edges) == 0 {
+		t.Fatalf("rule graph was not built: %#v", report.RuleGraph)
+	}
+	for _, edge := range report.RuleGraph.Edges {
+		if edge.RuleID == "" || edge.SourceObjectIndex < 0 || len(edge.SourceFieldIndexes) == 0 {
+			t.Fatalf("rule edge missing trace: %#v", edge)
+		}
+	}
+	for _, ruleID := range []string{
+		hvacRuleBranchListIncludesBranch,
+		hvacRuleBranchComponentSeries,
+		hvacRuleZoneHasEquipmentConnections,
+		hvacRuleZoneHasEquipmentList,
+		hvacRuleZoneEquipmentListTerminal,
+		hvacRuleZoneTerminalOutletMatchesInlet,
+		hvacRuleCrossLoopSameWaterCoil,
+	} {
+		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
+			t.Fatalf("rule graph missing %s edge: %#v", ruleID, report.RuleGraph.Edges)
+		}
+	}
 }
 
 func TestAnalyzeHVACReportsMissingBranch(t *testing.T) {
@@ -966,6 +987,15 @@ func hasHVACComponentReference(references []HVACComponentReference, fromName str
 			strings.EqualFold(reference.TargetObjectType, targetType) &&
 			strings.EqualFold(reference.TargetObjectName, targetName) &&
 			reference.RelationRole == role {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHVACRuleEdge(graph HVACRuleGraph, ruleID string) bool {
+	for _, edge := range graph.Edges {
+		if edge.RuleID == ruleID {
 			return true
 		}
 	}
