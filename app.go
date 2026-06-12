@@ -238,56 +238,54 @@ func (a *App) AnalyzeInputText(text string) (*InputAnalysisResult, error) {
 }
 
 func (a *App) AnalyzeInputDiagnosticsText(text string) ([]idf.Diagnostic, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	doc := epinput.ToIDFDocument(model)
 	return idf.AnalyzeDiagnostics(doc), nil
 }
 
 func (a *App) AnalyzeInputGeometryText(text string) (*idf.GeometryReport, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	geometry := idf.AnalyzeGeometry(epinput.ToIDFDocument(model))
+	geometry := idf.AnalyzeGeometry(doc)
 	return &geometry, nil
 }
 
 func (a *App) AnalyzeInputProfileText(text string) (*idf.ProfileReport, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	profile := idf.AnalyzeProfile(epinput.ToIDFDocument(model))
+	profile := idf.AnalyzeProfile(doc)
 	return &profile, nil
 }
 
 func (a *App) AnalyzeInputHVACText(text string) (*idf.HVACReport, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	hvac := idf.AnalyzeHVAC(epinput.ToIDFDocument(model))
+	hvac := idf.AnalyzeHVAC(doc)
 	return &hvac, nil
 }
 
 func (a *App) AnalyzeInputOutputText(text string) (*idf.OutputReport, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	output := idf.AnalyzeOutput(epinput.ToIDFDocument(model))
+	output := idf.AnalyzeOutput(doc)
 	return &output, nil
 }
 
 func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includeEPJSON bool) (*InputAnalysisResult, error) {
-	model, err := epinput.Parse("", []byte(text))
+	model, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	doc := epinput.ToIDFDocument(model)
 	report := analyze(doc)
 	epjsonText := ""
 	if includeEPJSON {
@@ -306,6 +304,21 @@ func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includ
 		Semantic: semanticProjectionForModelDoc(model, doc),
 		Report:   &report,
 	}, nil
+}
+
+func parseInputDocument(text string) (*epinput.Model, idf.Document, error) {
+	model, err := epinput.Parse("", []byte(text))
+	if err != nil {
+		return nil, idf.Document{}, err
+	}
+	if model.Format == epinput.FormatIDF {
+		doc, err := idf.Parse(text)
+		if err != nil {
+			return nil, idf.Document{}, err
+		}
+		return model, doc, nil
+	}
+	return model, epinput.ToIDFDocument(model), nil
 }
 
 func semanticProjectionForModelDoc(model *epinput.Model, doc idf.Document) *idf.SemanticYAMLProjection {
@@ -511,11 +524,11 @@ func (a *App) RemoveUnusedObjectsText(text string) (*TextEditResult, error) {
 }
 
 func (a *App) ExportSummaryText(text string, format string) (*SummaryExportResult, error) {
-	model, err := epinput.Parse("", []byte(text))
+	_, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	summary := idf.AnalyzeSummary(epinput.ToIDFDocument(model))
+	summary := idf.AnalyzeSummary(doc)
 
 	switch strings.ToLower(strings.TrimSpace(format)) {
 	case "json":

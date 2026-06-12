@@ -29,6 +29,7 @@ type VersionInfo struct {
 type InputObject struct {
 	Type        string         `json:"type"`
 	Name        string         `json:"name,omitempty"`
+	NameSource  string         `json:"nameSource,omitempty"`
 	Fields      []Field        `json:"fields"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
 	SourceIndex int            `json:"sourceIndex"`
@@ -104,24 +105,27 @@ func valueToString(value any) string {
 	}
 }
 
-func objectInstanceName(objectType string, fields []Field, fallbackIndex int) (name string, remaining []Field) {
+const (
+	NameSourceExplicitField    = "explicit_name_field"
+	NameSourceSyntheticDisplay = "synthetic_display_name"
+	NameSourceEPJSONInstance   = "epjson_instance_name"
+)
+
+func objectInstanceName(objectType string, fields []Field, fallbackIndex int) (name string, remaining []Field, source string) {
 	if isNamelessObjectType(objectType) || len(fields) == 0 {
-		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields
+		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields, NameSourceSyntheticDisplay
 	}
 
 	first := fields[0]
 	if first.Comment != "" && !strings.EqualFold(first.Comment, "Name") {
-		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields
+		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields, NameSourceSyntheticDisplay
 	}
 	if first.Key != "" && first.Key != "name" && first.Key != "field_1" {
-		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields
+		return fmt.Sprintf("%s %d", objectType, fallbackIndex+1), fields, NameSourceSyntheticDisplay
 	}
 
 	name = strings.TrimSpace(valueToString(first.Value))
-	if name == "" {
-		name = fmt.Sprintf("%s %d", objectType, fallbackIndex+1)
-	}
-	return name, fields[1:]
+	return name, fields[1:], NameSourceExplicitField
 }
 
 func isNamelessObjectType(objectType string) bool {

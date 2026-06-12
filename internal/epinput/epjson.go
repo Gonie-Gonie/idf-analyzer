@@ -54,6 +54,7 @@ func ParseEPJSON(content []byte) (*Model, error) {
 			model.Objects = append(model.Objects, InputObject{
 				Type:        typeMember.Key,
 				Name:        instanceMember.Key,
+				NameSource:  NameSourceEPJSONInstance,
 				Fields:      fields,
 				Metadata:    metadata,
 				SourceIndex: sourceIndexFromMetadata(metadata, objectIndex),

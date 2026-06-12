@@ -33,11 +33,12 @@ func FromIDFDocument(doc idf.Document, format Format) *Model {
 
 		typeIndex := typeCounts[object.Type]
 		typeCounts[object.Type]++
-		name, remaining := objectInstanceName(object.Type, fields, typeIndex)
+		name, remaining, nameSource := objectInstanceName(object.Type, fields, typeIndex)
 		remaining = collapseVertexArrayFields(object.Type, remaining)
 		model.Objects = append(model.Objects, InputObject{
 			Type:        object.Type,
 			Name:        name,
+			NameSource:  nameSource,
 			Fields:      remaining,
 			Metadata:    map[string]any{"idf_order": object.Index + 1},
 			SourceIndex: object.Index,
@@ -87,8 +88,8 @@ func WriteIDF(model *Model) string {
 }
 
 func shouldWriteObjectName(object InputObject) bool {
-	if object.Name == "" || isNamelessObjectType(object.Type) {
+	if isNamelessObjectType(object.Type) {
 		return false
 	}
-	return true
+	return object.NameSource == NameSourceExplicitField || object.NameSource == NameSourceEPJSONInstance
 }

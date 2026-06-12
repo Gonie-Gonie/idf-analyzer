@@ -1,8 +1,11 @@
 package epinput
 
 import (
+	"os"
 	"strings"
 	"testing"
+
+	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 )
 
 const idfV22 = `
@@ -118,6 +121,126 @@ OutputControl:Table:Style,
 	}
 }
 
+func TestIDFRoundTripDoesNotInsertSyntheticNamesForNamelessObjects(t *testing.T) {
+	model, err := Parse("model.idf", []byte(`Version,
+  24.2;                    !- Version Identifier
+
+SimulationControl,
+  Yes,                     !- Do Zone Sizing Calculation
+  Yes,                     !- Do System Sizing Calculation
+  Yes,                     !- Do Plant Sizing Calculation
+  No,                      !- Run Simulation for Sizing Periods
+  Yes;                     !- Run Simulation for Weather File Run Periods
+
+GlobalGeometryRules,
+  UpperLeftCorner,         !- Starting Vertex Position
+  CounterClockWise,        !- Vertex Entry Direction
+  World;                   !- Coordinate System
+
+Zone,
+  Basement;                !- Name
+
+ZoneHVAC:EquipmentConnections,
+  Basement,                !- Zone Name
+  Basement Equipment,      !- Zone Conditioning Equipment List Name
+  Basement Inlet Nodes,    !- Zone Air Inlet Node or NodeList Name
+  ,                        !- Zone Air Exhaust Node or NodeList Name
+  Basement Air Node,       !- Zone Air Node Name
+  Basement Return Air Node Name; !- Zone Return Air Node or NodeList Name
+
+Sizing:System,
+  VAV_1,                   !- AirLoop Name
+  Sensible,                !- Type of Load to Size On
+  Autosize;                !- Design Outdoor Air Flow Rate
+
+OutdoorAir:NodeList,
+  Outdoor Air Inlet Node;  !- Node or NodeList Name 1
+
+Output:Variable,
+  *,                       !- Key Value
+  Zone Mean Air Temperature, !- Variable Name
+  Hourly;                  !- Reporting Frequency
+`))
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	doc := ToIDFDocument(model)
+	for _, forbidden := range []string{
+		"ZoneHVAC:EquipmentConnections 1",
+		"Sizing:System 1",
+		"OutdoorAir:NodeList 1",
+		"Output:Variable 1",
+		"SimulationControl 1",
+		"GlobalGeometryRules 1",
+	} {
+		if strings.Contains(doc.String(), forbidden) {
+			t.Fatalf("roundtrip inserted synthetic name %q:\n%s", forbidden, doc.String())
+		}
+	}
+	for _, check := range []struct {
+		objectType string
+		field0     string
+	}{
+		{"SimulationControl", "Yes"},
+		{"GlobalGeometryRules", "UpperLeftCorner"},
+		{"ZoneHVAC:EquipmentConnections", "Basement"},
+		{"Sizing:System", "VAV_1"},
+		{"OutdoorAir:NodeList", "Outdoor Air Inlet Node"},
+		{"Output:Variable", "*"},
+	} {
+		obj := findEPInputTestingObject(doc, check.objectType)
+		if obj == nil || len(obj.Fields) == 0 || strings.TrimSpace(obj.Fields[0].Value) != check.field0 {
+			t.Fatalf("%s field 0 = %#v, want %q", check.objectType, obj, check.field0)
+		}
+	}
+	for _, object := range model.Objects {
+		if object.Type == "Zone" && object.NameSource != NameSourceExplicitField {
+			t.Fatalf("zone name source = %q, want explicit", object.NameSource)
+		}
+		if object.Type == "ZoneHVAC:EquipmentConnections" && object.NameSource != NameSourceSyntheticDisplay {
+			t.Fatalf("equipment connection name source = %q, want synthetic display", object.NameSource)
+		}
+	}
+}
+
+func TestHVACDefaultSampleNoSyntheticZoneNames(t *testing.T) {
+	report := analyzeEPInputTestingLargeOfficeAfterRoundTrip(t)
+	for _, relation := range report.ZoneRelations {
+		if strings.HasPrefix(relation.ZoneName, "ZoneHVAC:EquipmentConnections ") {
+			t.Fatalf("synthetic zone name in relation: %#v", relation)
+		}
+	}
+}
+
+func TestAnalyzeHVACDefaultSampleNoMissingZoneEquipmentList(t *testing.T) {
+	report := analyzeEPInputTestingLargeOfficeAfterRoundTrip(t)
+	if report.ZoneRelationCount != 16 {
+		t.Fatalf("zone relations = %d, want 16; warnings=%#v", report.ZoneRelationCount, report.Warnings)
+	}
+	if hasEPInputHVACWarningCode(report.Warnings, "missing_zone_equipment_list") {
+		t.Fatalf("missing equipment list warnings = %#v, want none", report.Warnings)
+	}
+	for _, relation := range report.ZoneRelations {
+		if len(relation.TerminalUnits) == 0 {
+			t.Fatalf("zone relation has no terminal: %#v", relation)
+		}
+	}
+}
+
+func analyzeEPInputTestingLargeOfficeAfterRoundTrip(t *testing.T) idf.HVACReport {
+	t.Helper()
+	content, err := os.ReadFile("../../frontend/src/samples/RefBldgLargeOfficeNew2004_Chicago.idf")
+	if err != nil {
+		t.Fatalf("read reference sample: %v", err)
+	}
+	model, err := Parse("RefBldgLargeOfficeNew2004_Chicago.idf", content)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	doc := ToIDFDocument(model)
+	return idf.AnalyzeHVAC(doc)
+}
+
 func TestRejectsPre22VersionWhenKnown(t *testing.T) {
 	_, err := Parse("old.idf", []byte("Version,\n  9.6; !- Version Identifier\n"))
 	if err == nil {
@@ -126,6 +249,24 @@ func TestRejectsPre22VersionWhenKnown(t *testing.T) {
 	if !strings.Contains(err.Error(), "version 22 or newer") {
 		t.Fatalf("error = %q, want supported range message", err)
 	}
+}
+
+func findEPInputTestingObject(doc idf.Document, objectType string) *idf.Object {
+	for index := range doc.Objects {
+		if strings.EqualFold(doc.Objects[index].Type, objectType) {
+			return &doc.Objects[index]
+		}
+	}
+	return nil
+}
+
+func hasEPInputHVACWarningCode(warnings []idf.HVACWarning, code string) bool {
+	for _, warning := range warnings {
+		if warning.Code == code {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPatchFieldValueUpdatesRootAndNestedValues(t *testing.T) {
