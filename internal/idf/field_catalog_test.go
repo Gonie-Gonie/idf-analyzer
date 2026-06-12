@@ -323,6 +323,24 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			role:       fieldRoleObjectRef,
 		},
 		{
+			objectType: "ZoneHVAC:RefrigerationChillerSet",
+			fieldIndex: 2,
+			fieldName:  "Zone Name",
+			role:       fieldRoleZoneRef,
+		},
+		{
+			objectType: "ZoneHVAC:RefrigerationChillerSet",
+			fieldIndex: 5,
+			fieldName:  "Air Chiller Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "ZoneHVAC:RefrigerationChillerSet",
+			fieldIndex: 17,
+			fieldName:  "Air Chiller Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
 			objectType: "ZoneHVAC:LowTemperatureRadiant:SurfaceGroup",
 			fieldIndex: 1,
 			fieldName:  "Surface Name",

@@ -2172,6 +2172,18 @@ func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentRe
 				Source:           "schema_name_field",
 			},
 		}
+	case "zonehvac:refrigerationchillerset":
+		var pairs []hvacComponentReferencePair
+		for index := 5; index < len(obj.Fields); index++ {
+			pairs = append(pairs, hvacComponentReferencePair{
+				TypeIndex:        -1,
+				NameIndex:        index,
+				TargetObjectType: "Refrigeration:AirChiller",
+				RelationRole:     "internal_component_reference",
+				Source:           "schema_name_field",
+			})
+		}
+		return pairs
 	default:
 		return hvacComponentReferencePairsFromFieldRoles(obj)
 	}
@@ -3891,6 +3903,7 @@ func isHVACComponentType(objectType string) bool {
 		strings.HasPrefix(lower, "airconditioner:") ||
 		strings.HasPrefix(lower, "airloophvac:") ||
 		strings.HasPrefix(lower, "plantcomponent:") ||
+		strings.HasPrefix(lower, "refrigeration:") ||
 		strings.HasPrefix(lower, "districtcooling") ||
 		strings.HasPrefix(lower, "districtheating") ||
 		strings.HasPrefix(lower, "coolingtower:") ||

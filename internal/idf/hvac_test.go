@@ -760,6 +760,70 @@ func TestAnalyzeHVACHybridUnitaryHVACUsesCatalogForDirectZoneService(t *testing.
 	}
 }
 
+func TestAnalyzeHVACRefrigerationChillerSetUsesCatalogForAirChillers(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "SubFreezer"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "SubFreezer"},
+			{Value: "SubFreezerEquipment"},
+			{Value: "SubFreezer Supply Node"},
+			{Value: ""},
+			{Value: "SubFreezer Air Node"},
+			{Value: "SubFreezer Return Node"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "SubFreezerEquipment"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:RefrigerationChillerSet"},
+			{Value: "SubFreezerChillerSet"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 3, Type: "ZoneHVAC:RefrigerationChillerSet", Fields: []Field{
+			{Value: "SubFreezerChillerSet"},
+			{Value: ""},
+			{Value: "SubFreezer"},
+			{Value: "SubFreezer Return Node"},
+			{Value: "SubFreezer Supply Node"},
+			{Value: "SubFreezerAirChiller_1"},
+			{Value: "SubFreezerAirChiller_2"},
+			{Value: "SubFreezerAirChiller_3"},
+		}},
+		{Index: 4, Type: "Refrigeration:AirChiller", Fields: []Field{{Value: "SubFreezerAirChiller_1"}}},
+		{Index: 5, Type: "Refrigeration:AirChiller", Fields: []Field{{Value: "SubFreezerAirChiller_2"}}},
+		{Index: 6, Type: "Refrigeration:AirChiller", Fields: []Field{{Value: "SubFreezerAirChiller_3"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "SubFreezer")
+	if relation == nil {
+		t.Fatalf("SubFreezer relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("refrigeration chiller set relation resolved unexpected air terminal/loop: %#v", relation)
+	}
+	equipment := findHVACTestingComponent(relation.ZoneEquipment, "SubFreezerChillerSet")
+	if equipment == nil {
+		t.Fatalf("zone equipment = %#v, want refrigeration chiller set", relation.ZoneEquipment)
+	}
+	if equipment.ObjectType != "ZoneHVAC:RefrigerationChillerSet" || equipment.RoleHere != "zone_equipment" || !equipment.ListedInZoneEquipment {
+		t.Fatalf("chiller set metadata = %#v, want listed direct zone equipment", equipment)
+	}
+	if equipment.InletNode != "SubFreezer Return Node" || equipment.OutletNode != "SubFreezer Supply Node" {
+		t.Fatalf("chiller set nodes = %#v, want catalog-derived air inlet/outlet nodes", equipment)
+	}
+	for _, chiller := range []string{"SubFreezerAirChiller_1", "SubFreezerAirChiller_2", "SubFreezerAirChiller_3"} {
+		if !hasHVACComponentReference(report.ComponentReferences, "SubFreezerChillerSet", "Refrigeration:AirChiller", chiller, "internal_component_reference") {
+			t.Fatalf("component references = %#v, want chiller set -> %s", report.ComponentReferences, chiller)
+		}
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "", "", "SubFreezerChillerSet") {
+		t.Fatalf("service chains = %#v, want RefrigerationChillerSet -> zone path", relation.ServiceChains)
+	}
+}
+
 func TestAnalyzeHVACFourPipeFanCoilUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
