@@ -3217,6 +3217,8 @@ func hvacNodeFieldRole(obj Object, fieldIndex int, field Field) string {
 		return "air_inlet" + listSuffix
 	case strings.Contains(comment, "air") && strings.Contains(comment, "outlet"):
 		return "air_outlet" + listSuffix
+	case strings.Contains(comment, "supply") && strings.Contains(comment, "air"):
+		return "air_outlet" + listSuffix
 	case strings.Contains(comment, "inlet"):
 		return "inlet" + listSuffix
 	case strings.Contains(comment, "outlet"):

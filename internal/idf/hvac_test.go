@@ -579,6 +579,76 @@ func TestAnalyzeHVACKeepsFourPipeFanCoilAsZoneEquipment(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACIdealLoadsAirSystemBuildsDirectZoneServiceChain(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:IdealLoadsAirSystem"},
+			{Value: "Office Ideal Loads"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 3, Type: "ZoneHVAC:IdealLoadsAirSystem", Fields: []Field{
+			{Value: "Office Ideal Loads"},
+			{Value: "Always On"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "50"},
+			{Value: "13"},
+			{Value: "0.015"},
+			{Value: "0.009"},
+			{Value: "NoLimit"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "NoLimit"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "None"},
+			{Value: "0.7"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil {
+		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("ideal loads relation resolved unexpected air terminal/loop: %#v", relation)
+	}
+	equipment := findHVACTestingComponent(relation.ZoneEquipment, "Office Ideal Loads")
+	if equipment == nil {
+		t.Fatalf("zone equipment = %#v, want Office Ideal Loads", relation.ZoneEquipment)
+	}
+	if equipment.ObjectType != "ZoneHVAC:IdealLoadsAirSystem" || equipment.RoleHere != "zone_equipment" || !equipment.ListedInZoneEquipment {
+		t.Fatalf("ideal loads equipment metadata = %#v, want listed direct zone equipment", equipment)
+	}
+	if equipment.OutletNode != "Office Supply Inlet" || equipment.OutletFieldIndex != 2 {
+		t.Fatalf("ideal loads nodes = %#v, want catalog-derived supply outlet node at field 2", equipment)
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "", "", "Office Ideal Loads") {
+		t.Fatalf("service chains = %#v, want IdealLoadsAirSystem -> zone path", relation.ServiceChains)
+	}
+	if !hasHVACRuleEdge(report.RuleGraph, hvacRuleZoneEquipmentListEquipment) {
+		t.Fatalf("rule graph missing direct zone equipment edge: %#v", report.RuleGraph.Edges)
+	}
+}
+
 func TestAnalyzeHVACFourPipeFanCoilUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
