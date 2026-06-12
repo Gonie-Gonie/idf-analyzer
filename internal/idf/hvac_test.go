@@ -532,7 +532,7 @@ func TestAnalyzeHVACKeepsFourPipeFanCoilAsZoneEquipment(t *testing.T) {
 		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
 	}
 	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
-		t.Fatalf("four-pipe fan coil relation inferred air terminal/loop: %#v", relation)
+		t.Fatalf("four-pipe fan coil relation resolved unexpected air terminal/loop: %#v", relation)
 	}
 	if len(relation.ZoneEquipment) != 1 {
 		t.Fatalf("zone equipment = %#v, want one four-pipe fan coil", relation.ZoneEquipment)

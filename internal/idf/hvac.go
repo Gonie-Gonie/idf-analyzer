@@ -1282,7 +1282,7 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 	relation.PlantEquipment = plantSourceEquipmentForLoopNames(loops, relation.PlantLoopNames)
 	if len(zoneReturnNodes) > 0 && len(relation.AirLoopNames) == 0 {
 		relation.Warnings = append(relation.Warnings, hvacWarningForObject(connectionObj, "zone_return_without_airloop",
-			fmt.Sprintf("Zone %q has return node(s) but no AirLoop relation could be inferred.", zoneName)))
+			fmt.Sprintf("Zone %q has return node(s) but no AirLoop relation could be resolved.", zoneName)))
 	}
 	annotateTerminalAirLoopEvidence(ctx, loops, &relation)
 	relation.RuleIDs = appendUniqueStrings(relation.RuleIDs, hvacLoopRelationRuleIDs(relation.AirLoopRelations)...)
@@ -1371,7 +1371,7 @@ func buildHVACSpaceRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Ob
 	relation.PlantEquipment = plantSourceEquipmentForLoopNames(loops, relation.PlantLoopNames)
 	if len(spaceReturnNodes) > 0 && len(relation.AirLoopNames) == 0 {
 		relation.Warnings = append(relation.Warnings, hvacWarningForObject(connectionObj, "space_return_without_airloop",
-			fmt.Sprintf("Space %q has return node(s) but no AirLoop relation could be inferred.", spaceName)))
+			fmt.Sprintf("Space %q has return node(s) but no AirLoop relation could be resolved.", spaceName)))
 	}
 	annotateTerminalAirLoopEvidence(ctx, loops, &relation)
 	relation.RuleIDs = appendUniqueStrings(relation.RuleIDs, hvacLoopRelationRuleIDs(relation.AirLoopRelations)...)
