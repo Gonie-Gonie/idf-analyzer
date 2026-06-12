@@ -1219,6 +1219,100 @@ func TestAnalyzeHVACCompactZoneEquipmentUsesCatalogForReferences(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACBaseboardWaterUsesCatalogForPlantServiceChain(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:Baseboard:Convective:Water"},
+			{Value: "Office Baseboard"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 3, Type: "ZoneHVAC:Baseboard:Convective:Water", Fields: []Field{
+			{Value: "Office Baseboard"},
+			{Value: "Always On"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HeatingDesignCapacity"},
+			{Value: "Autosize"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "0.001"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+			{Value: "HW Supply Branches"},
+			{Value: ""},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "HW Supply Branches"},
+			{Value: "Boiler Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Boiler Branch"},
+			{Value: ""},
+			{Value: "Boiler:HotWater"},
+			{Value: "HW Boiler"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+		}},
+		{Index: 7, Type: "Boiler:HotWater", Fields: []Field{{Value: "HW Boiler"}}},
+		{Index: 8, Type: "BranchList", Fields: []Field{
+			{Value: "HW Demand Branches"},
+			{Value: "Baseboard Branch"},
+		}},
+		{Index: 9, Type: "Branch", Fields: []Field{
+			{Value: "Baseboard Branch"},
+			{Value: ""},
+			{Value: "ZoneHVAC:Baseboard:Convective:Water"},
+			{Value: "Office Baseboard"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil {
+		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+	}
+	if !stringSliceContainsFold(relation.PlantLoopNames, "Heating Water Loop") {
+		t.Fatalf("plant loops = %#v, want Heating Water Loop", relation.PlantLoopNames)
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "Heating Water Loop", "HW Boiler", "Office Baseboard") {
+		t.Fatalf("service chains = %#v, want boiler -> baseboard -> zone", relation.ServiceChains)
+	}
+}
+
 func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
