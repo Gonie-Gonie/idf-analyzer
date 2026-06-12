@@ -2128,6 +2128,124 @@ func TestAnalyzeHVACUnitaryAndCoilSystemsUseCatalogForInternalComponents(t *test
 	}
 }
 
+func TestAnalyzeHVACPlantSourceFamiliesUseCatalogForNodeRoles(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Chiller:Electric:EIR", Fields: []Field{
+			{Value: "Electric Chiller"},
+			{Value: "Autosize"},
+			{Value: "5.0"},
+			{Value: "6.7"},
+			{Value: "29.4"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "ChillerCapFT"},
+			{Value: "ChillerEIRFT"},
+			{Value: "ChillerEIRFPLR"},
+			{Value: "0.1"},
+			{Value: "1.0"},
+			{Value: "1.0"},
+			{Value: "0.2"},
+			{Value: "Chiller CHW Inlet"},
+			{Value: "Chiller CHW Outlet"},
+			{Value: "Chiller Condenser Inlet"},
+			{Value: "Chiller Condenser Outlet"},
+		}},
+		{Index: 1, Type: "Boiler:HotWater", Fields: []Field{
+			{Value: "Hot Water Boiler"},
+			{Value: "NaturalGas"},
+			{Value: "Autosize"},
+			{Value: "0.85"},
+			{Value: "LeavingBoiler"},
+			{Value: "BoilerEfficiencyCurve"},
+			{Value: "Autosize"},
+			{Value: "0.1"},
+			{Value: "1.0"},
+			{Value: "1.0"},
+			{Value: "Boiler HW Inlet"},
+			{Value: "Boiler HW Outlet"},
+		}},
+		{Index: 2, Type: "HeatPump:PlantLoop:EIR:Heating", Fields: []Field{
+			{Value: "Heating Plant Heat Pump"},
+			{Value: "HP Load Inlet"},
+			{Value: "HP Load Outlet"},
+			{Value: "WaterSource"},
+			{Value: "HP Source Inlet"},
+			{Value: "HP Source Outlet"},
+			{Value: "HP Heat Recovery Inlet"},
+			{Value: "HP Heat Recovery Outlet"},
+			{Value: "Cooling Plant Heat Pump"},
+		}},
+		{Index: 3, Type: "CoolingTower:SingleSpeed", Fields: []Field{
+			{Value: "Condenser Tower"},
+			{Value: "Tower Water Inlet"},
+			{Value: "Tower Water Outlet"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+		}},
+		{Index: 4, Type: "HeatExchanger:FluidToFluid", Fields: []Field{
+			{Value: "Loop Heat Exchanger"},
+			{Value: "Always On"},
+			{Value: "HX Demand Inlet"},
+			{Value: "HX Demand Outlet"},
+			{Value: "Autosize"},
+			{Value: "HX Supply Inlet"},
+			{Value: "HX Supply Outlet"},
+			{Value: "Autosize"},
+		}},
+		{Index: 5, Type: "DistrictCooling", Fields: []Field{
+			{Value: "Campus Chilled Water"},
+			{Value: "District Cooling Inlet"},
+			{Value: "District Cooling Outlet"},
+			{Value: "Autosize"},
+		}},
+		{Index: 6, Type: "DistrictHeating:Water", Fields: []Field{
+			{Value: "Campus Hot Water"},
+			{Value: "District Heating Inlet"},
+			{Value: "District Heating Outlet"},
+			{Value: "Autosize"},
+		}},
+		{Index: 7, Type: "DistrictHeating", Fields: []Field{
+			{Value: "Legacy District Heat"},
+			{Value: "Legacy Heating Inlet"},
+			{Value: "Legacy Heating Outlet"},
+			{Value: "Autosize"},
+		}},
+		{Index: 8, Type: "GroundHeatExchanger:System", Fields: []Field{
+			{Value: "Borefield"},
+			{Value: "GHE Inlet"},
+			{Value: "GHE Outlet"},
+			{Value: "Autosize"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	tests := []struct {
+		objectType string
+		objectName string
+		nodeName   string
+		role       string
+		fieldIndex int
+	}{
+		{objectType: "Chiller:Electric:EIR", objectName: "Electric Chiller", nodeName: "Chiller CHW Inlet", role: "water_inlet", fieldIndex: 14},
+		{objectType: "Chiller:Electric:EIR", objectName: "Electric Chiller", nodeName: "Chiller Condenser Outlet", role: "condenser_outlet", fieldIndex: 17},
+		{objectType: "Boiler:HotWater", objectName: "Hot Water Boiler", nodeName: "Boiler HW Outlet", role: "water_outlet", fieldIndex: 11},
+		{objectType: "HeatPump:PlantLoop:EIR:Heating", objectName: "Heating Plant Heat Pump", nodeName: "HP Load Inlet", role: "inlet", fieldIndex: 1},
+		{objectType: "HeatPump:PlantLoop:EIR:Heating", objectName: "Heating Plant Heat Pump", nodeName: "HP Source Outlet", role: "outlet", fieldIndex: 5},
+		{objectType: "CoolingTower:SingleSpeed", objectName: "Condenser Tower", nodeName: "Tower Water Inlet", role: "water_inlet", fieldIndex: 1},
+		{objectType: "HeatExchanger:FluidToFluid", objectName: "Loop Heat Exchanger", nodeName: "HX Supply Outlet", role: "outlet", fieldIndex: 6},
+		{objectType: "DistrictCooling", objectName: "Campus Chilled Water", nodeName: "District Cooling Inlet", role: "water_inlet", fieldIndex: 1},
+		{objectType: "DistrictHeating:Water", objectName: "Campus Hot Water", nodeName: "District Heating Outlet", role: "water_outlet", fieldIndex: 2},
+		{objectType: "DistrictHeating", objectName: "Legacy District Heat", nodeName: "Legacy Heating Inlet", role: "water_inlet", fieldIndex: 1},
+		{objectType: "GroundHeatExchanger:System", objectName: "Borefield", nodeName: "GHE Outlet", role: "outlet", fieldIndex: 2},
+	}
+	for _, test := range tests {
+		if !hasHVACNodeUsage(report.NodeUsages, test.objectType, test.objectName, test.nodeName, test.role, test.fieldIndex) {
+			t.Fatalf("node usages = %#v, want %s %s node %q role %s at field %d",
+				report.NodeUsages, test.objectType, test.objectName, test.nodeName, test.role, test.fieldIndex)
+		}
+	}
+}
+
 func TestAnalyzeHVACVRFTerminalUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow", Fields: []Field{

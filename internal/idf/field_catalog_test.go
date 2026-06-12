@@ -526,6 +526,54 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			fieldName:  "Supplemental Heating Coil Object Type",
 			role:       fieldRoleObjectTypeRef,
 		},
+		{
+			objectType: "Chiller:Electric:EIR",
+			fieldIndex: 14,
+			fieldName:  "Chilled Water Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "Chiller:Electric:EIR",
+			fieldIndex: 16,
+			fieldName:  "Condenser Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "Boiler:HotWater",
+			fieldIndex: 10,
+			fieldName:  "Boiler Water Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "HeatPump:PlantLoop:EIR:Heating",
+			fieldIndex: 4,
+			fieldName:  "Source Side Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "CoolingTower:SingleSpeed",
+			fieldIndex: 1,
+			fieldName:  "Water Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "HeatExchanger:FluidToFluid",
+			fieldIndex: 5,
+			fieldName:  "Loop Supply Side Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "DistrictHeating:Water",
+			fieldIndex: 1,
+			fieldName:  "Hot Water Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "GroundHeatExchanger:System",
+			fieldIndex: 2,
+			fieldName:  "Outlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
 	}
 
 	for _, test := range tests {

@@ -3729,6 +3729,8 @@ func hvacComponentFamily(objectType string) (string, string) {
 		return "cooling_tower", "Cooling towers"
 	case strings.HasPrefix(lower, "heatpump:"):
 		return "heat_pump", "Heat pumps"
+	case strings.HasPrefix(lower, "groundheatexchanger:"):
+		return "ground_heat_exchanger", "Ground heat exchangers"
 	case isRefrigerantSystemType(objectType):
 		return "refrigerant_system", "Refrigerant systems"
 	case strings.Contains(lower, "unitarysystem"):
@@ -3940,6 +3942,7 @@ func isHVACComponentType(objectType string) bool {
 		strings.HasPrefix(lower, "refrigeration:") ||
 		strings.HasPrefix(lower, "districtcooling") ||
 		strings.HasPrefix(lower, "districtheating") ||
+		strings.HasPrefix(lower, "groundheatexchanger:") ||
 		strings.HasPrefix(lower, "coolingtower:") ||
 		strings.HasPrefix(lower, "heatpump:") ||
 		strings.Contains(lower, "unitarysystem") ||
@@ -3966,6 +3969,7 @@ func isPlantSourceEquipmentType(objectType string) bool {
 		strings.HasPrefix(lower, "districtcooling") ||
 		strings.HasPrefix(lower, "districtheating") ||
 		strings.HasPrefix(lower, "heatpump:") ||
+		strings.HasPrefix(lower, "groundheatexchanger:") ||
 		strings.HasPrefix(lower, "plantcomponent:") ||
 		strings.HasPrefix(lower, "coolingtower:") ||
 		strings.HasPrefix(lower, "waterheater:") ||
