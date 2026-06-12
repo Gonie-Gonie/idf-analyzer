@@ -2138,6 +2138,26 @@ func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentRe
 				Source:           "schema_name_field",
 			},
 		}
+	case "airterminal:singleduct:seriespiu:reheat":
+		pairs := hvacComponentReferencePairsFromFieldRoles(obj)
+		pairs = append(pairs, hvacComponentReferencePair{
+			TypeIndex:                  -1,
+			NameIndex:                  9,
+			TargetObjectTypeCandidates: []string{"Fan:*"},
+			RelationRole:               "internal_component_reference",
+			Source:                     "schema_name_field",
+		})
+		return pairs
+	case "airterminal:singleduct:parallelpiu:reheat":
+		pairs := hvacComponentReferencePairsFromFieldRoles(obj)
+		pairs = append(pairs, hvacComponentReferencePair{
+			TypeIndex:                  -1,
+			NameIndex:                  10,
+			TargetObjectTypeCandidates: []string{"Fan:*"},
+			RelationRole:               "internal_component_reference",
+			Source:                     "schema_name_field",
+		})
+		return pairs
 	case "zonehvac:ventilatedslab":
 		pairs := hvacComponentReferencePairsFromFieldRoles(obj)
 		pairs = append(pairs, hvacComponentReferencePair{

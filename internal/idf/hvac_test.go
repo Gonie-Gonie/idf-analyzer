@@ -2412,6 +2412,225 @@ func TestAnalyzeHVACVAVReheatTerminalUsesCatalogWithoutComments(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACAirTerminalFamiliesUseCatalogWithoutComments(t *testing.T) {
+	type target struct {
+		objectType string
+		name       string
+	}
+	tests := []struct {
+		name         string
+		objectType   string
+		terminalName string
+		fields       []Field
+		inlet        string
+		outlet       string
+		targets      []target
+	}{
+		{
+			name:         "ConstantVolumeReheat",
+			objectType:   "AirTerminal:SingleDuct:ConstantVolume:Reheat",
+			terminalName: "Office CV Reheat",
+			fields: []Field{
+				{Value: "Office CV Reheat"},
+				{Value: "Always On"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Terminal Inlet"},
+				{Value: "Autosize"},
+				{Value: "Coil:Heating:Water"},
+				{Value: "Office Reheat Coil"},
+				{Value: "Autosize"},
+				{Value: "0"},
+				{Value: "0.001"},
+				{Value: "50"},
+			},
+			inlet:  "Office Terminal Inlet",
+			outlet: "Office Supply Inlet",
+			targets: []target{
+				{objectType: "Coil:Heating:Water", name: "Office Reheat Coil"},
+			},
+		},
+		{
+			name:         "VAVNoReheat",
+			objectType:   "AirTerminal:SingleDuct:VAV:NoReheat",
+			terminalName: "Office VAV No Reheat",
+			fields: []Field{
+				{Value: "Office VAV No Reheat"},
+				{Value: "Always On"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Terminal Inlet"},
+				{Value: "Autosize"},
+				{Value: "Constant"},
+				{Value: "0.3"},
+				{Value: ""},
+				{Value: ""},
+				{Value: ""},
+			},
+			inlet:  "Office Terminal Inlet",
+			outlet: "Office Supply Inlet",
+		},
+		{
+			name:         "SeriesPIUReheat",
+			objectType:   "AirTerminal:SingleDuct:SeriesPIU:Reheat",
+			terminalName: "Office Series PIU",
+			fields: []Field{
+				{Value: "Office Series PIU"},
+				{Value: "Always On"},
+				{Value: "Autosize"},
+				{Value: "Autosize"},
+				{Value: "0.3"},
+				{Value: "Office Terminal Inlet"},
+				{Value: "Office Secondary Inlet"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Zone Mixer"},
+				{Value: "Office PIU Fan"},
+				{Value: "Coil:Heating:Water"},
+				{Value: "Office Reheat Coil"},
+			},
+			inlet:  "Office Terminal Inlet",
+			outlet: "Office Supply Inlet",
+			targets: []target{
+				{objectType: "Fan:ConstantVolume", name: "Office PIU Fan"},
+				{objectType: "Coil:Heating:Water", name: "Office Reheat Coil"},
+			},
+		},
+		{
+			name:         "ParallelPIUReheat",
+			objectType:   "AirTerminal:SingleDuct:ParallelPIU:Reheat",
+			terminalName: "Office Parallel PIU",
+			fields: []Field{
+				{Value: "Office Parallel PIU"},
+				{Value: "Always On"},
+				{Value: "Autosize"},
+				{Value: "Autosize"},
+				{Value: "0.3"},
+				{Value: "0.5"},
+				{Value: "Office Terminal Inlet"},
+				{Value: "Office Secondary Inlet"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Zone Mixer"},
+				{Value: "Office PIU Fan"},
+				{Value: "Coil:Heating:Water"},
+				{Value: "Office Reheat Coil"},
+			},
+			inlet:  "Office Terminal Inlet",
+			outlet: "Office Supply Inlet",
+			targets: []target{
+				{objectType: "Fan:ConstantVolume", name: "Office PIU Fan"},
+				{objectType: "Coil:Heating:Water", name: "Office Reheat Coil"},
+			},
+		},
+		{
+			name:         "SingleDuctMixer",
+			objectType:   "AirTerminal:SingleDuct:Mixer",
+			terminalName: "Office Terminal Mixer",
+			fields: []Field{
+				{Value: "Office Terminal Mixer"},
+				{Value: "ZoneHVAC:FourPipeFanCoil"},
+				{Value: "Office FPFC"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Terminal Inlet"},
+				{Value: "Office Secondary Inlet"},
+				{Value: "InletSide"},
+				{Value: ""},
+				{Value: "CurrentOccupancy"},
+			},
+			inlet:  "Office Terminal Inlet",
+			outlet: "Office Supply Inlet",
+			targets: []target{
+				{objectType: "ZoneHVAC:FourPipeFanCoil", name: "Office FPFC"},
+			},
+		},
+		{
+			name:         "DualDuctConstantVolume",
+			objectType:   "AirTerminal:DualDuct:ConstantVolume",
+			terminalName: "Office Dual Duct CV",
+			fields: []Field{
+				{Value: "Office Dual Duct CV"},
+				{Value: "Always On"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Hot Inlet"},
+				{Value: "Office Cold Inlet"},
+				{Value: "Autosize"},
+			},
+			inlet:  "Office Hot Inlet",
+			outlet: "Office Supply Inlet",
+		},
+		{
+			name:         "DualDuctVAV",
+			objectType:   "AirTerminal:DualDuct:VAV",
+			terminalName: "Office Dual Duct VAV",
+			fields: []Field{
+				{Value: "Office Dual Duct VAV"},
+				{Value: "Always On"},
+				{Value: "Office Supply Inlet"},
+				{Value: "Office Hot Inlet"},
+				{Value: "Office Cold Inlet"},
+				{Value: "Autosize"},
+				{Value: "0.2"},
+			},
+			inlet:  "Office Hot Inlet",
+			outlet: "Office Supply Inlet",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			objects := []Object{
+				{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+				{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+					{Value: "Office"},
+					{Value: "Office Equipment"},
+					{Value: "Office Supply Inlet"},
+					{Value: ""},
+					{Value: "Office Zone Air Node"},
+					{Value: "Office Return Node"},
+				}},
+				{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+					{Value: "Office Equipment"},
+					{Value: "SequentialLoad"},
+					{Value: "ZoneHVAC:AirDistributionUnit"},
+					{Value: "Office ADU"},
+					{Value: "1"},
+					{Value: "1"},
+					{Value: ""},
+					{Value: ""},
+				}},
+				{Index: 3, Type: "ZoneHVAC:AirDistributionUnit", Fields: []Field{
+					{Value: "Office ADU"},
+					{Value: "Office Supply Inlet"},
+					{Value: test.objectType},
+					{Value: test.terminalName},
+				}},
+				{Index: 4, Type: test.objectType, Fields: test.fields},
+			}
+			for index, item := range test.targets {
+				objects = append(objects, Object{Index: 5 + index, Type: item.objectType, Fields: []Field{{Value: item.name}}})
+			}
+
+			report := AnalyzeHVAC(Document{Objects: objects})
+			relation := findHVACTestingZoneRelation(report, "Office")
+			if relation == nil {
+				t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+			}
+			terminal := findHVACTestingComponent(relation.TerminalUnits, test.terminalName)
+			if terminal == nil {
+				t.Fatalf("terminal units = %#v, want %s", relation.TerminalUnits, test.terminalName)
+			}
+			if terminal.ObjectType != test.objectType || terminal.InletNode != test.inlet || terminal.OutletNode != test.outlet {
+				t.Fatalf("terminal = %#v, want %s inlet %q outlet %q", terminal, test.objectType, test.inlet, test.outlet)
+			}
+			if !terminal.ResolvedFromADU || terminal.DistributionUnitName != "Office ADU" || terminal.DistributionUnitOutletNode != "Office Supply Inlet" {
+				t.Fatalf("terminal ADU trace = %#v, want Office ADU outlet trace", terminal)
+			}
+			for _, item := range test.targets {
+				if !hasHVACComponentReference(report.ComponentReferences, test.terminalName, item.objectType, item.name, "internal_component_reference") {
+					t.Fatalf("component references = %#v, want %s -> %s %s", report.ComponentReferences, test.terminalName, item.objectType, item.name)
+				}
+			}
+		})
+	}
+}
+
 func TestAnalyzeHVACServiceWaterLoopWarningIsNotice(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "PlantLoop", Fields: []Field{
