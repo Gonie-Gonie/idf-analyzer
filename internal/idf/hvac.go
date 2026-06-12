@@ -2142,7 +2142,7 @@ func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentRe
 		pairs := hvacComponentReferencePairsFromFieldRoles(obj)
 		pairs = append(pairs, hvacComponentReferencePair{
 			TypeIndex:                  -1,
-			NameIndex:                  9,
+			NameIndex:                  10,
 			TargetObjectTypeCandidates: []string{"Fan:*"},
 			RelationRole:               "internal_component_reference",
 			Source:                     "schema_name_field",
@@ -2152,7 +2152,7 @@ func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentRe
 		pairs := hvacComponentReferencePairsFromFieldRoles(obj)
 		pairs = append(pairs, hvacComponentReferencePair{
 			TypeIndex:                  -1,
-			NameIndex:                  10,
+			NameIndex:                  11,
 			TargetObjectTypeCandidates: []string{"Fan:*"},
 			RelationRole:               "internal_component_reference",
 			Source:                     "schema_name_field",

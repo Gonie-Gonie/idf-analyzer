@@ -96,9 +96,45 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 		},
 		{
 			objectType: "AirTerminal:SingleDuct:SeriesPIU:Reheat",
-			fieldIndex: 10,
+			fieldIndex: 8,
+			fieldName:  "Reheat Coil Air Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:SeriesPIU:Reheat",
+			fieldIndex: 11,
 			fieldName:  "Reheat Coil Object Type",
 			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:ParallelPIU:Reheat",
+			fieldIndex: 11,
+			fieldName:  "Fan Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:VAV:HeatAndCool:Reheat",
+			fieldIndex: 10,
+			fieldName:  "Air Outlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:ConstantVolume:FourPipeInduction",
+			fieldIndex: 12,
+			fieldName:  "Cooling Coil Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:ConstantVolume:FourPipeBeam",
+			fieldIndex: 8,
+			fieldName:  "Hot Water Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "AirTerminal:SingleDuct:UserDefined",
+			fieldIndex: 4,
+			fieldName:  "Primary Air Outlet Node Name",
+			role:       fieldRoleNodeRef,
 		},
 		{
 			objectType: "AirTerminal:DualDuct:VAV",
