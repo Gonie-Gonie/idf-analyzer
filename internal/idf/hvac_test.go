@@ -2001,6 +2001,133 @@ func TestAnalyzeHVACCoilFamiliesUseCatalogForNodeRoles(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACUnitaryAndCoilSystemsUseCatalogForInternalComponents(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "CoilSystem:Cooling:DX", Fields: []Field{
+			{Value: "Main Cooling System"},
+			{Value: "Always On"},
+			{Value: "Cooling System Inlet"},
+			{Value: "Cooling System Outlet"},
+			{Value: "Cooling System Sensor"},
+			{Value: "Coil:Cooling:DX:SingleSpeed"},
+			{Value: "DX Cooling Coil"},
+		}},
+		{Index: 1, Type: "CoilSystem:Heating:DX", Fields: []Field{
+			{Value: "Main Heating System"},
+			{Value: "Always On"},
+			{Value: "Coil:Heating:DX:SingleSpeed"},
+			{Value: "DX Heating Coil"},
+		}},
+		{Index: 2, Type: "AirLoopHVAC:UnitarySystem", Fields: []Field{
+			{Value: "Main Unitary System"},
+			{Value: "Load"},
+			{Value: "Office"},
+			{Value: "None"},
+			{Value: "Always On"},
+			{Value: "Unitary Inlet"},
+			{Value: "Unitary Outlet"},
+			{Value: "Fan:ConstantVolume"},
+			{Value: "Main Supply Fan"},
+			{Value: "BlowThrough"},
+			{Value: "Always On"},
+			{Value: "Coil:Heating:DX:SingleSpeed"},
+			{Value: "DX Heating Coil"},
+			{Value: "1.0"},
+			{Value: "CoilSystem:Cooling:DX"},
+			{Value: "Main Cooling System"},
+			{Value: "No"},
+			{Value: "12.8"},
+			{Value: "None"},
+			{Value: "Coil:Heating:Electric"},
+			{Value: "Main Supplemental Coil"},
+		}},
+		{Index: 3, Type: "AirLoopHVAC:UnitaryHeatCool", Fields: []Field{
+			{Value: "Legacy Heat Cool"},
+			{Value: "Always On"},
+			{Value: "Legacy Inlet"},
+			{Value: "Legacy Outlet"},
+			{Value: "Always On"},
+			{Value: "80"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Office"},
+			{Value: "Fan:OnOff"},
+			{Value: "Legacy Fan"},
+			{Value: "DrawThrough"},
+			{Value: "Coil:Heating:Steam"},
+			{Value: "Steam Reheat Coil"},
+			{Value: "Coil:Cooling:DX:SingleSpeed"},
+			{Value: "DX Cooling Coil"},
+			{Value: "None"},
+			{Value: "Coil:Heating:Electric"},
+			{Value: "Main Supplemental Coil"},
+		}},
+		{Index: 4, Type: "AirLoopHVAC:UnitaryHeatPump:AirToAir", Fields: []Field{
+			{Value: "Air To Air HP"},
+			{Value: "Always On"},
+			{Value: "HP Inlet"},
+			{Value: "HP Outlet"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Office"},
+			{Value: "Fan:SystemModel"},
+			{Value: "HP Fan"},
+			{Value: "Coil:Heating:DX:SingleSpeed"},
+			{Value: "DX Heating Coil"},
+			{Value: "Coil:Cooling:DX:SingleSpeed"},
+			{Value: "DX Cooling Coil"},
+			{Value: "Coil:Heating:Electric"},
+			{Value: "HP Supplemental Coil"},
+		}},
+		{Index: 5, Type: "Coil:Cooling:DX:SingleSpeed", Fields: []Field{{Value: "DX Cooling Coil"}}},
+		{Index: 6, Type: "Coil:Heating:DX:SingleSpeed", Fields: []Field{{Value: "DX Heating Coil"}}},
+		{Index: 7, Type: "Coil:Heating:Steam", Fields: []Field{{Value: "Steam Reheat Coil"}}},
+		{Index: 8, Type: "Coil:Heating:Electric", Fields: []Field{{Value: "Main Supplemental Coil"}}},
+		{Index: 9, Type: "Coil:Heating:Electric", Fields: []Field{{Value: "HP Supplemental Coil"}}},
+		{Index: 10, Type: "Fan:ConstantVolume", Fields: []Field{{Value: "Main Supply Fan"}}},
+		{Index: 11, Type: "Fan:OnOff", Fields: []Field{{Value: "Legacy Fan"}}},
+		{Index: 12, Type: "Fan:SystemModel", Fields: []Field{{Value: "HP Fan"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	references := []struct {
+		from       string
+		targetType string
+		targetName string
+	}{
+		{from: "Main Cooling System", targetType: "Coil:Cooling:DX:SingleSpeed", targetName: "DX Cooling Coil"},
+		{from: "Main Heating System", targetType: "Coil:Heating:DX:SingleSpeed", targetName: "DX Heating Coil"},
+		{from: "Main Unitary System", targetType: "Fan:ConstantVolume", targetName: "Main Supply Fan"},
+		{from: "Main Unitary System", targetType: "Coil:Heating:DX:SingleSpeed", targetName: "DX Heating Coil"},
+		{from: "Main Unitary System", targetType: "CoilSystem:Cooling:DX", targetName: "Main Cooling System"},
+		{from: "Main Unitary System", targetType: "Coil:Heating:Electric", targetName: "Main Supplemental Coil"},
+		{from: "Legacy Heat Cool", targetType: "Fan:OnOff", targetName: "Legacy Fan"},
+		{from: "Legacy Heat Cool", targetType: "Coil:Heating:Steam", targetName: "Steam Reheat Coil"},
+		{from: "Legacy Heat Cool", targetType: "Coil:Cooling:DX:SingleSpeed", targetName: "DX Cooling Coil"},
+		{from: "Air To Air HP", targetType: "Fan:SystemModel", targetName: "HP Fan"},
+		{from: "Air To Air HP", targetType: "Coil:Heating:DX:SingleSpeed", targetName: "DX Heating Coil"},
+		{from: "Air To Air HP", targetType: "Coil:Cooling:DX:SingleSpeed", targetName: "DX Cooling Coil"},
+		{from: "Air To Air HP", targetType: "Coil:Heating:Electric", targetName: "HP Supplemental Coil"},
+	}
+	for _, reference := range references {
+		if !hasHVACComponentReference(report.ComponentReferences, reference.from, reference.targetType, reference.targetName, "internal_component_reference") {
+			t.Fatalf("component references = %#v, want %s -> %s %s",
+				report.ComponentReferences, reference.from, reference.targetType, reference.targetName)
+		}
+	}
+	if !hasHVACNodeUsage(report.NodeUsages, "CoilSystem:Cooling:DX", "Main Cooling System", "Cooling System Inlet", "inlet", 2) {
+		t.Fatalf("node usages = %#v, want coil system inlet node", report.NodeUsages)
+	}
+	if !hasHVACNodeUsage(report.NodeUsages, "AirLoopHVAC:UnitarySystem", "Main Unitary System", "Unitary Outlet", "air_outlet", 6) {
+		t.Fatalf("node usages = %#v, want unitary outlet node", report.NodeUsages)
+	}
+	if !hasHVACRuleEdge(report.RuleGraph, hvacRuleComponentReferencesComponent) {
+		t.Fatalf("rule graph missing component reference edges: %#v", report.RuleGraph.Edges)
+	}
+}
+
 func TestAnalyzeHVACVRFTerminalUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow", Fields: []Field{

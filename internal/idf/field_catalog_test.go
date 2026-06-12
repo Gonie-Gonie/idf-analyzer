@@ -490,6 +490,42 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			fieldName:  "Coil Air Inlet Node",
 			role:       fieldRoleNodeRef,
 		},
+		{
+			objectType: "CoilSystem:Cooling:DX",
+			fieldIndex: 5,
+			fieldName:  "Cooling Coil Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "CoilSystem:Heating:DX",
+			fieldIndex: 3,
+			fieldName:  "Heating Coil Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "AirLoopHVAC:UnitarySystem",
+			fieldIndex: 7,
+			fieldName:  "Supply Fan Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "AirLoopHVAC:UnitarySystem",
+			fieldIndex: 15,
+			fieldName:  "Cooling Coil Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "AirLoopHVAC:UnitaryHeatCool",
+			fieldIndex: 13,
+			fieldName:  "Heating Coil Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "AirLoopHVAC:UnitaryHeatPump:AirToAir",
+			fieldIndex: 14,
+			fieldName:  "Supplemental Heating Coil Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
 	}
 
 	for _, test := range tests {

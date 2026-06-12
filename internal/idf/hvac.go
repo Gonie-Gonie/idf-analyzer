@@ -3715,6 +3715,8 @@ func hvacComponentFamily(objectType string) (string, string) {
 		return "cooling_coil", "Cooling coils"
 	case strings.HasPrefix(lower, "coil:heating"):
 		return "heating_coil", "Heating coils"
+	case strings.HasPrefix(lower, "coilsystem:"):
+		return "coil_system", "Coil systems"
 	case strings.HasPrefix(lower, "coil:"):
 		return "coil", "Coils"
 	case strings.HasPrefix(lower, "pump:"):
@@ -3925,6 +3927,7 @@ func isLowTemperatureRadiantEquipmentType(objectType string) bool {
 func isHVACComponentType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return strings.HasPrefix(lower, "coil:") ||
+		strings.HasPrefix(lower, "coilsystem:") ||
 		strings.HasPrefix(lower, "fan:") ||
 		strings.HasPrefix(lower, "pump:") ||
 		strings.HasPrefix(lower, "chiller:") ||
