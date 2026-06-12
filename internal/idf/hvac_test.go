@@ -646,6 +646,34 @@ func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.
 	}
 }
 
+func TestBuildServiceChainsDoesNotCreateAirPlantCartesianProduct(t *testing.T) {
+	relation := HVACZoneChain{
+		ZoneName:       "Office",
+		AirLoopNames:   []string{"Air 1", "Air 2"},
+		PlantLoopNames: []string{"Plant 1", "Plant 2"},
+		TerminalUnits: []HVACComponent{
+			{ObjectType: "AirTerminal:SingleDuct:VAV:Reheat", ObjectName: "Office VAV"},
+		},
+		PlantEquipment: []HVACComponent{
+			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 1", LoopName: "Plant 1"},
+			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 2", LoopName: "Plant 2"},
+		},
+	}
+
+	paths := buildServiceChains(relation)
+	if len(paths) != 4 {
+		t.Fatalf("service path count = %d, want 4 non-cartesian paths: %#v", len(paths), paths)
+	}
+	for _, path := range paths {
+		if path.AirLoopName != "" && path.PlantLoop != "" {
+			t.Fatalf("service path combines air and plant without RuleGraph path search: %#v", path)
+		}
+		if path.Confidence != "rule" {
+			t.Fatalf("service path confidence = %q, want rule", path.Confidence)
+		}
+	}
+}
+
 func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

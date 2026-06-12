@@ -2288,30 +2288,34 @@ func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
 			paths = append(paths, HVACServicePath{
 				ZoneName:        relation.ZoneName,
 				TerminalName:    componentLabel(terminal),
-				Confidence:      "medium",
-				Evidence:        "terminal outlet matches zone inlet",
+				Confidence:      "rule",
+				Evidence:        hvacRuleZoneTerminalOutletMatchesInlet,
 				SourceRelations: []string{"terminal_outlet_node", "zone_inlet_node"},
 			})
 			continue
 		}
-		for _, airLoopName := range append([]string{""}, relation.AirLoopNames...) {
-			for _, plantLoopName := range append([]string{""}, relation.PlantLoopNames...) {
-				if airLoopName == "" && plantLoopName == "" {
-					continue
-				}
-				sourceComponents := plantSourceComponentsForServicePath(relation, plantLoopName)
-				for _, sourceComponent := range sourceComponents {
-					paths = append(paths, HVACServicePath{
-						ZoneName:        relation.ZoneName,
-						TerminalName:    componentLabel(terminal),
-						AirLoopName:     airLoopName,
-						PlantLoop:       plantLoopName,
-						SourceComponent: sourceComponent,
-						Confidence:      "inferred",
-						Evidence:        "node/reference relation",
-						SourceRelations: []string{"air_loop_demand_nodes", "zone_equipment_references", "plant_loop_component_references"},
-					})
-				}
+		for _, airLoopName := range relation.AirLoopNames {
+			paths = append(paths, HVACServicePath{
+				ZoneName:        relation.ZoneName,
+				TerminalName:    componentLabel(terminal),
+				AirLoopName:     airLoopName,
+				Confidence:      "rule",
+				Evidence:        hvacRuleAirLoopZoneSplitterToTerminal,
+				SourceRelations: []string{hvacRuleAirLoopZoneSplitterToTerminal, hvacRuleZoneTerminalOutletMatchesInlet},
+			})
+		}
+		for _, plantLoopName := range relation.PlantLoopNames {
+			sourceComponents := plantSourceComponentsForServicePath(relation, plantLoopName)
+			for _, sourceComponent := range sourceComponents {
+				paths = append(paths, HVACServicePath{
+					ZoneName:        relation.ZoneName,
+					TerminalName:    componentLabel(terminal),
+					PlantLoop:       plantLoopName,
+					SourceComponent: sourceComponent,
+					Confidence:      "rule",
+					Evidence:        "typed_component_reference",
+					SourceRelations: []string{"typed_component_reference", hvacRuleZoneTerminalOutletMatchesInlet},
+				})
 			}
 		}
 	}
@@ -2320,9 +2324,9 @@ func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
 			paths = append(paths, HVACServicePath{
 				ZoneName:        relation.ZoneName,
 				Component:       componentLabel(equipment),
-				Confidence:      "high",
-				Evidence:        "ZoneHVAC:EquipmentList",
-				SourceRelations: []string{"zone_equipment_list"},
+				Confidence:      "rule",
+				Evidence:        hvacRuleZoneEquipmentListEquipment,
+				SourceRelations: []string{hvacRuleZoneEquipmentListEquipment},
 			})
 		}
 	}
