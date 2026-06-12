@@ -3583,6 +3583,10 @@ func isWaterCoilType(objectType string) bool {
 		(strings.Contains(lower, "coil") && strings.Contains(lower, "water"))
 }
 
+func isChillerType(objectType string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(objectType)), "chiller:")
+}
+
 func isHVACComponentType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return strings.HasPrefix(lower, "coil:") ||

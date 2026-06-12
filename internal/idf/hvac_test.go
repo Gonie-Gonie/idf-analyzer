@@ -1222,6 +1222,21 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	if coolingCoil == nil || !stringSliceContainsFold(coolingCoil.RelatedLoopNames, "CoolSys1") {
 		t.Fatalf("VAV_1_CoolC = %#v, want CoolSys1 related loop", coolingCoil)
 	}
+	coolSys1 := findHVACTestingLoop(report, "CoolSys1")
+	if coolSys1 == nil {
+		t.Fatalf("CoolSys1 loop not found")
+	}
+	if !hasHVACRelatedLoop(*coolSys1, "CondenserLoop", "TowerWaterSys") {
+		t.Fatalf("CoolSys1 related loops = %#v, want TowerWaterSys condenser loop", coolSys1.RelatedLoops)
+	}
+	chiller := findHVACTestingComponent(loopComponents(*coolSys1), "CoolSys1 Chiller 1")
+	if chiller == nil || !stringSliceContainsFold(chiller.RelatedLoopNames, "TowerWaterSys") {
+		t.Fatalf("CoolSys1 chiller = %#v, want TowerWaterSys related loop", chiller)
+	}
+	towerWaterSys := findHVACTestingLoop(report, "TowerWaterSys")
+	if towerWaterSys == nil || !hasHVACRelatedLoop(*towerWaterSys, "PlantLoop", "CoolSys1") {
+		t.Fatalf("TowerWaterSys related loops = %#v, want CoolSys1 plant loop", towerWaterSys)
+	}
 	relation := findHVACTestingZoneRelation(report, "Basement")
 	if relation == nil {
 		t.Fatalf("Basement relation not found")
@@ -1241,6 +1256,9 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	}
 	if !stringSliceContainsFold(relation.PlantLoopNames, "HeatSys1") || !stringSliceContainsFold(relation.PlantLoopNames, "CoolSys1") {
 		t.Fatalf("Basement plant loops = %#v, want HeatSys1 and CoolSys1", relation.PlantLoopNames)
+	}
+	if !stringSliceContainsFold(relation.CondenserLoopNames, "TowerWaterSys") {
+		t.Fatalf("Basement condenser loops = %#v, want TowerWaterSys through CoolSys1 chiller", relation.CondenserLoopNames)
 	}
 	if !componentSliceContainsName(relation.PlantEquipment, "HeatSys1 Boiler") || !componentSliceContainsName(relation.PlantEquipment, "CoolSys1 Chiller 1") {
 		t.Fatalf("Basement plant equipment = %#v, want source equipment", relation.PlantEquipment)
@@ -1266,9 +1284,12 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 		hvacRuleZoneADUResolvesTerminal,
 		hvacRuleZoneADUOutletMatchesInlet,
 		hvacRuleZoneTerminalOutletMatchesADU,
+		hvacRuleCondenserComponentOnDemand,
+		hvacRuleCondenserComponentOnSupply,
+		hvacRuleCrossLoopChillerCondenser,
 	} {
 		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
-			t.Fatalf("rule graph missing ADU rule %s: %#v", ruleID, report.RuleGraph.Edges)
+			t.Fatalf("rule graph missing HVAC rule %s: %#v", ruleID, report.RuleGraph.Edges)
 		}
 	}
 	assertHVACJSONHasNoLegacyVocabulary(t, report)

@@ -42,7 +42,10 @@ const (
 	hvacRuleComponentServesParent          = "component.reference_serves_parent"
 	hvacRulePlantComponentOnSupplyBranch   = "plant.component_on_supply_branch"
 	hvacRulePlantComponentOnDemandBranch   = "plant.component_on_demand_branch"
+	hvacRuleCondenserComponentOnDemand     = "condenser.component_on_demand_branch"
+	hvacRuleCondenserComponentOnSupply     = "condenser.component_on_supply_branch"
 	hvacRuleCrossLoopSameWaterCoil         = "crossloop.same_water_coil_air_and_plant"
+	hvacRuleCrossLoopChillerCondenser      = "crossloop.chiller_chw_to_condenser"
 )
 
 type HVACRuleGraph struct {
@@ -212,11 +215,11 @@ func (b *hvacRuleGraphBuilder) addBranchComponentEdges(loop HVACLoop, side HVACL
 			[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
 		b.addEdge(hvacRuleBranchComponentOccurrence, branchID, occurrenceID, "contains", medium, branchObj,
 			[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
-		if plantRuleID := hvacRulePlantComponentOnBranch(loop.Type, side.Name); plantRuleID != "" {
-			b.addEdge(plantRuleID, sourceID, hvacRuleLoopNodeID(loop), "occurs_on", medium, branchObj,
+		if branchRuleID := hvacRuleComponentOnLoopBranch(loop.Type, side.Name); branchRuleID != "" {
+			b.addEdge(branchRuleID, sourceID, hvacRuleLoopNodeID(loop), "occurs_on", medium, branchObj,
 				[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
-			if plantRuleID == hvacRulePlantComponentOnDemandBranch {
-				b.addEdge(plantRuleID, hvacRuleLoopNodeID(loop), sourceID, "serves_demand", medium, branchObj,
+			if branchRuleID == hvacRulePlantComponentOnDemandBranch || branchRuleID == hvacRuleCondenserComponentOnDemand {
+				b.addEdge(branchRuleID, hvacRuleLoopNodeID(loop), sourceID, "serves_demand", medium, branchObj,
 					[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
 			}
 		}
@@ -467,16 +470,25 @@ func (b *hvacRuleGraphBuilder) addZoneTerminalEdges(subjectID string, connection
 func (b *hvacRuleGraphBuilder) addCrossLoopEdges() {
 	for _, occurrences := range b.componentOccurrences {
 		var air []hvacRuleComponentOccurrence
-		var plant []hvacRuleComponentOccurrence
+		var plantWater []hvacRuleComponentOccurrence
+		var plantChillers []hvacRuleComponentOccurrence
+		var condenser []hvacRuleComponentOccurrence
 		for _, occurrence := range occurrences {
-			if !isWaterCoilType(occurrence.Component.ObjectType) {
-				continue
+			if isWaterCoilType(occurrence.Component.ObjectType) {
+				switch occurrence.LoopType {
+				case "AirLoopHVAC":
+					air = append(air, occurrence)
+				case "PlantLoop":
+					plantWater = append(plantWater, occurrence)
+				}
 			}
-			switch occurrence.LoopType {
-			case "AirLoopHVAC":
-				air = append(air, occurrence)
-			case "PlantLoop":
-				plant = append(plant, occurrence)
+			if isChillerType(occurrence.Component.ObjectType) {
+				switch occurrence.LoopType {
+				case "PlantLoop":
+					plantChillers = append(plantChillers, occurrence)
+				case "CondenserLoop":
+					condenser = append(condenser, occurrence)
+				}
 			}
 		}
 		for _, airOccurrence := range air {
@@ -484,12 +496,30 @@ func (b *hvacRuleGraphBuilder) addCrossLoopEdges() {
 			if !ok {
 				continue
 			}
-			for _, plantOccurrence := range plant {
+			for _, plantOccurrence := range plantWater {
 				b.addEdge(hvacRuleCrossLoopSameWaterCoil, airOccurrence.ID, plantOccurrence.ID, "crossloop", "water", sourceObj,
 					[]int{0}, []string{airOccurrence.Component.ObjectName})
 				if airLoopID, plantLoopID := b.loopNodeID(airOccurrence.LoopType, airOccurrence.LoopName), b.loopNodeID(plantOccurrence.LoopType, plantOccurrence.LoopName); airLoopID != "" && plantLoopID != "" {
 					b.addEdge(hvacRuleCrossLoopSameWaterCoil, plantLoopID, airLoopID, "crossloop", "water", sourceObj,
 						[]int{0}, []string{airOccurrence.Component.ObjectName})
+				}
+			}
+		}
+		for _, plantOccurrence := range plantChillers {
+			sourceObj, ok := b.objectByTypeName(plantOccurrence.Component.ObjectType, plantOccurrence.Component.ObjectName)
+			if !ok {
+				continue
+			}
+			for _, condenserOccurrence := range condenser {
+				if !strings.EqualFold(plantOccurrence.Component.ObjectType, condenserOccurrence.Component.ObjectType) ||
+					!strings.EqualFold(plantOccurrence.Component.ObjectName, condenserOccurrence.Component.ObjectName) {
+					continue
+				}
+				b.addEdge(hvacRuleCrossLoopChillerCondenser, plantOccurrence.ID, condenserOccurrence.ID, "crossloop", "condenser_water", sourceObj,
+					[]int{0}, []string{plantOccurrence.Component.ObjectName})
+				if plantLoopID, condenserLoopID := b.loopNodeID(plantOccurrence.LoopType, plantOccurrence.LoopName), b.loopNodeID(condenserOccurrence.LoopType, condenserOccurrence.LoopName); plantLoopID != "" && condenserLoopID != "" {
+					b.addEdge(hvacRuleCrossLoopChillerCondenser, plantLoopID, condenserLoopID, "crossloop", "condenser_water", sourceObj,
+						[]int{0}, []string{plantOccurrence.Component.ObjectName})
 				}
 			}
 		}
@@ -829,14 +859,19 @@ func hvacRuleAirLoopDemandEdgeRule(role string) string {
 	}
 }
 
-func hvacRulePlantComponentOnBranch(loopType string, sideName string) string {
-	if !strings.EqualFold(loopType, "PlantLoop") {
+func hvacRuleComponentOnLoopBranch(loopType string, sideName string) string {
+	switch {
+	case strings.EqualFold(loopType, "PlantLoop") && strings.EqualFold(sideName, "Demand"):
+		return hvacRulePlantComponentOnDemandBranch
+	case strings.EqualFold(loopType, "PlantLoop"):
+		return hvacRulePlantComponentOnSupplyBranch
+	case strings.EqualFold(loopType, "CondenserLoop") && strings.EqualFold(sideName, "Demand"):
+		return hvacRuleCondenserComponentOnDemand
+	case strings.EqualFold(loopType, "CondenserLoop"):
+		return hvacRuleCondenserComponentOnSupply
+	default:
 		return ""
 	}
-	if strings.EqualFold(sideName, "Demand") {
-		return hvacRulePlantComponentOnDemandBranch
-	}
-	return hvacRulePlantComponentOnSupplyBranch
 }
 
 func hvacRuleZoneNodeRule(role string) string {
