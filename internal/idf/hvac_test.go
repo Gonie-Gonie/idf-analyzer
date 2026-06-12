@@ -1101,6 +1101,10 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	if !componentSliceContainsName(relation.TerminalUnits, "Basement VAV Box Component") {
 		t.Fatalf("Basement terminals = %#v, want resolved VAV terminal", relation.TerminalUnits)
 	}
+	basementTerminal := findHVACTestingComponent(relation.TerminalUnits, "Basement VAV Box Component")
+	if basementTerminal == nil || !basementTerminal.ResolvedFromADU || basementTerminal.DistributionUnitOutletNode == "" || basementTerminal.TerminalObjectOutletNode == "" {
+		t.Fatalf("Basement ADU terminal trace = %#v, want ADU outlet and terminal outlet", basementTerminal)
+	}
 	if len(relation.RuleIDs) == 0 {
 		t.Fatalf("Basement relation missing rule ids: %#v", relation)
 	}
@@ -1125,6 +1129,16 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	}
 	if !hasHVACServiceChain(coreBottom.ServiceChains, "HeatSys1", "HeatSys1 Boiler", "", "Core_bottom VAV Box") {
 		t.Fatalf("Core_bottom service chains = %#v, want HeatSys1 -> reheat terminal -> zone", coreBottom.ServiceChains)
+	}
+	for _, ruleID := range []string{
+		hvacRuleZoneEquipmentListADU,
+		hvacRuleZoneADUResolvesTerminal,
+		hvacRuleZoneADUOutletMatchesInlet,
+		hvacRuleZoneTerminalOutletMatchesADU,
+	} {
+		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
+			t.Fatalf("rule graph missing ADU rule %s: %#v", ruleID, report.RuleGraph.Edges)
+		}
 	}
 	assertHVACJSONHasNoLegacyVocabulary(t, report)
 }

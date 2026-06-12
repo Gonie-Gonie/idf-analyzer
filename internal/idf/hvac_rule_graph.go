@@ -31,9 +31,12 @@ const (
 	hvacRuleZoneHasInletNode               = "zone.has_inlet_node"
 	hvacRuleZoneHasExhaustNode             = "zone.has_exhaust_node"
 	hvacRuleZoneHasReturnNode              = "zone.has_return_node"
+	hvacRuleZoneEquipmentListADU           = "zone.equipment_list_contains_adu"
 	hvacRuleZoneEquipmentListTerminal      = "zone.equipment_list_contains_terminal"
 	hvacRuleZoneEquipmentListEquipment     = "zone.equipment_list_contains_equipment"
 	hvacRuleZoneADUResolvesTerminal        = "zone.adu_resolves_terminal"
+	hvacRuleZoneADUOutletMatchesInlet      = "zone.adu_outlet_matches_zone_inlet"
+	hvacRuleZoneTerminalOutletMatchesADU   = "zone.terminal_outlet_matches_adu_outlet"
 	hvacRuleZoneTerminalOutletMatchesInlet = "zone.terminal_outlet_matches_zone_inlet"
 	hvacRuleComponentReferencesComponent   = "component.references_component"
 	hvacRuleComponentServesParent          = "component.reference_serves_parent"
@@ -387,7 +390,9 @@ func (b *hvacRuleGraphBuilder) addZoneEquipmentEdges(subjectID string, connectio
 		seen[key] = true
 		sourceID := b.addComponentSourceNode(component, "air")
 		ruleID := hvacRuleZoneEquipmentListEquipment
-		if isAirTerminalType(component.ObjectType) {
+		if isAirDistributionUnitType(component.ObjectType) {
+			ruleID = hvacRuleZoneEquipmentListADU
+		} else if isAirTerminalType(component.ObjectType) {
 			ruleID = hvacRuleZoneEquipmentListTerminal
 		}
 		b.addEdge(ruleID, equipmentListID, sourceID, "reference", "air", equipmentListObj,
@@ -410,6 +415,24 @@ func (b *hvacRuleGraphBuilder) addZoneEquipmentEdges(subjectID string, connectio
 		terminalID := b.addComponentSourceNode(terminal, "air")
 		b.addEdge(hvacRuleZoneADUResolvesTerminal, aduID, terminalID, "reference", "air", aduObj,
 			fieldIndexesOfValues(aduObj, []string{terminal.ObjectType, terminal.ObjectName}, 1), []string{terminal.ObjectName})
+		if terminal.DistributionUnitOutletNode != "" {
+			nodeID := b.addNodeName(terminal.DistributionUnitOutletNode, "air", "zone_inlet")
+			outletFieldIndex := terminal.DistributionUnitOutletFieldIndex
+			if outletFieldIndex < 0 {
+				outletFieldIndex = fieldIndexOfValue(aduObj, terminal.DistributionUnitOutletNode, 0)
+			}
+			b.addEdge(hvacRuleZoneADUOutletMatchesInlet, aduID, nodeID, "validation", "air", aduObj,
+				[]int{outletFieldIndex}, []string{terminal.DistributionUnitOutletNode})
+			b.addEdge(hvacRuleZoneADUOutletMatchesInlet, aduID, subjectID, "serves", "air", aduObj,
+				[]int{outletFieldIndex}, []string{terminal.DistributionUnitOutletNode})
+		}
+		if terminal.TerminalObjectOutletNode != "" && terminal.DistributionUnitOutletNode != "" && strings.EqualFold(terminal.TerminalObjectOutletNode, terminal.DistributionUnitOutletNode) {
+			terminalObj, ok := b.objectByTypeName(terminal.ObjectType, terminal.ObjectName)
+			if ok {
+				b.addEdge(hvacRuleZoneTerminalOutletMatchesADU, terminalID, aduID, "validation", "air", terminalObj,
+					[]int{terminal.OutletFieldIndex}, []string{terminal.TerminalObjectOutletNode})
+			}
+		}
 	}
 }
 

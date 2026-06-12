@@ -113,41 +113,44 @@ type HVACBranch struct {
 }
 
 type HVACComponent struct {
-	ObjectType              string          `json:"objectType"`
-	ObjectName              string          `json:"objectName"`
-	ObjectIndex             int             `json:"objectIndex,omitempty"`
-	Exists                  bool            `json:"exists"`
-	Family                  string          `json:"family,omitempty"`
-	FamilyLabel             string          `json:"familyLabel,omitempty"`
-	DisplayLabel            string          `json:"displayLabel,omitempty"`
-	LoopName                string          `json:"loopName,omitempty"`
-	ControlType             string          `json:"controlType,omitempty"`
-	InletNode               string          `json:"inletNode,omitempty"`
-	OutletNode              string          `json:"outletNode,omitempty"`
-	WaterInletNode          string          `json:"waterInletNode,omitempty"`
-	WaterOutletNode         string          `json:"waterOutletNode,omitempty"`
-	InletFieldIndex         int             `json:"inletFieldIndex,omitempty"`
-	OutletFieldIndex        int             `json:"outletFieldIndex,omitempty"`
-	SourceOwner             string          `json:"sourceOwner,omitempty"`
-	SourceOwnerType         string          `json:"sourceOwnerType,omitempty"`
-	SourceOwnerName         string          `json:"sourceOwnerName,omitempty"`
-	SourceOwnerObjectIndex  int             `json:"sourceOwnerObjectIndex,omitempty"`
-	TypeFieldIndex          int             `json:"typeFieldIndex,omitempty"`
-	NameFieldIndex          int             `json:"nameFieldIndex,omitempty"`
-	ExpectedObjectType      string          `json:"expectedObjectType,omitempty"`
-	RoleHere                string          `json:"roleHere,omitempty"`
-	CoolingSequence         string          `json:"coolingSequence,omitempty"`
-	HeatingSequence         string          `json:"heatingSequence,omitempty"`
-	CoolingFractionSchedule string          `json:"coolingFractionSchedule,omitempty"`
-	HeatingFractionSchedule string          `json:"heatingFractionSchedule,omitempty"`
-	NodeUsages              []HVACNodeUsage `json:"nodeUsages,omitempty"`
-	RelatedLoopNames        []string        `json:"relatedLoopNames,omitempty"`
-	EditableFields          []HVACEditField `json:"editableFields,omitempty"`
-	ListedInZoneEquipment   bool            `json:"listedInZoneEquipment,omitempty"`
-	ResolvedFromADU         bool            `json:"resolvedFromAirDistributionUnit,omitempty"`
-	DistributionUnitName    string          `json:"distributionUnitName,omitempty"`
-	OutletMatchesZoneInlet  bool            `json:"outletMatchesZoneInlet,omitempty"`
-	InletOnAirLoopDemand    bool            `json:"inletOnAirLoopDemandPath,omitempty"`
+	ObjectType                       string          `json:"objectType"`
+	ObjectName                       string          `json:"objectName"`
+	ObjectIndex                      int             `json:"objectIndex,omitempty"`
+	Exists                           bool            `json:"exists"`
+	Family                           string          `json:"family,omitempty"`
+	FamilyLabel                      string          `json:"familyLabel,omitempty"`
+	DisplayLabel                     string          `json:"displayLabel,omitempty"`
+	LoopName                         string          `json:"loopName,omitempty"`
+	ControlType                      string          `json:"controlType,omitempty"`
+	InletNode                        string          `json:"inletNode,omitempty"`
+	OutletNode                       string          `json:"outletNode,omitempty"`
+	WaterInletNode                   string          `json:"waterInletNode,omitempty"`
+	WaterOutletNode                  string          `json:"waterOutletNode,omitempty"`
+	InletFieldIndex                  int             `json:"inletFieldIndex,omitempty"`
+	OutletFieldIndex                 int             `json:"outletFieldIndex,omitempty"`
+	SourceOwner                      string          `json:"sourceOwner,omitempty"`
+	SourceOwnerType                  string          `json:"sourceOwnerType,omitempty"`
+	SourceOwnerName                  string          `json:"sourceOwnerName,omitempty"`
+	SourceOwnerObjectIndex           int             `json:"sourceOwnerObjectIndex,omitempty"`
+	TypeFieldIndex                   int             `json:"typeFieldIndex,omitempty"`
+	NameFieldIndex                   int             `json:"nameFieldIndex,omitempty"`
+	ExpectedObjectType               string          `json:"expectedObjectType,omitempty"`
+	RoleHere                         string          `json:"roleHere,omitempty"`
+	CoolingSequence                  string          `json:"coolingSequence,omitempty"`
+	HeatingSequence                  string          `json:"heatingSequence,omitempty"`
+	CoolingFractionSchedule          string          `json:"coolingFractionSchedule,omitempty"`
+	HeatingFractionSchedule          string          `json:"heatingFractionSchedule,omitempty"`
+	NodeUsages                       []HVACNodeUsage `json:"nodeUsages,omitempty"`
+	RelatedLoopNames                 []string        `json:"relatedLoopNames,omitempty"`
+	EditableFields                   []HVACEditField `json:"editableFields,omitempty"`
+	ListedInZoneEquipment            bool            `json:"listedInZoneEquipment,omitempty"`
+	ResolvedFromADU                  bool            `json:"resolvedFromAirDistributionUnit,omitempty"`
+	DistributionUnitName             string          `json:"distributionUnitName,omitempty"`
+	DistributionUnitOutletNode       string          `json:"distributionUnitOutletNode,omitempty"`
+	DistributionUnitOutletFieldIndex int             `json:"distributionUnitOutletFieldIndex,omitempty"`
+	TerminalObjectOutletNode         string          `json:"terminalObjectOutletNode,omitempty"`
+	OutletMatchesZoneInlet           bool            `json:"outletMatchesZoneInlet,omitempty"`
+	InletOnAirLoopDemand             bool            `json:"inletOnAirLoopDemandPath,omitempty"`
 }
 
 type HVACConnector struct {
@@ -1775,7 +1778,10 @@ func resolveAirDistributionUnitTerminal(ctx *hvacContext, equipment HVACComponen
 		return HVACComponent{}, false
 	}
 	terminal := newHVACComponent(ctx, objectType, objectNameValue)
+	terminal.TerminalObjectOutletNode = terminal.OutletNode
 	if equipment.OutletNode != "" {
+		terminal.DistributionUnitOutletNode = equipment.OutletNode
+		terminal.DistributionUnitOutletFieldIndex = equipment.OutletFieldIndex
 		terminal.OutletNode = equipment.OutletNode
 	}
 	terminal.RoleHere = "zone_terminal"
