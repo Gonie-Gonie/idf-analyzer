@@ -651,31 +651,63 @@ func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.
 	}
 }
 
-func TestBuildServiceChainsDoesNotCreateAirPlantCartesianProduct(t *testing.T) {
+func TestBuildServiceChainsFromRuleGraphRequiresDirectedPath(t *testing.T) {
 	relation := HVACZoneChain{
 		ZoneName:       "Office",
 		AirLoopNames:   []string{"Air 1", "Air 2"},
 		PlantLoopNames: []string{"Plant 1", "Plant 2"},
 		TerminalUnits: []HVACComponent{
-			{ObjectType: "AirTerminal:SingleDuct:VAV:Reheat", ObjectName: "Office VAV"},
+			{ObjectType: "AirTerminal:SingleDuct:VAV:Reheat", ObjectName: "Office VAV", ObjectIndex: 3},
 		},
 		PlantEquipment: []HVACComponent{
-			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 1", LoopName: "Plant 1"},
-			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 2", LoopName: "Plant 2"},
+			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 1", ObjectIndex: 4, LoopName: "Plant 1"},
+			{ObjectType: "Boiler:HotWater", ObjectName: "Boiler 2", ObjectIndex: 5, LoopName: "Plant 2"},
+		},
+	}
+	terminalID := hvacRuleComponentSourceNodeID(relation.TerminalUnits[0])
+	boilerID := hvacRuleComponentSourceNodeID(relation.PlantEquipment[0])
+	graph := HVACRuleGraph{
+		Nodes: []HVACRuleNode{
+			{ID: "loop:air:1", Kind: "loop", ObjectType: "AirLoopHVAC", ObjectName: "Air 1"},
+			{ID: "loop:air:2", Kind: "loop", ObjectType: "AirLoopHVAC", ObjectName: "Air 2"},
+			{ID: "loop:plant:1", Kind: "loop", ObjectType: "PlantLoop", ObjectName: "Plant 1"},
+			{ID: "loop:plant:2", Kind: "loop", ObjectType: "PlantLoop", ObjectName: "Plant 2"},
+			{ID: terminalID, Kind: "component", ObjectType: relation.TerminalUnits[0].ObjectType, ObjectName: relation.TerminalUnits[0].ObjectName, ObjectIndex: 3},
+			{ID: boilerID, Kind: "component", ObjectType: relation.PlantEquipment[0].ObjectType, ObjectName: relation.PlantEquipment[0].ObjectName, ObjectIndex: 4},
+			{ID: "zone:office", Kind: "zone", ObjectType: "Zone", ObjectName: "Office"},
+		},
+		Edges: []HVACRuleEdge{
+			{RuleID: hvacRulePlantComponentOnSupplyBranch, FromID: boilerID, ToID: "loop:plant:1", SourceObjectIndex: 100},
+			{RuleID: hvacRuleCrossLoopSameWaterCoil, FromID: "loop:plant:1", ToID: "loop:air:1", SourceObjectIndex: 101},
+			{RuleID: hvacRuleAirLoopZoneSplitterToTerminal, FromID: "loop:air:1", ToID: terminalID, SourceObjectIndex: 102},
+			{RuleID: hvacRuleZoneTerminalOutletMatchesInlet, FromID: terminalID, ToID: "zone:office", SourceObjectIndex: 103},
 		},
 	}
 
-	paths := buildServiceChains(relation)
-	if len(paths) != 4 {
-		t.Fatalf("service path count = %d, want 4 non-cartesian paths: %#v", len(paths), paths)
+	paths := buildServiceChainsFromRuleGraph(relation, graph)
+	if len(paths) != 3 {
+		t.Fatalf("service path count = %d, want terminal + Air 1 + Plant 1 paths: %#v", len(paths), paths)
 	}
+	seenAir1 := false
+	seenPlant1 := false
 	for _, path := range paths {
 		if path.AirLoopName != "" && path.PlantLoop != "" {
 			t.Fatalf("service path combines air and plant without RuleGraph path search: %#v", path)
 		}
+		if path.AirLoopName == "Air 2" || path.PlantLoop == "Plant 2" {
+			t.Fatalf("service path includes disconnected loop: %#v", path)
+		}
 		if path.Confidence != "rule" {
 			t.Fatalf("service path confidence = %q, want rule", path.Confidence)
 		}
+		if len(path.SourceRelations) == 0 {
+			t.Fatalf("service path missing rule trace: %#v", path)
+		}
+		seenAir1 = seenAir1 || path.AirLoopName == "Air 1"
+		seenPlant1 = seenPlant1 || path.PlantLoop == "Plant 1"
+	}
+	if !seenAir1 || !seenPlant1 {
+		t.Fatalf("service paths missing connected air/plant loops: %#v", paths)
 	}
 }
 

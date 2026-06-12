@@ -367,6 +367,8 @@ func AnalyzeHVAC(doc Document) HVACReport {
 	applyCrossLoopRelations(ctx, loops)
 	relations := buildHVACZoneRelations(ctx, loops)
 	applyLoopZoneRelations(loops, relations)
+	ruleGraph := buildHVACRuleGraph(ctx, loops, relations)
+	attachHVACServiceChains(relations, ruleGraph)
 	report := HVACReport{
 		Loops:               loops,
 		ZoneRelations:       relations,
@@ -375,7 +377,7 @@ func AnalyzeHVAC(doc Document) HVACReport {
 		NodeOutputMonitors:  hvacNodeOutputMonitors(doc),
 		NodeEdges:           buildHVACNodeEdges(loops),
 		ComponentReferences: append([]HVACComponentReference(nil), ctx.componentReferences...),
-		RuleGraph:           buildHVACRuleGraph(ctx, loops, relations),
+		RuleGraph:           ruleGraph,
 	}
 	report.LoopCount = len(report.Loops)
 	report.ZoneRelationCount = len(report.ZoneRelations)
@@ -1295,7 +1297,6 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 	}
 	annotateTerminalAirLoopEvidence(ctx, loops, &relation)
 	relation.RelationSource, relation.Confidence = zoneRelationSourceConfidence(relation)
-	relation.ServiceChains = buildServiceChains(relation)
 	return relation
 }
 
@@ -1387,7 +1388,6 @@ func buildHVACSpaceRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Ob
 	}
 	annotateTerminalAirLoopEvidence(ctx, loops, &relation)
 	relation.RelationSource, relation.Confidence = zoneRelationSourceConfidence(relation)
-	relation.ServiceChains = buildServiceChains(relation)
 	return relation
 }
 
@@ -2278,76 +2278,210 @@ func (loop HVACLoop) SupplySideComponents() []HVACComponent {
 	return components
 }
 
-func buildServiceChains(relation HVACZoneChain) []HVACServicePath {
-	var paths []HVACServicePath
-	if len(relation.TerminalUnits) == 0 && len(relation.ZoneEquipment) == 0 {
+func attachHVACServiceChains(relations []HVACZoneChain, graph HVACRuleGraph) {
+	for index := range relations {
+		relations[index].ServiceChains = buildServiceChainsFromRuleGraph(relations[index], graph)
+	}
+}
+
+func buildServiceChainsFromRuleGraph(relation HVACZoneChain, graph HVACRuleGraph) []HVACServicePath {
+	subjectID := hvacRuleSubjectNodeIDForRelation(graph, relation)
+	if subjectID == "" {
 		return nil
 	}
+	var paths []HVACServicePath
+	seen := map[string]bool{}
+	addPath := func(path HVACServicePath) {
+		key := strings.Join([]string{
+			path.ZoneName,
+			path.TerminalName,
+			path.AirLoopName,
+			path.Component,
+			path.PlantLoop,
+			path.SourceComponent,
+		}, "|")
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		paths = append(paths, path)
+	}
+
 	for _, terminal := range relation.TerminalUnits {
-		if len(relation.AirLoopNames) == 0 && len(relation.PlantLoopNames) == 0 {
-			paths = append(paths, HVACServicePath{
-				ZoneName:        relation.ZoneName,
-				TerminalName:    componentLabel(terminal),
-				Confidence:      "rule",
-				Evidence:        hvacRuleZoneTerminalOutletMatchesInlet,
-				SourceRelations: []string{"terminal_outlet_node", "zone_inlet_node"},
-			})
+		terminalID := hvacRuleComponentSourceNodeID(terminal)
+		if terminalID == "" || !hvacRuleGraphHasNode(graph, terminalID) {
 			continue
 		}
 		for _, airLoopName := range relation.AirLoopNames {
-			paths = append(paths, HVACServicePath{
-				ZoneName:        relation.ZoneName,
-				TerminalName:    componentLabel(terminal),
-				AirLoopName:     airLoopName,
-				Confidence:      "rule",
-				Evidence:        hvacRuleAirLoopZoneSplitterToTerminal,
-				SourceRelations: []string{hvacRuleAirLoopZoneSplitterToTerminal, hvacRuleZoneTerminalOutletMatchesInlet},
-			})
-		}
-		for _, plantLoopName := range relation.PlantLoopNames {
-			sourceComponents := plantSourceComponentsForServicePath(relation, plantLoopName)
-			for _, sourceComponent := range sourceComponents {
-				paths = append(paths, HVACServicePath{
+			loopID := hvacRuleLoopNodeIDForName(graph, "AirLoopHVAC", airLoopName)
+			if loopID == "" {
+				continue
+			}
+			if edges, ok := hvacRuleGraphPath(graph, loopID, subjectID); ok && hvacRulePathContainsNode(edges, terminalID) {
+				addPath(HVACServicePath{
 					ZoneName:        relation.ZoneName,
 					TerminalName:    componentLabel(terminal),
-					PlantLoop:       plantLoopName,
-					SourceComponent: sourceComponent,
+					AirLoopName:     airLoopName,
 					Confidence:      "rule",
-					Evidence:        "typed_component_reference",
-					SourceRelations: []string{"typed_component_reference", hvacRuleZoneTerminalOutletMatchesInlet},
+					Evidence:        hvacRulePathEvidence(edges),
+					SourceRelations: hvacRulePathRuleIDs(edges),
+				})
+			}
+		}
+		if edges, ok := hvacRuleGraphPath(graph, terminalID, subjectID); ok {
+			addPath(HVACServicePath{
+				ZoneName:        relation.ZoneName,
+				TerminalName:    componentLabel(terminal),
+				Confidence:      "rule",
+				Evidence:        hvacRulePathEvidence(edges),
+				SourceRelations: hvacRulePathRuleIDs(edges),
+			})
+		}
+	}
+
+	for _, plantLoopName := range relation.PlantLoopNames {
+		sourceComponents := plantSourceComponentsForServicePath(relation, plantLoopName)
+		for _, sourceComponent := range sourceComponents {
+			componentID := hvacRuleComponentSourceNodeID(sourceComponent)
+			if componentID == "" || !hvacRuleGraphHasNode(graph, componentID) {
+				continue
+			}
+			if edges, ok := hvacRuleGraphPath(graph, componentID, subjectID); ok {
+				addPath(HVACServicePath{
+					ZoneName:        relation.ZoneName,
+					PlantLoop:       plantLoopName,
+					SourceComponent: componentLabel(sourceComponent),
+					Confidence:      "rule",
+					Evidence:        hvacRulePathEvidence(edges),
+					SourceRelations: hvacRulePathRuleIDs(edges),
 				})
 			}
 		}
 	}
-	if len(paths) == 0 {
-		for _, equipment := range relation.ZoneEquipment {
-			paths = append(paths, HVACServicePath{
+
+	for _, equipment := range relation.ZoneEquipment {
+		if isAirTerminalType(equipment.ObjectType) {
+			continue
+		}
+		equipmentID := hvacRuleComponentSourceNodeID(equipment)
+		if equipmentID == "" || !hvacRuleGraphHasNode(graph, equipmentID) {
+			continue
+		}
+		if edges, ok := hvacRuleGraphPath(graph, equipmentID, subjectID); ok {
+			addPath(HVACServicePath{
 				ZoneName:        relation.ZoneName,
 				Component:       componentLabel(equipment),
 				Confidence:      "rule",
-				Evidence:        hvacRuleZoneEquipmentListEquipment,
-				SourceRelations: []string{hvacRuleZoneEquipmentListEquipment},
+				Evidence:        hvacRulePathEvidence(edges),
+				SourceRelations: hvacRulePathRuleIDs(edges),
 			})
 		}
 	}
+
 	return paths
 }
 
-func plantSourceComponentsForServicePath(relation HVACZoneChain, plantLoopName string) []string {
-	var labels []string
+func plantSourceComponentsForServicePath(relation HVACZoneChain, plantLoopName string) []HVACComponent {
+	var components []HVACComponent
 	if plantLoopName == "" {
-		return []string{""}
+		return nil
 	}
 	for _, component := range relation.PlantEquipment {
 		if component.LoopName != "" && !strings.EqualFold(component.LoopName, plantLoopName) {
 			continue
 		}
-		labels = append(labels, componentLabel(component))
+		components = append(components, component)
 	}
-	if len(labels) == 0 {
-		return []string{""}
+	return components
+}
+
+func hvacRuleSubjectNodeIDForRelation(graph HVACRuleGraph, relation HVACZoneChain) string {
+	wantedKind := "zone"
+	wantedName := relation.ZoneName
+	if strings.EqualFold(relation.RelationScope, "space") && relation.SpaceName != "" {
+		wantedKind = "space"
+		wantedName = relation.SpaceName
 	}
-	return labels
+	for _, node := range graph.Nodes {
+		if node.Kind == wantedKind && strings.EqualFold(node.ObjectName, wantedName) {
+			return node.ID
+		}
+	}
+	return ""
+}
+
+func hvacRuleLoopNodeIDForName(graph HVACRuleGraph, loopType string, loopName string) string {
+	for _, node := range graph.Nodes {
+		if node.Kind == "loop" && strings.EqualFold(node.ObjectType, loopType) && strings.EqualFold(node.ObjectName, loopName) {
+			return node.ID
+		}
+	}
+	return ""
+}
+
+func hvacRuleGraphHasNode(graph HVACRuleGraph, nodeID string) bool {
+	for _, node := range graph.Nodes {
+		if node.ID == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
+func hvacRuleGraphPath(graph HVACRuleGraph, fromID string, toID string) ([]HVACRuleEdge, bool) {
+	if fromID == "" || toID == "" || fromID == toID {
+		return nil, fromID == toID
+	}
+	adjacency := map[string][]HVACRuleEdge{}
+	for _, edge := range graph.Edges {
+		adjacency[edge.FromID] = append(adjacency[edge.FromID], edge)
+	}
+	type queueItem struct {
+		NodeID string
+		Path   []HVACRuleEdge
+	}
+	queue := []queueItem{{NodeID: fromID}}
+	visited := map[string]bool{fromID: true}
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+		for _, edge := range adjacency[item.NodeID] {
+			if edge.ToID == "" || visited[edge.ToID] {
+				continue
+			}
+			nextPath := append(append([]HVACRuleEdge(nil), item.Path...), edge)
+			if edge.ToID == toID {
+				return nextPath, true
+			}
+			visited[edge.ToID] = true
+			queue = append(queue, queueItem{NodeID: edge.ToID, Path: nextPath})
+		}
+	}
+	return nil, false
+}
+
+func hvacRulePathContainsNode(edges []HVACRuleEdge, nodeID string) bool {
+	if nodeID == "" {
+		return false
+	}
+	for _, edge := range edges {
+		if edge.FromID == nodeID || edge.ToID == nodeID {
+			return true
+		}
+	}
+	return false
+}
+
+func hvacRulePathRuleIDs(edges []HVACRuleEdge) []string {
+	var ids []string
+	for _, edge := range edges {
+		ids = appendUniqueString(ids, edge.RuleID)
+	}
+	return ids
+}
+
+func hvacRulePathEvidence(edges []HVACRuleEdge) string {
+	return strings.Join(hvacRulePathRuleIDs(edges), " -> ")
 }
 
 func parseAirLoopDemandGraph(ctx *hvacContext, loop HVACLoop) AirLoopDemandGraph {

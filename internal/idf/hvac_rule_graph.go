@@ -35,6 +35,8 @@ const (
 	hvacRuleZoneEquipmentListEquipment     = "zone.equipment_list_contains_equipment"
 	hvacRuleZoneADUResolvesTerminal        = "zone.adu_resolves_terminal"
 	hvacRuleZoneTerminalOutletMatchesInlet = "zone.terminal_outlet_matches_zone_inlet"
+	hvacRulePlantComponentOnSupplyBranch   = "plant.component_on_supply_branch"
+	hvacRulePlantComponentOnDemandBranch   = "plant.component_on_demand_branch"
 	hvacRuleCrossLoopSameWaterCoil         = "crossloop.same_water_coil_air_and_plant"
 )
 
@@ -74,6 +76,7 @@ type hvacRuleGraphBuilder struct {
 	edges                map[string]HVACRuleEdge
 	branchNodeIDs        map[string]string
 	componentOccurrences map[string][]hvacRuleComponentOccurrence
+	loopNodeIDs          map[string]string
 }
 
 type hvacRuleComponentOccurrence struct {
@@ -91,6 +94,7 @@ func buildHVACRuleGraph(ctx *hvacContext, loops []HVACLoop, relations []HVACZone
 		edges:                map[string]HVACRuleEdge{},
 		branchNodeIDs:        map[string]string{},
 		componentOccurrences: map[string][]hvacRuleComponentOccurrence{},
+		loopNodeIDs:          map[string]string{},
 	}
 	for _, loop := range loops {
 		builder.addLoop(loop)
@@ -132,6 +136,7 @@ func (b *hvacRuleGraphBuilder) graph() HVACRuleGraph {
 func (b *hvacRuleGraphBuilder) addLoop(loop HVACLoop) {
 	loopObj, _ := b.objectByTypeName(loop.Type, loop.Name)
 	loopID := hvacRuleLoopNodeID(loop)
+	b.loopNodeIDs[hvacObjectKey(loop.Type, loop.Name)] = loopID
 	b.addNode(HVACRuleNode{
 		ID:          loopID,
 		Kind:        "loop",
@@ -201,6 +206,10 @@ func (b *hvacRuleGraphBuilder) addBranchComponentEdges(loop HVACLoop, side HVACL
 			[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
 		b.addEdge(hvacRuleBranchComponentOccurrence, branchID, occurrenceID, "contains", medium, branchObj,
 			[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+		if plantRuleID := hvacRulePlantComponentOnBranch(loop.Type, side.Name); plantRuleID != "" {
+			b.addEdge(plantRuleID, sourceID, hvacRuleLoopNodeID(loop), "occurs_on", medium, branchObj,
+				[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+		}
 		if component.InletNode != "" {
 			nodeID := b.addNodeName(component.InletNode, medium, "component_inlet")
 			b.addEdge(hvacRuleBranchComponentInletNode, nodeID, occurrenceID, "flow", medium, branchObj,
@@ -326,7 +335,7 @@ func (b *hvacRuleGraphBuilder) addZoneRelation(relation HVACZoneChain) {
 	b.addEdge(hvacRuleZoneHasEquipmentConnections, subjectID, connectionID, "reference", "air", connectionObj,
 		[]int{0}, []string{relation.ZoneName, relation.SpaceName})
 	b.addZoneNodeEdges(subjectID, relation)
-	b.addZoneEquipmentEdges(connectionID, connectionObj, relation)
+	b.addZoneEquipmentEdges(subjectID, connectionID, connectionObj, relation)
 	b.addZoneTerminalEdges(subjectID, connectionObj, relation)
 }
 
@@ -351,7 +360,7 @@ func (b *hvacRuleGraphBuilder) addZoneNodeEdges(subjectID string, relation HVACZ
 	}
 }
 
-func (b *hvacRuleGraphBuilder) addZoneEquipmentEdges(connectionID string, connectionObj Object, relation HVACZoneChain) {
+func (b *hvacRuleGraphBuilder) addZoneEquipmentEdges(subjectID string, connectionID string, connectionObj Object, relation HVACZoneChain) {
 	equipmentListName := fieldValueByCatalogName(connectionObj, "Zone Conditioning Equipment List Name", "Space Conditioning Equipment List Name")
 	equipmentListObj, ok := hvacEquipmentListByName(b.ctx, equipmentListName, "ZoneHVAC:EquipmentList", "SpaceHVAC:EquipmentList")
 	if !ok {
@@ -376,6 +385,10 @@ func (b *hvacRuleGraphBuilder) addZoneEquipmentEdges(connectionID string, connec
 		}
 		b.addEdge(ruleID, equipmentListID, sourceID, "reference", "air", equipmentListObj,
 			[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+		if !isAirTerminalType(component.ObjectType) && subjectID != "" {
+			b.addEdge(ruleID, sourceID, subjectID, "serves", "air", equipmentListObj,
+				[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+		}
 	}
 	for _, terminal := range relation.TerminalUnits {
 		if !terminal.ResolvedFromADU {
@@ -408,6 +421,16 @@ func (b *hvacRuleGraphBuilder) addZoneTerminalEdges(subjectID string, connection
 			[]int{terminal.OutletFieldIndex}, []string{terminal.OutletNode})
 		b.addEdge(hvacRuleZoneTerminalOutletMatchesInlet, terminalID, subjectID, "serves", "air", terminalObj,
 			[]int{terminal.OutletFieldIndex}, []string{terminal.OutletNode})
+		if terminal.InletOnAirLoopDemand && terminal.InletNode != "" {
+			for _, airLoopName := range relation.AirLoopNames {
+				loopID := b.loopNodeID("AirLoopHVAC", airLoopName)
+				if loopID == "" {
+					continue
+				}
+				b.addEdge(hvacRuleAirLoopZoneSplitterToTerminal, loopID, terminalID, "serves", "air", terminalObj,
+					[]int{terminal.InletFieldIndex}, []string{terminal.InletNode})
+			}
+		}
 	}
 }
 
@@ -434,6 +457,10 @@ func (b *hvacRuleGraphBuilder) addCrossLoopEdges() {
 			for _, plantOccurrence := range plant {
 				b.addEdge(hvacRuleCrossLoopSameWaterCoil, airOccurrence.ID, plantOccurrence.ID, "crossloop", "water", sourceObj,
 					[]int{0}, []string{airOccurrence.Component.ObjectName})
+				if airLoopID, plantLoopID := b.loopNodeID(airOccurrence.LoopType, airOccurrence.LoopName), b.loopNodeID(plantOccurrence.LoopType, plantOccurrence.LoopName); airLoopID != "" && plantLoopID != "" {
+					b.addEdge(hvacRuleCrossLoopSameWaterCoil, plantLoopID, airLoopID, "crossloop", "water", sourceObj,
+						[]int{0}, []string{airOccurrence.Component.ObjectName})
+				}
 			}
 		}
 	}
@@ -622,6 +649,10 @@ func (b *hvacRuleGraphBuilder) branchNodeID(branchName string) string {
 	return b.branchNodeIDs[normalizeName(branchName)]
 }
 
+func (b *hvacRuleGraphBuilder) loopNodeID(loopType string, loopName string) string {
+	return b.loopNodeIDs[hvacObjectKey(loopType, loopName)]
+}
+
 func (b *hvacRuleGraphBuilder) objectByTypeName(objectType string, objectNameValue string) (Object, bool) {
 	if strings.TrimSpace(objectType) == "" || strings.TrimSpace(objectNameValue) == "" {
 		return Object{}, false
@@ -728,6 +759,16 @@ func hvacRuleAirLoopDemandEdgeRule(role string) string {
 	default:
 		return ""
 	}
+}
+
+func hvacRulePlantComponentOnBranch(loopType string, sideName string) string {
+	if !strings.EqualFold(loopType, "PlantLoop") {
+		return ""
+	}
+	if strings.EqualFold(sideName, "Demand") {
+		return hvacRulePlantComponentOnDemandBranch
+	}
+	return hvacRulePlantComponentOnSupplyBranch
 }
 
 func hvacRuleZoneNodeRule(role string) string {
