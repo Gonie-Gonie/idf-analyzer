@@ -414,6 +414,20 @@ function hvacLoopKind(loop) {
   return "other";
 }
 
+function hvacLoopChipClass(loopType = "") {
+  const type = String(loopType || "").toLowerCase();
+  if (type.includes("airloop")) {
+    return "air";
+  }
+  if (type.includes("condenser")) {
+    return "condenser";
+  }
+  if (type.includes("plant")) {
+    return "plant";
+  }
+  return "other";
+}
+
 function renderHVACLoopView(loop, query) {
   if (!loop) {
     elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.noLoopsFound")}</div>`;
@@ -425,9 +439,10 @@ function renderHVACLoopView(loop, query) {
   }
   elements.hvacGraph.innerHTML = `
     <div class="hvac-loop-title">
-      <div>
+      <div class="hvac-loop-heading">
         <h3>${escapeHTML(loop.name || loop.type)}</h3>
         <span>${escapeHTML(loop.type)} ${renderObjectLink(loop.objectIndex, loop.type)}</span>
+        ${renderLoopRelatedSystemChips(loop)}
       </div>
       <div class="hvac-loop-meta">
         <span>${escapeHTML(t("count.zones", { count: (loop.relatedZones || []).length }))}</span>
@@ -438,6 +453,30 @@ function renderHVACLoopView(loop, query) {
     ${renderHVACLoopDiagram(loop)}
     ${renderHVACLoopGraphDetail(loop)}
     ${renderCrossLoopRelations(loop)}`;
+}
+
+function renderLoopRelatedSystemChips(loop) {
+  const relations = loop.relatedLoops || [];
+  if (!relations.length) {
+    return "";
+  }
+  return `
+    <div class="hvac-related-system-chips" aria-label="${escapeHTML(t("hvac.connectedSystems", {}, "Connected systems"))}">
+      ${relations
+        .map((relation) => {
+          const graphKey = componentKeyForCrossLoopRelation(loop, relation);
+          const chipClass = hvacLoopChipClass(relation.loopType);
+          const label = [relation.loopName, relation.componentName ? `via ${relation.componentName}` : ""].filter(Boolean).join(" ");
+          return `
+            <button class="${escapeHTML(chipClass)}" type="button"
+              data-hvac-jump-loop-name="${escapeHTML(relation.loopName)}"
+              data-hvac-jump-graph-key="${escapeHTML(graphKey)}"
+              title="${escapeHTML(`${relation.loopType} ${label}`)}">
+              ${escapeHTML(label || relation.loopType || t("hvac.viewLoop"))}
+            </button>`;
+        })
+        .join("")}
+    </div>`;
 }
 
 function hvacGraphScaleMode(value = state.hvacGraphScale) {
@@ -1375,6 +1414,7 @@ function renderHVACInspectorSelection(selected) {
       <strong>${escapeHTML(title)}</strong>
       <span>${escapeHTML(selected.kind || t("common.selection"))}</span>
     </div>
+    ${selected.component ? renderConnectedSystemsPanel(selected) : ""}
     ${
       selected.component
         ? `
@@ -1390,6 +1430,63 @@ function renderHVACInspectorSelection(selected) {
         ? `<div class="hvac-tag-list">${selected.relations.map((relation) => `<span>${escapeHTML(relationDisplayName(relation))}</span>`).join("") || `<span>N/A</span>`}</div>`
         : ""
     }`;
+}
+
+function renderConnectedSystemsPanel(selected) {
+  const systems = connectedSystemsForSelection(selected);
+  if (!systems.length) {
+    return "";
+  }
+  return `
+    <section class="hvac-connected-systems">
+      <strong>${escapeHTML(t("hvac.connectedSystems", {}, "Connected systems"))}</strong>
+      <div class="hvac-connected-system-list">
+        ${systems
+          .map((system) =>
+            system.current
+              ? `<span class="${escapeHTML(hvacLoopChipClass(system.type))}" title="${escapeHTML(system.name)}">${escapeHTML(system.name)} / ${escapeHTML(t("common.current"))}</span>`
+              : `<button class="${escapeHTML(hvacLoopChipClass(system.type))}" type="button" data-hvac-jump-loop-name="${escapeHTML(system.name)}" data-hvac-jump-graph-key="${escapeHTML(system.graphKey || componentGraphKey(selected.component))}" title="${escapeHTML([system.type, system.name].filter(Boolean).join(" "))}">${escapeHTML(system.name)}</button>`,
+          )
+          .join("")}
+      </div>
+    </section>`;
+}
+
+function connectedSystemsForSelection(selected) {
+  const component = selected.component || {};
+  const systems = [];
+  const add = (name, type = "", current = false, graphKey = "") => {
+    const cleanName = String(name || "").trim();
+    if (!cleanName) {
+      return;
+    }
+    const key = `${normalizeGraphName(type)}:${normalizeGraphName(cleanName)}:${current ? "current" : "related"}`;
+    if (systems.some((system) => system.key === key)) {
+      return;
+    }
+    systems.push({ key, name: cleanName, type, current, graphKey });
+  };
+  const currentLoopName = component.loopName || selected.loop?.name || "";
+  const currentLoop = findHVACLoopByName(currentLoopName);
+  if (currentLoopName) {
+    add(currentLoopName, selected.loop?.type || currentLoop?.type || "", true);
+  }
+  for (const loopName of verifiedCrossLoopNamesForComponent(component)) {
+    const loop = findHVACLoopByName(loopName);
+    add(loopName, loop?.type || "", false, componentGraphKey(component));
+  }
+  for (const relation of selected.relations || []) {
+    for (const loopName of relation.airLoopNames || []) {
+      add(loopName, "AirLoopHVAC", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
+    }
+    for (const loopName of relation.plantLoopNames || []) {
+      add(loopName, "PlantLoop", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
+    }
+    for (const loopName of relation.condenserLoopNames || []) {
+      add(loopName, "CondenserLoop", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
+    }
+  }
+  return systems.slice(0, 10);
 }
 
 function renderNodeUsage(usage) {
@@ -1653,7 +1750,7 @@ function selectedLoopGraphItem(loop) {
       }
       for (const component of branch.components || []) {
         if (componentGraphKey(component) === key) {
-          return { kind: "component", component, branch, side };
+          return { kind: "component", component, branch, side, loop };
         }
       }
     }

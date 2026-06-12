@@ -2807,6 +2807,12 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   border-bottom: 1px solid var(--line);
 }
 
+.hvac-loop-heading {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
 .hvac-loop-title h3,
 .hvac-section-head h3 {
   margin: 0;
@@ -2835,6 +2841,48 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+.hvac-related-system-chips,
+.hvac-connected-system-list {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hvac-related-system-chips button,
+.hvac-connected-system-list button,
+.hvac-connected-system-list span {
+  max-width: 220px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.hvac-related-system-chips .plant,
+.hvac-connected-system-list .plant {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--accent-strong);
+}
+
+.hvac-related-system-chips .air,
+.hvac-connected-system-list .air {
+  border-color: rgba(14, 165, 233, 0.3);
+  background: rgba(14, 165, 233, 0.12);
+  color: var(--teal-dark);
+}
+
+.hvac-related-system-chips .condenser,
+.hvac-connected-system-list .condenser {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
 }
 
 .hvac-graph-toolbar {
@@ -3382,6 +3430,23 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   gap: 8px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-connected-systems {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-connected-systems > strong {
+  font-size: 12px;
+}
+
+.hvac-connected-system-list span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--surface-2);
 }
 
 .hvac-inspector-kv {
