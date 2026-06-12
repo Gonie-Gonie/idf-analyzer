@@ -135,8 +135,8 @@ func TestAnalyzeHVACBuildsLoopAndZoneRelations(t *testing.T) {
 	if relation.RelationSource != "cross_confirmed" || relation.Confidence != "high" {
 		t.Fatalf("relation evidence = source %q confidence %q, want cross_confirmed/high", relation.RelationSource, relation.Confidence)
 	}
-	if len(relation.AirLoopRelations) != 1 || relation.AirLoopRelations[0].Confidence != "high" {
-		t.Fatalf("air loop relations = %#v, want high-confidence relation", relation.AirLoopRelations)
+	if len(relation.AirLoopRelations) != 1 || relation.AirLoopRelations[0].Confidence != "rule" {
+		t.Fatalf("air loop relations = %#v, want rule-resolved relation", relation.AirLoopRelations)
 	}
 	if len(relation.TerminalUnits) != 1 || !relation.TerminalUnits[0].InletOnAirLoopDemand || !relation.TerminalUnits[0].OutletMatchesZoneInlet {
 		t.Fatalf("terminal evidence = %#v, want demand path and zone inlet match", relation.TerminalUnits)
@@ -625,8 +625,8 @@ func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.
 		t.Fatalf("Office air loop relation = %#v", report.ZoneRelations)
 	}
 	airRelation := relation.AirLoopRelations[0]
-	if airRelation.Source != "terminal_inlet_on_demand_path" || airRelation.Confidence != "high" {
-		t.Fatalf("air relation = %#v, want terminal_inlet_on_demand_path/high", airRelation)
+	if airRelation.Source != hvacRuleAirLoopZoneSplitterToTerminal || airRelation.Confidence != "rule" {
+		t.Fatalf("air relation = %#v, want %s/rule", airRelation, hvacRuleAirLoopZoneSplitterToTerminal)
 	}
 	if !stringSliceContainsFold(airRelation.Evidence, `Terminal inlet node "Office Terminal Inlet" is on the AirLoop demand graph.`) {
 		t.Fatalf("air relation evidence = %#v, want terminal inlet graph evidence", airRelation.Evidence)
