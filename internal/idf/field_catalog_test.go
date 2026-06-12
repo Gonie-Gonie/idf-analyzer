@@ -125,6 +125,12 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			role:       fieldRoleNodeRef,
 		},
 		{
+			objectType: "ZoneHVAC:LowTemperatureRadiant:SurfaceGroup",
+			fieldIndex: 1,
+			fieldName:  "Surface Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
 			objectType: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow",
 			fieldIndex: 13,
 			fieldName:  "Supply Air Fan Object Type",

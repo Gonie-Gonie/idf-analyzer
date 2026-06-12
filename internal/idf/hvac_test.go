@@ -654,6 +654,17 @@ func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
 			{Value: "HW Demand Inlet"},
 			{Value: "HW Demand Outlet"},
 		}},
+		{Index: 10, Type: "ZoneHVAC:LowTemperatureRadiant:SurfaceGroup", Fields: []Field{
+			{Value: "Office Radiant Surfaces"},
+			{Value: "Office Floor"},
+			{Value: "1.0"},
+		}},
+		{Index: 11, Type: "BuildingSurface:Detailed", Fields: []Field{
+			{Value: "Office Floor"},
+			{Value: "Floor"},
+			{Value: "Office Slab Construction"},
+			{Value: "Office"},
+		}},
 	}}
 
 	report := AnalyzeHVAC(doc)
@@ -678,6 +689,9 @@ func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
 		hvacRuleZoneEquipmentListEquipment,
 		hvacRulePlantComponentOnSupplyBranch,
 		hvacRulePlantComponentOnDemandBranch,
+		hvacRuleRadiantEquipmentSurfaceGroup,
+		hvacRuleRadiantSurfaceGroupSurface,
+		hvacRuleRadiantSurfaceBelongsToZone,
 	} {
 		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
 			t.Fatalf("rule graph missing %s edge: %#v", ruleID, report.RuleGraph.Edges)

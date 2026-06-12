@@ -2184,6 +2184,11 @@ type zoneTerminalUnitReference struct {
 	FieldIndex int
 }
 
+type radiantSurfaceReference struct {
+	Name       string
+	FieldIndex int
+}
+
 func vrfSystemTerminalReferences(ctx *hvacContext, obj Object) []HVACComponentReference {
 	if !isRefrigerantSystemType(obj.Type) {
 		return nil
@@ -2267,6 +2272,41 @@ func zoneTerminalUnitReferences(listObj Object) []zoneTerminalUnitReference {
 	for index := 1; index < len(listObj.Fields); index++ {
 		if value := strings.TrimSpace(listObj.Fields[index].Value); value != "" {
 			references = append(references, zoneTerminalUnitReference{Name: value, FieldIndex: index})
+		}
+	}
+	return references
+}
+
+func radiantSurfaceOrGroupName(obj Object) (string, int, bool) {
+	if value, index, ok := fieldValueIndexByCatalogName(obj, "Surface Name or Radiant Surface Group Name"); ok && value != "" {
+		return value, index, true
+	}
+	for index, field := range obj.Fields {
+		if strings.Contains(normalizeFieldName(field.Comment), "surface name or radiant surface group name") {
+			value := strings.TrimSpace(field.Value)
+			return value, index, value != ""
+		}
+	}
+	return "", -1, false
+}
+
+func radiantSurfaceGroupReferences(groupObj Object) []radiantSurfaceReference {
+	var references []radiantSurfaceReference
+	for _, group := range hvacExtensibleFieldGroups(groupObj, "surfaces") {
+		index := hvacGroupFieldIndexByRole(group, fieldRoleObjectRef)
+		if index < 0 || index >= len(groupObj.Fields) {
+			continue
+		}
+		if value := strings.TrimSpace(groupObj.Fields[index].Value); value != "" {
+			references = append(references, radiantSurfaceReference{Name: value, FieldIndex: index})
+		}
+	}
+	if len(references) > 0 {
+		return references
+	}
+	for index := 1; index < len(groupObj.Fields); index += 2 {
+		if value := strings.TrimSpace(groupObj.Fields[index].Value); value != "" {
+			references = append(references, radiantSurfaceReference{Name: value, FieldIndex: index})
 		}
 	}
 	return references
@@ -3711,6 +3751,13 @@ func isChillerType(objectType string) bool {
 func isRefrigerantSystemType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return strings.HasPrefix(lower, "airconditioner:variablerefrigerantflow")
+}
+
+func isLowTemperatureRadiantEquipmentType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	return strings.HasPrefix(lower, "zonehvac:lowtemperatureradiant:") &&
+		!strings.HasSuffix(lower, ":surfacegroup") &&
+		!strings.HasSuffix(lower, ":design")
 }
 
 func isHVACComponentType(objectType string) bool {

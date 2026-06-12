@@ -42,6 +42,10 @@ const (
 	hvacRuleComponentServesParent          = "component.reference_serves_parent"
 	hvacRuleVRFSystemTerminalList          = "vrf.system_terminal_unit_list"
 	hvacRuleVRFTerminalListContains        = "vrf.terminal_unit_list_contains_terminal"
+	hvacRuleRadiantEquipmentSurface        = "radiant.equipment_surface"
+	hvacRuleRadiantEquipmentSurfaceGroup   = "radiant.equipment_surface_group"
+	hvacRuleRadiantSurfaceGroupSurface     = "radiant.surface_group_contains_surface"
+	hvacRuleRadiantSurfaceBelongsToZone    = "radiant.surface_belongs_to_zone"
 	hvacRulePlantComponentOnSupplyBranch   = "plant.component_on_supply_branch"
 	hvacRulePlantComponentOnDemandBranch   = "plant.component_on_demand_branch"
 	hvacRuleCondenserComponentOnDemand     = "condenser.component_on_demand_branch"
@@ -113,6 +117,7 @@ func buildHVACRuleGraph(ctx *hvacContext, loops []HVACLoop, relations []HVACZone
 		builder.addZoneRelation(relation)
 	}
 	builder.addVRFSystemEdges()
+	builder.addRadiantSurfaceEdges()
 	builder.addComponentReferenceEdges()
 	builder.addCrossLoopEdges()
 	return builder.graph()
@@ -503,6 +508,66 @@ func (b *hvacRuleGraphBuilder) addVRFSystemEdges() {
 				[]int{terminalRef.FieldIndex}, []string{terminalRef.Name})
 		}
 	}
+}
+
+func (b *hvacRuleGraphBuilder) addRadiantSurfaceEdges() {
+	for _, radiantObj := range b.ctx.doc.Objects {
+		if !isLowTemperatureRadiantEquipmentType(radiantObj.Type) {
+			continue
+		}
+		surfaceOrGroupName, fieldIndex, ok := radiantSurfaceOrGroupName(radiantObj)
+		if !ok || surfaceOrGroupName == "" {
+			continue
+		}
+		radiant := newHVACComponent(b.ctx, radiantObj.Type, objectName(radiantObj))
+		radiantID := b.addComponentSourceNode(radiant, "radiant")
+		if groupObj, ok := b.objectByTypeName("ZoneHVAC:LowTemperatureRadiant:SurfaceGroup", surfaceOrGroupName); ok {
+			groupID := hvacRuleObjectNodeID("path", groupObj.Type, objectName(groupObj), groupObj.Index, "radiant_surface_group")
+			b.addObjectNode(groupID, "path", "radiant_surface_group", "radiant", groupObj)
+			b.addEdge(hvacRuleRadiantEquipmentSurfaceGroup, radiantID, groupID, "reference", "radiant", radiantObj,
+				[]int{fieldIndex}, []string{surfaceOrGroupName})
+			b.addRadiantSurfaceGroupSurfaceEdges(groupID, groupObj)
+			continue
+		}
+		if surfaceObj, ok := b.objectByTypeName("BuildingSurface:Detailed", surfaceOrGroupName); ok {
+			surfaceID := b.addRadiantSurfaceNode(surfaceObj)
+			b.addEdge(hvacRuleRadiantEquipmentSurface, radiantID, surfaceID, "reference", "radiant", radiantObj,
+				[]int{fieldIndex}, []string{surfaceOrGroupName})
+			b.addRadiantSurfaceZoneEdge(surfaceID, surfaceObj)
+		}
+	}
+}
+
+func (b *hvacRuleGraphBuilder) addRadiantSurfaceGroupSurfaceEdges(groupID string, groupObj Object) {
+	for _, surfaceRef := range radiantSurfaceGroupReferences(groupObj) {
+		if surfaceRef.Name == "" {
+			continue
+		}
+		surfaceObj, ok := b.objectByTypeName("BuildingSurface:Detailed", surfaceRef.Name)
+		if !ok {
+			continue
+		}
+		surfaceID := b.addRadiantSurfaceNode(surfaceObj)
+		b.addEdge(hvacRuleRadiantSurfaceGroupSurface, groupID, surfaceID, "reference", "radiant", groupObj,
+			[]int{surfaceRef.FieldIndex}, []string{surfaceRef.Name})
+		b.addRadiantSurfaceZoneEdge(surfaceID, surfaceObj)
+	}
+}
+
+func (b *hvacRuleGraphBuilder) addRadiantSurfaceNode(surfaceObj Object) string {
+	surfaceID := hvacRuleObjectNodeID("surface", surfaceObj.Type, objectName(surfaceObj), surfaceObj.Index, "radiant_surface")
+	b.addObjectNode(surfaceID, "surface", "radiant_surface", "radiant", surfaceObj)
+	return surfaceID
+}
+
+func (b *hvacRuleGraphBuilder) addRadiantSurfaceZoneEdge(surfaceID string, surfaceObj Object) {
+	zoneName, zoneFieldIndex, ok := fieldValueIndexByCatalogName(surfaceObj, "Zone Name")
+	if !ok || zoneName == "" {
+		return
+	}
+	zoneID := b.addZoneNode(zoneName)
+	b.addEdge(hvacRuleRadiantSurfaceBelongsToZone, surfaceID, zoneID, "reference", "radiant", surfaceObj,
+		[]int{zoneFieldIndex}, []string{zoneName})
 }
 
 func (b *hvacRuleGraphBuilder) addCrossLoopEdges() {
