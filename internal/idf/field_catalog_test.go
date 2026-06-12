@@ -191,6 +191,30 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			role:       fieldRoleObjectRef,
 		},
 		{
+			objectType: "ZoneHVAC:WindowAirConditioner",
+			fieldIndex: 8,
+			fieldName:  "Supply Air Fan Object Type",
+			role:       fieldRoleObjectTypeRef,
+		},
+		{
+			objectType: "ZoneHVAC:WindowAirConditioner",
+			fieldIndex: 11,
+			fieldName:  "DX Cooling Coil Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "ZoneHVAC:EnergyRecoveryVentilator",
+			fieldIndex: 5,
+			fieldName:  "Supply Air Fan Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "ZoneHVAC:Dehumidifier:DX",
+			fieldIndex: 3,
+			fieldName:  "Air Outlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
 			objectType: "ZoneHVAC:LowTemperatureRadiant:VariableFlow",
 			fieldIndex: 8,
 			fieldName:  "Heating Water Inlet Node Name",

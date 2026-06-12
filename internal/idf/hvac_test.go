@@ -1092,6 +1092,133 @@ func TestAnalyzeHVACDirectZoneEquipmentUsesCatalogForInternalComponents(t *testi
 	}
 }
 
+func TestAnalyzeHVACCompactZoneEquipmentUsesCatalogForReferences(t *testing.T) {
+	type target struct {
+		objectType string
+		name       string
+	}
+	tests := []struct {
+		name          string
+		objectType    string
+		equipmentName string
+		fields        []Field
+		targets       []target
+	}{
+		{
+			name:          "WindowAirConditioner",
+			objectType:    "ZoneHVAC:WindowAirConditioner",
+			equipmentName: "Office Window AC",
+			fields: []Field{
+				{Value: "Office Window AC"},
+				{Value: "Always On"},
+				{Value: "Autosize"},
+				{Value: "Autosize"},
+				{Value: "Office Window AC Return"},
+				{Value: "Office Window AC Supply"},
+				{Value: "OutdoorAir:Mixer"},
+				{Value: "Office Window AC OA Mixer"},
+				{Value: "Fan:OnOff"},
+				{Value: "Office Window AC Fan"},
+				{Value: "Coil:Cooling:DX:SingleSpeed"},
+				{Value: "Office Window AC Cooling Coil"},
+				{Value: "Always On"},
+				{Value: "BlowThrough"},
+				{Value: "0.001"},
+			},
+			targets: []target{
+				{objectType: "OutdoorAir:Mixer", name: "Office Window AC OA Mixer"},
+				{objectType: "Fan:OnOff", name: "Office Window AC Fan"},
+				{objectType: "Coil:Cooling:DX:SingleSpeed", name: "Office Window AC Cooling Coil"},
+			},
+		},
+		{
+			name:          "EnergyRecoveryVentilator",
+			objectType:    "ZoneHVAC:EnergyRecoveryVentilator",
+			equipmentName: "Office ERV",
+			fields: []Field{
+				{Value: "Office ERV"},
+				{Value: "Always On"},
+				{Value: "Office ERV Heat Exchanger"},
+				{Value: "0.03"},
+				{Value: "0.03"},
+				{Value: "Office ERV Supply Fan"},
+				{Value: "Office ERV Exhaust Fan"},
+				{Value: "Office ERV Controller"},
+			},
+			targets: []target{
+				{objectType: "HeatExchanger:AirToAir:SensibleAndLatent", name: "Office ERV Heat Exchanger"},
+				{objectType: "Fan:SystemModel", name: "Office ERV Supply Fan"},
+				{objectType: "Fan:SystemModel", name: "Office ERV Exhaust Fan"},
+				{objectType: "ZoneHVAC:EnergyRecoveryVentilator:Controller", name: "Office ERV Controller"},
+			},
+		},
+		{
+			name:          "DehumidifierDX",
+			objectType:    "ZoneHVAC:Dehumidifier:DX",
+			equipmentName: "Office Dehumidifier",
+			fields: []Field{
+				{Value: "Office Dehumidifier"},
+				{Value: "Always On"},
+				{Value: "Office Dehumidifier Inlet"},
+				{Value: "Office Dehumidifier Outlet"},
+				{Value: "50.16"},
+				{Value: "3.412"},
+				{Value: "0.12036"},
+				{Value: "Office Water Removal Curve"},
+				{Value: "Office Energy Factor Curve"},
+				{Value: "Office PLF Curve"},
+				{Value: "10"},
+				{Value: "32"},
+				{Value: "0"},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			objects := []Object{
+				{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+				{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+					{Value: "Office"},
+					{Value: "Office Equipment"},
+					{Value: "Office Supply"},
+					{Value: ""},
+					{Value: "Office Zone Air Node"},
+					{Value: ""},
+				}},
+				{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+					{Value: "Office Equipment"},
+					{Value: "SequentialLoad"},
+					{Value: test.objectType},
+					{Value: test.equipmentName},
+					{Value: "1"},
+					{Value: "1"},
+					{Value: ""},
+					{Value: ""},
+				}},
+				{Index: 3, Type: test.objectType, Fields: test.fields},
+			}
+			for index, item := range test.targets {
+				objects = append(objects, Object{Index: 4 + index, Type: item.objectType, Fields: []Field{{Value: item.name}}})
+			}
+
+			report := AnalyzeHVAC(Document{Objects: objects})
+			for _, item := range test.targets {
+				if !hasHVACComponentReference(report.ComponentReferences, test.equipmentName, item.objectType, item.name, "internal_component_reference") {
+					t.Fatalf("component references = %#v, want %s -> %s %s", report.ComponentReferences, test.equipmentName, item.objectType, item.name)
+				}
+			}
+			relation := findHVACTestingZoneRelation(report, "Office")
+			if relation == nil {
+				t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+			}
+			if len(relation.ZoneEquipment) != 1 || !strings.EqualFold(relation.ZoneEquipment[0].ObjectType, test.objectType) {
+				t.Fatalf("zone equipment = %#v, want %s", relation.ZoneEquipment, test.objectType)
+			}
+		})
+	}
+}
+
 func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

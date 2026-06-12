@@ -2042,10 +2042,12 @@ func typedHVACComponentReferenceKeys(ctx *hvacContext, component HVACComponent) 
 }
 
 type hvacComponentReferencePair struct {
-	TypeIndex    int
-	NameIndex    int
-	RelationRole string
-	Source       string
+	TypeIndex                  int
+	NameIndex                  int
+	TargetObjectType           string
+	TargetObjectTypeCandidates []string
+	RelationRole               string
+	Source                     string
 }
 
 func buildHVACComponentReferenceGraph(ctx *hvacContext) []HVACComponentReference {
@@ -2105,6 +2107,37 @@ func hvacComponentReferencePairs(ctx *hvacContext, obj Object) []hvacComponentRe
 			})
 		}
 		return pairs
+	case "zonehvac:energyrecoveryventilator":
+		return []hvacComponentReferencePair{
+			{
+				TypeIndex:                  -1,
+				NameIndex:                  2,
+				TargetObjectTypeCandidates: []string{"HeatExchanger:*"},
+				RelationRole:               "internal_component_reference",
+				Source:                     "schema_name_field",
+			},
+			{
+				TypeIndex:                  -1,
+				NameIndex:                  5,
+				TargetObjectTypeCandidates: []string{"Fan:*"},
+				RelationRole:               "internal_component_reference",
+				Source:                     "schema_name_field",
+			},
+			{
+				TypeIndex:                  -1,
+				NameIndex:                  6,
+				TargetObjectTypeCandidates: []string{"Fan:*"},
+				RelationRole:               "internal_component_reference",
+				Source:                     "schema_name_field",
+			},
+			{
+				TypeIndex:        -1,
+				NameIndex:        7,
+				TargetObjectType: "ZoneHVAC:EnergyRecoveryVentilator:Controller",
+				RelationRole:     "internal_component_reference",
+				Source:           "schema_name_field",
+			},
+		}
 	default:
 		return hvacComponentReferencePairsFromFieldRoles(obj)
 	}
@@ -2147,8 +2180,13 @@ func hvacLooksLikeObjectNameField(obj Object, index int) bool {
 }
 
 func hvacComponentReferenceFromPair(ctx *hvacContext, obj Object, pair hvacComponentReferencePair) (HVACComponentReference, bool) {
-	targetType := hvacFieldValue(obj, pair.TypeIndex)
 	targetName := hvacFieldValue(obj, pair.NameIndex)
+	targetType := ""
+	if pair.TypeIndex >= 0 {
+		targetType = hvacFieldValue(obj, pair.TypeIndex)
+	} else {
+		targetType = hvacResolveComponentReferenceTargetType(ctx, targetName, pair.TargetObjectType, pair.TargetObjectTypeCandidates)
+	}
 	if targetType == "" || targetName == "" {
 		return HVACComponentReference{}, false
 	}
@@ -2177,6 +2215,51 @@ func hvacComponentReferenceFromPair(ctx *hvacContext, obj Object, pair hvacCompo
 		reference.TargetObjectIndex = targetObj.Index
 	}
 	return reference, true
+}
+
+func hvacResolveComponentReferenceTargetType(ctx *hvacContext, targetName string, targetObjectType string, candidates []string) string {
+	targetName = strings.TrimSpace(targetName)
+	if targetName == "" {
+		return ""
+	}
+	if targetObjectType != "" {
+		if targetObj, ok := ctx.objectsByTypeName[hvacObjectKey(targetObjectType, targetName)]; ok {
+			return targetObj.Type
+		}
+		return targetObjectType
+	}
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if strings.Contains(candidate, "*") {
+			if objectType, ok := hvacFindObjectTypeByNameAndPattern(ctx, targetName, candidate); ok {
+				return objectType
+			}
+			continue
+		}
+		if targetObj, ok := ctx.objectsByTypeName[hvacObjectKey(candidate, targetName)]; ok {
+			return targetObj.Type
+		}
+	}
+	if len(candidates) > 0 {
+		return strings.TrimSpace(candidates[0])
+	}
+	return ""
+}
+
+func hvacFindObjectTypeByNameAndPattern(ctx *hvacContext, targetName string, pattern string) (string, bool) {
+	prefix := strings.TrimSuffix(normalizeFieldCatalogKey(pattern), "*")
+	for _, obj := range ctx.doc.Objects {
+		if !strings.EqualFold(objectName(obj), targetName) {
+			continue
+		}
+		if strings.HasPrefix(normalizeFieldCatalogKey(obj.Type), prefix) {
+			return obj.Type, true
+		}
+	}
+	return "", false
 }
 
 type zoneTerminalUnitReference struct {
