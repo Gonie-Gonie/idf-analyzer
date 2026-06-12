@@ -579,6 +579,112 @@ func TestAnalyzeHVACKeepsFourPipeFanCoilAsZoneEquipment(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "ZoneHVAC:LowTemperatureRadiant:VariableFlow"},
+			{Value: "Office Radiant"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:LowTemperatureRadiant:VariableFlow", Fields: []Field{
+			{Value: "Office Radiant"},
+			{Value: "Radiant Design"},
+			{Value: ""},
+			{Value: "Office"},
+			{Value: "Office Radiant Surfaces"},
+			{Value: "100"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "HW Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+			{Value: "HW Supply Branches"},
+			{Value: ""},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "HW Supply Branches"},
+			{Value: "Boiler Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Boiler Branch"},
+			{Value: ""},
+			{Value: "Boiler:HotWater"},
+			{Value: "HW Boiler"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+		}},
+		{Index: 7, Type: "Boiler:HotWater", Fields: []Field{{Value: "HW Boiler"}}},
+		{Index: 8, Type: "BranchList", Fields: []Field{
+			{Value: "HW Demand Branches"},
+			{Value: "Radiant Branch"},
+		}},
+		{Index: 9, Type: "Branch", Fields: []Field{
+			{Value: "Radiant Branch"},
+			{Value: ""},
+			{Value: "ZoneHVAC:LowTemperatureRadiant:VariableFlow"},
+			{Value: "Office Radiant"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Office")
+	if relation == nil {
+		t.Fatalf("Office relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("radiant relation resolved unexpected air terminal/loop: %#v", relation)
+	}
+	if !stringSliceContainsFold(relation.PlantLoopNames, "Heating Water Loop") {
+		t.Fatalf("plant loops = %#v, want Heating Water Loop", relation.PlantLoopNames)
+	}
+	radiant := findHVACTestingComponent(relation.ZoneEquipment, "Office Radiant")
+	if radiant == nil || radiant.WaterInletNode != "HW Demand Inlet" || radiant.WaterOutletNode != "HW Demand Outlet" {
+		t.Fatalf("radiant equipment = %#v, want catalog-derived water nodes", radiant)
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "Heating Water Loop", "HW Boiler", "Office Radiant") {
+		t.Fatalf("service chains = %#v, want boiler -> plant -> radiant -> zone", relation.ServiceChains)
+	}
+	for _, ruleID := range []string{
+		hvacRuleZoneEquipmentListEquipment,
+		hvacRulePlantComponentOnSupplyBranch,
+		hvacRulePlantComponentOnDemandBranch,
+	} {
+		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
+			t.Fatalf("rule graph missing %s edge: %#v", ruleID, report.RuleGraph.Edges)
+		}
+	}
+}
+
 func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "AirLoopHVAC", Fields: []Field{
@@ -1400,6 +1506,22 @@ func hasHVACServiceChain(chains []HVACServicePath, plantLoop string, sourceNeedl
 			continue
 		}
 		if terminalNeedle != "" && !strings.Contains(strings.ToLower(chain.TerminalName), strings.ToLower(terminalNeedle)) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func hasHVACServiceChainComponent(chains []HVACServicePath, plantLoop string, sourceNeedle string, componentNeedle string) bool {
+	for _, chain := range chains {
+		if plantLoop != "" && !strings.EqualFold(chain.PlantLoop, plantLoop) {
+			continue
+		}
+		if sourceNeedle != "" && !strings.Contains(strings.ToLower(chain.SourceComponent), strings.ToLower(sourceNeedle)) {
+			continue
+		}
+		if componentNeedle != "" && !strings.Contains(strings.ToLower(chain.Component), strings.ToLower(componentNeedle)) {
 			continue
 		}
 		return true

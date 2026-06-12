@@ -2360,6 +2360,9 @@ func enrichHVACServicePathFromRulePath(path *HVACServicePath, edges []HVACRuleEd
 			if path.Component == "" && node.Kind == "component" && isWaterCoilType(node.ObjectType) {
 				path.Component = firstNonEmpty(node.Label, node.ObjectName)
 			}
+			if path.Component == "" && node.Kind == "component" && isDirectZoneEquipmentType(node.ObjectType) {
+				path.Component = firstNonEmpty(node.Label, node.ObjectName)
+			}
 		}
 	}
 }
@@ -3574,6 +3577,11 @@ func isAirTerminalType(objectType string) bool {
 func isAirDistributionUnitType(objectType string) bool {
 	lower := strings.ToLower(strings.TrimSpace(objectType))
 	return lower == "zonehvac:airdistributionunit" || strings.Contains(lower, "airdistributionunit")
+}
+
+func isDirectZoneEquipmentType(objectType string) bool {
+	lower := strings.ToLower(strings.TrimSpace(objectType))
+	return strings.HasPrefix(lower, "zonehvac:") && !isAirDistributionUnitType(lower)
 }
 
 func isWaterCoilType(objectType string) bool {
