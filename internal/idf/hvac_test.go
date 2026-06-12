@@ -1126,6 +1126,7 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	if !hasHVACServiceChain(coreBottom.ServiceChains, "HeatSys1", "HeatSys1 Boiler", "", "Core_bottom VAV Box") {
 		t.Fatalf("Core_bottom service chains = %#v, want HeatSys1 -> reheat terminal -> zone", coreBottom.ServiceChains)
 	}
+	assertHVACJSONHasNoLegacyVocabulary(t, report)
 }
 
 func findHVACTestingLoop(report HVACReport, name string) *HVACLoop {
@@ -1148,6 +1149,29 @@ func findHVACTestingZoneRelation(report HVACReport, name string) *HVACZoneChain 
 
 func hasHVACWarningCode(warnings []HVACWarning, code string) bool {
 	return findHVACWarningByCode(warnings, code) != nil
+}
+
+func assertHVACJSONHasNoLegacyVocabulary(t *testing.T, report HVACReport) {
+	t.Helper()
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonText := string(encoded)
+	for _, forbidden := range []string{
+		"relationSource",
+		"relationConfidence",
+		"relationEvidence",
+		`"confidence"`,
+		`"evidence"`,
+		`"inferred"`,
+		`"weak"`,
+		`"unsupported"`,
+	} {
+		if strings.Contains(jsonText, forbidden) {
+			t.Fatalf("HVAC JSON contains legacy resolver vocabulary %q:\n%s", forbidden, jsonText)
+		}
+	}
 }
 
 func findHVACWarningByCode(warnings []HVACWarning, code string) *HVACWarning {
