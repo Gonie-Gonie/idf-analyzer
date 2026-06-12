@@ -263,6 +263,18 @@ type HVACComponentReference struct {
 	TargetClass       string `json:"targetClass,omitempty"`
 }
 
+type ConnectionDebugRow struct {
+	ObjectIndex               int    `json:"object_index"`
+	ObjectType                string `json:"object_type"`
+	RawField0                 string `json:"raw_field_0"`
+	RawField1                 string `json:"raw_field_1"`
+	FieldComment0             string `json:"field_comment_0"`
+	FieldComment1             string `json:"field_comment_1"`
+	ResolvedZoneName          string `json:"resolved_zone_name"`
+	ResolvedEquipmentListName string `json:"resolved_equipment_list_name"`
+	EquipmentListObjectFound  bool   `json:"equipment_list_object_found"`
+}
+
 type HVACWarning struct {
 	Severity           string   `json:"severity"`
 	Category           string   `json:"category"`
@@ -435,6 +447,30 @@ func newHVACContext(doc Document) *hvacContext {
 		}
 	}
 	return ctx
+}
+
+func dumpHVACConnectionFields(doc Document) []ConnectionDebugRow {
+	ctx := newHVACContext(doc)
+	var rows []ConnectionDebugRow
+	for _, obj := range ctx.objectsByType[normalizeFieldCatalogKey("ZoneHVAC:EquipmentConnections")] {
+		row := ConnectionDebugRow{
+			ObjectIndex:               obj.Index,
+			ObjectType:                obj.Type,
+			ResolvedZoneName:          fieldValueByCatalogName(obj, "Zone Name"),
+			ResolvedEquipmentListName: fieldValueByCatalogName(obj, "Zone Conditioning Equipment List Name"),
+		}
+		if len(obj.Fields) > 0 {
+			row.RawField0 = strings.TrimSpace(obj.Fields[0].Value)
+			row.FieldComment0 = strings.TrimSpace(obj.Fields[0].Comment)
+		}
+		if len(obj.Fields) > 1 {
+			row.RawField1 = strings.TrimSpace(obj.Fields[1].Value)
+			row.FieldComment1 = strings.TrimSpace(obj.Fields[1].Comment)
+		}
+		_, row.EquipmentListObjectFound = hvacEquipmentListByName(ctx, row.ResolvedEquipmentListName, "ZoneHVAC:EquipmentList")
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func parseAirLoopHVAC(ctx *hvacContext, obj Object) HVACLoop {
@@ -1228,14 +1264,14 @@ func buildHVACZoneRelation(ctx *hvacContext, loops []HVACLoop, connectionObj Obj
 	}
 
 	if equipmentListName != "" {
-		equipmentList, ok := ctx.objectsByTypeName[hvacObjectKey("ZoneHVAC:EquipmentList", equipmentListName)]
+		equipmentList, ok := hvacEquipmentListByName(ctx, equipmentListName, "ZoneHVAC:EquipmentList")
 		if !ok {
 			relation.Warnings = append(relation.Warnings, hvacWarningForObject(connectionObj, "missing_zone_equipment_list",
 				fmt.Sprintf("Zone %q references missing ZoneHVAC:EquipmentList %q.", zoneName, equipmentListName)))
 		} else {
-			relation.ZoneEquipment = equipmentFromHVACEquipmentList(ctx, equipmentList, &relation, "ZoneHVAC:EquipmentList", "missing_zone_equipment", "zone_equipment")
+			relation.ZoneEquipment = equipmentFromHVACEquipmentList(ctx, equipmentList, &relation, objectLabel(equipmentList), "missing_zone_equipment", "zone_equipment")
 			relation.RuleIDs = appendUniqueString(relation.RuleIDs, hvacRuleZoneHasEquipmentList)
-			relation.RuleTrace = appendUniqueString(relation.RuleTrace, "ZoneHVAC:EquipmentConnections -> ZoneHVAC:EquipmentList")
+			relation.RuleTrace = appendUniqueString(relation.RuleTrace, fmt.Sprintf("ZoneHVAC:EquipmentConnections -> %s", objectLabel(equipmentList)))
 		}
 	}
 
@@ -2206,6 +2242,7 @@ func attachHVACServiceChains(relations []HVACZoneChain, graph HVACRuleGraph) {
 }
 
 func buildServiceChainsFromRuleGraph(relation HVACZoneChain, graph HVACRuleGraph) []HVACServicePath {
+	nodesByID := hvacRuleGraphNodeByID(graph)
 	subjectID := hvacRuleSubjectNodeIDForRelation(graph, relation)
 	if subjectID == "" {
 		return nil
@@ -2264,12 +2301,14 @@ func buildServiceChainsFromRuleGraph(relation HVACZoneChain, graph HVACRuleGraph
 				continue
 			}
 			if edges, ok := hvacRuleGraphPath(graph, componentID, subjectID); ok {
-				addPath(HVACServicePath{
+				path := HVACServicePath{
 					ZoneName:        relation.ZoneName,
 					PlantLoop:       plantLoopName,
 					SourceComponent: componentLabel(sourceComponent),
 					SourceRelations: hvacRulePathRuleIDs(edges),
-				})
+				}
+				enrichHVACServicePathFromRulePath(&path, edges, nodesByID)
+				addPath(path)
 			}
 		}
 	}
@@ -2292,6 +2331,37 @@ func buildServiceChainsFromRuleGraph(relation HVACZoneChain, graph HVACRuleGraph
 	}
 
 	return paths
+}
+
+func enrichHVACServicePathFromRulePath(path *HVACServicePath, edges []HVACRuleEdge, nodesByID map[string]HVACRuleNode) {
+	for _, edge := range edges {
+		if path.Component == "" && edge.RuleID == hvacRuleCrossLoopSameWaterCoil && len(edge.NodeNames) > 0 {
+			path.Component = edge.NodeNames[0]
+		}
+		for _, nodeID := range []string{edge.FromID, edge.ToID} {
+			node, ok := nodesByID[nodeID]
+			if !ok {
+				continue
+			}
+			if path.AirLoopName == "" && node.Kind == "loop" && strings.EqualFold(node.ObjectType, "AirLoopHVAC") {
+				path.AirLoopName = node.ObjectName
+			}
+			if path.TerminalName == "" && node.Kind == "component" && isAirTerminalType(node.ObjectType) {
+				path.TerminalName = firstNonEmpty(node.Label, node.ObjectName)
+			}
+			if path.Component == "" && node.Kind == "component" && isWaterCoilType(node.ObjectType) {
+				path.Component = firstNonEmpty(node.Label, node.ObjectName)
+			}
+		}
+	}
+}
+
+func hvacRuleGraphNodeByID(graph HVACRuleGraph) map[string]HVACRuleNode {
+	nodes := map[string]HVACRuleNode{}
+	for _, node := range graph.Nodes {
+		nodes[node.ID] = node
+	}
+	return nodes
 }
 
 func plantSourceComponentsForServicePath(relation HVACZoneChain, plantLoopName string) []HVACComponent {

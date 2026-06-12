@@ -35,6 +35,8 @@ const (
 	hvacRuleZoneEquipmentListEquipment     = "zone.equipment_list_contains_equipment"
 	hvacRuleZoneADUResolvesTerminal        = "zone.adu_resolves_terminal"
 	hvacRuleZoneTerminalOutletMatchesInlet = "zone.terminal_outlet_matches_zone_inlet"
+	hvacRuleComponentReferencesComponent   = "component.references_component"
+	hvacRuleComponentServesParent          = "component.reference_serves_parent"
 	hvacRulePlantComponentOnSupplyBranch   = "plant.component_on_supply_branch"
 	hvacRulePlantComponentOnDemandBranch   = "plant.component_on_demand_branch"
 	hvacRuleCrossLoopSameWaterCoil         = "crossloop.same_water_coil_air_and_plant"
@@ -102,6 +104,7 @@ func buildHVACRuleGraph(ctx *hvacContext, loops []HVACLoop, relations []HVACZone
 	for _, relation := range relations {
 		builder.addZoneRelation(relation)
 	}
+	builder.addComponentReferenceEdges()
 	builder.addCrossLoopEdges()
 	return builder.graph()
 }
@@ -209,6 +212,10 @@ func (b *hvacRuleGraphBuilder) addBranchComponentEdges(loop HVACLoop, side HVACL
 		if plantRuleID := hvacRulePlantComponentOnBranch(loop.Type, side.Name); plantRuleID != "" {
 			b.addEdge(plantRuleID, sourceID, hvacRuleLoopNodeID(loop), "occurs_on", medium, branchObj,
 				[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+			if plantRuleID == hvacRulePlantComponentOnDemandBranch {
+				b.addEdge(plantRuleID, hvacRuleLoopNodeID(loop), sourceID, "serves_demand", medium, branchObj,
+					[]int{component.TypeFieldIndex, component.NameFieldIndex}, []string{component.ObjectName})
+			}
 		}
 		if component.InletNode != "" {
 			nodeID := b.addNodeName(component.InletNode, medium, "component_inlet")
@@ -462,6 +469,29 @@ func (b *hvacRuleGraphBuilder) addCrossLoopEdges() {
 						[]int{0}, []string{airOccurrence.Component.ObjectName})
 				}
 			}
+		}
+	}
+}
+
+func (b *hvacRuleGraphBuilder) addComponentReferenceEdges() {
+	for _, reference := range b.ctx.componentReferences {
+		if reference.RelationRole != "internal_component_reference" || !reference.TargetExists {
+			continue
+		}
+		fromObj, ok := b.objectByIndex(reference.FromObjectIndex)
+		if !ok || objectName(fromObj) == "" {
+			continue
+		}
+		fromComponent := newHVACComponent(b.ctx, reference.FromObjectType, reference.FromObjectName)
+		targetComponent := newHVACComponent(b.ctx, reference.TargetObjectType, reference.TargetObjectName)
+		fromID := b.addComponentSourceNode(fromComponent, hvacRuleMediumForComponent(reference.FromObjectType))
+		targetID := b.addComponentSourceNode(targetComponent, hvacRuleMediumForComponent(reference.TargetObjectType))
+		fieldIndexes := []int{reference.TypeFieldIndex, reference.NameFieldIndex}
+		b.addEdge(hvacRuleComponentReferencesComponent, fromID, targetID, "component_reference", hvacRuleMediumForComponent(reference.TargetObjectType), fromObj,
+			fieldIndexes, []string{reference.TargetObjectName})
+		if hvacReferenceTargetServesParent(reference) {
+			b.addEdge(hvacRuleComponentServesParent, targetID, fromID, "serves_parent", hvacRuleMediumForComponent(reference.TargetObjectType), fromObj,
+				fieldIndexes, []string{reference.TargetObjectName})
 		}
 	}
 }
@@ -748,6 +778,21 @@ func hvacRuleMediumForLoop(loopType string) string {
 	default:
 		return ""
 	}
+}
+
+func hvacRuleMediumForComponent(objectType string) string {
+	switch {
+	case isAirTerminalType(objectType):
+		return "air"
+	case isWaterCoilType(objectType), isPlantSourceEquipmentType(objectType):
+		return "water"
+	default:
+		return ""
+	}
+}
+
+func hvacReferenceTargetServesParent(reference HVACComponentReference) bool {
+	return isAirTerminalType(reference.FromObjectType) && isWaterCoilType(reference.TargetObjectType)
 }
 
 func hvacRuleAirLoopDemandEdgeRule(role string) string {

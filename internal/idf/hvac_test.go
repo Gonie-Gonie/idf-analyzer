@@ -378,6 +378,39 @@ func TestAnalyzeHVACReadsZoneEquipmentListSixFieldGroup(t *testing.T) {
 	}
 }
 
+func TestDumpHVACConnectionFieldsUsesCatalogOrder(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: "Office Return Node"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "AirTerminal:SingleDuct:ConstantVolume:NoReheat"},
+			{Value: "Office Terminal"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+	}}
+
+	rows := dumpHVACConnectionFields(doc)
+	if len(rows) != 1 {
+		t.Fatalf("debug rows = %#v, want one row", rows)
+	}
+	row := rows[0]
+	if row.RawField0 != "Office" || row.RawField1 != "Office Equipment" {
+		t.Fatalf("raw fields = %#v, want Zone Name / Equipment List fields", row)
+	}
+	if row.ResolvedZoneName != "Office" || row.ResolvedEquipmentListName != "Office Equipment" || !row.EquipmentListObjectFound {
+		t.Fatalf("resolved fields = %#v, want Office and matching equipment list", row)
+	}
+}
+
 func TestAnalyzeHVACTerminalMismatchWarningIncludesEdgeMetadata(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
@@ -690,10 +723,8 @@ func TestBuildServiceChainsFromRuleGraphRequiresDirectedPath(t *testing.T) {
 	}
 	seenAir1 := false
 	seenPlant1 := false
+	seenDirectedPlantPath := false
 	for _, path := range paths {
-		if path.AirLoopName != "" && path.PlantLoop != "" {
-			t.Fatalf("service path combines air and plant without RuleGraph path search: %#v", path)
-		}
 		if path.AirLoopName == "Air 2" || path.PlantLoop == "Plant 2" {
 			t.Fatalf("service path includes disconnected loop: %#v", path)
 		}
@@ -702,8 +733,14 @@ func TestBuildServiceChainsFromRuleGraphRequiresDirectedPath(t *testing.T) {
 		}
 		seenAir1 = seenAir1 || path.AirLoopName == "Air 1"
 		seenPlant1 = seenPlant1 || path.PlantLoop == "Plant 1"
+		if path.PlantLoop == "Plant 1" {
+			if path.AirLoopName != "Air 1" || path.TerminalName == "" {
+				t.Fatalf("directed plant service path = %#v, want Plant 1 -> Air 1 -> terminal -> zone", path)
+			}
+			seenDirectedPlantPath = true
+		}
 	}
-	if !seenAir1 || !seenPlant1 {
+	if !seenAir1 || !seenPlant1 || !seenDirectedPlantPath {
 		t.Fatalf("service paths missing connected air/plant loops: %#v", paths)
 	}
 }
@@ -746,7 +783,7 @@ func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.
 			{Value: "Autosize"},
 			{Value: "HW Supply Inlet"},
 			{Value: "HW Supply Outlet"},
-			{Value: ""},
+			{Value: "HW Supply Branches"},
 			{Value: ""},
 			{Value: "HW Demand Inlet"},
 			{Value: "HW Demand Outlet"},
@@ -770,6 +807,21 @@ func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.
 			{Value: "HW Demand Inlet", Comment: "Water Inlet Node Name"},
 			{Value: "HW Demand Outlet", Comment: "Water Outlet Node Name"},
 		}},
+		{Index: 8, Type: "BranchList", Fields: []Field{
+			{Value: "HW Supply Branches"},
+			{Value: "Boiler Branch"},
+		}},
+		{Index: 9, Type: "Branch", Fields: []Field{
+			{Value: "Boiler Branch"},
+			{Value: ""},
+			{Value: "Boiler:HotWater"},
+			{Value: "HW Boiler"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+		}},
+		{Index: 10, Type: "Boiler:HotWater", Fields: []Field{
+			{Value: "HW Boiler", Comment: "Name"},
+		}},
 	}}
 
 	report := AnalyzeHVAC(doc)
@@ -785,6 +837,12 @@ func TestAnalyzeHVACUsesTypedComponentReferenceGraphForPlantRelation(t *testing.
 	}
 	if !hasHVACComponentReference(report.ComponentReferences, "Office VAV", "Coil:Heating:Water", "Office Reheat Coil", "internal_component_reference") {
 		t.Fatalf("component references = %#v, want Office VAV -> Office Reheat Coil", report.ComponentReferences)
+	}
+	if !hasHVACRuleEdge(report.RuleGraph, hvacRuleComponentServesParent) || !hasHVACRuleEdge(report.RuleGraph, hvacRulePlantComponentOnDemandBranch) {
+		t.Fatalf("rule graph missing reheat source-to-terminal edges: %#v", report.RuleGraph.Edges)
+	}
+	if !hasHVACServiceChain(relation.ServiceChains, "Heating Water Loop", "Boiler:HotWater HW Boiler", "", "Office VAV") {
+		t.Fatalf("service chains = %#v, want boiler -> Heat loop -> reheat coil -> terminal -> zone", relation.ServiceChains)
 	}
 
 	projection := BuildSemanticYAMLProjection(doc, SemanticYAMLMetadata{})
@@ -987,11 +1045,51 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	}
 
 	report := AnalyzeHVAC(doc)
-	if report.AirLoopCount != 4 || report.PlantLoopCount != 3 || report.ZoneRelationCount != 16 {
-		t.Fatalf("counts = air %d plant %d zones %d, want 4/3/16", report.AirLoopCount, report.PlantLoopCount, report.ZoneRelationCount)
+	if report.AirLoopCount != 4 || report.PlantLoopCount != 3 || report.CondenserLoopCount != 1 || report.ZoneRelationCount != 16 {
+		t.Fatalf("counts = air %d plant %d condenser %d zones %d, want 4/3/1/16", report.AirLoopCount, report.PlantLoopCount, report.CondenserLoopCount, report.ZoneRelationCount)
 	}
 	if report.WarningCount != 0 {
 		t.Fatalf("warnings = %#v, want none for reference sample", report.Warnings)
+	}
+	if hasHVACWarningCode(report.Warnings, "missing_zone_equipment_list") {
+		t.Fatalf("missing zone equipment warnings = %#v, want none", report.Warnings)
+	}
+	debugRows := dumpHVACConnectionFields(doc)
+	if len(debugRows) != 16 {
+		t.Fatalf("connection debug rows = %d, want 16: %#v", len(debugRows), debugRows)
+	}
+	for _, row := range debugRows {
+		if row.ResolvedZoneName == "" || row.ResolvedEquipmentListName == "" || !row.EquipmentListObjectFound {
+			t.Fatalf("unresolved equipment connection row: %#v", row)
+		}
+	}
+	for _, relation := range report.ZoneRelations {
+		if len(relation.TerminalUnits) == 0 {
+			t.Fatalf("zone relation has no terminal units: %#v", relation)
+		}
+		if len(relation.ServiceChains) == 0 {
+			t.Fatalf("zone relation has no rule-backed service chains: %#v", relation)
+		}
+	}
+	for _, loopName := range []string{"VAV_1", "VAV_2", "VAV_3", "VAV_5"} {
+		loop := findHVACTestingLoop(report, loopName)
+		if loop == nil || len(loop.RelatedZones) == 0 {
+			t.Fatalf("%s related zones = %#v, want at least one zone", loopName, loop)
+		}
+	}
+	vav1 := findHVACTestingLoop(report, "VAV_1")
+	if vav1 == nil {
+		t.Fatalf("VAV_1 loop not found")
+	}
+	if !hasHVACRelatedLoop(*vav1, "PlantLoop", "CoolSys1") || !hasHVACRelatedLoop(*vav1, "PlantLoop", "HeatSys1") {
+		t.Fatalf("VAV_1 related loops = %#v, want CoolSys1 and HeatSys1", vav1.RelatedLoops)
+	}
+	if vav1.DemandGraph.SupplyPath == nil || vav1.DemandGraph.ReturnPath == nil || len(vav1.DemandGraph.Nodes) == 0 {
+		t.Fatalf("VAV_1 demand graph is blank: %#v", vav1.DemandGraph)
+	}
+	coolingCoil := findHVACTestingComponent(vav1.SupplySideComponents(), "VAV_1_CoolC")
+	if coolingCoil == nil || !stringSliceContainsFold(coolingCoil.RelatedLoopNames, "CoolSys1") {
+		t.Fatalf("VAV_1_CoolC = %#v, want CoolSys1 related loop", coolingCoil)
 	}
 	relation := findHVACTestingZoneRelation(report, "Basement")
 	if relation == nil {
@@ -1011,6 +1109,22 @@ func TestAnalyzeHVACReferenceLargeOfficeRelations(t *testing.T) {
 	}
 	if !componentSliceContainsName(relation.PlantEquipment, "HeatSys1 Boiler") || !componentSliceContainsName(relation.PlantEquipment, "CoolSys1 Chiller 1") {
 		t.Fatalf("Basement plant equipment = %#v, want source equipment", relation.PlantEquipment)
+	}
+	if !hasHVACServiceChain(relation.ServiceChains, "CoolSys1", "CoolSys1 Chiller", "VAV_5", "Basement VAV Box") {
+		t.Fatalf("Basement service chains = %#v, want cooling source -> VAV_5 -> terminal -> zone", relation.ServiceChains)
+	}
+	if !hasHVACServiceChain(relation.ServiceChains, "HeatSys1", "HeatSys1 Boiler", "", "Basement VAV Box") {
+		t.Fatalf("Basement service chains = %#v, want heating source -> reheat terminal -> zone", relation.ServiceChains)
+	}
+	coreBottom := findHVACTestingZoneRelation(report, "Core_bottom")
+	if coreBottom == nil {
+		t.Fatalf("Core_bottom relation not found")
+	}
+	if !hasHVACServiceChain(coreBottom.ServiceChains, "CoolSys1", "CoolSys1 Chiller", "VAV_1", "Core_bottom VAV Box") {
+		t.Fatalf("Core_bottom service chains = %#v, want CoolSys1 -> VAV_1 -> terminal -> zone", coreBottom.ServiceChains)
+	}
+	if !hasHVACServiceChain(coreBottom.ServiceChains, "HeatSys1", "HeatSys1 Boiler", "", "Core_bottom VAV Box") {
+		t.Fatalf("Core_bottom service chains = %#v, want HeatSys1 -> reheat terminal -> zone", coreBottom.ServiceChains)
 	}
 }
 
@@ -1071,6 +1185,34 @@ func hasHVACRuleEdge(graph HVACRuleGraph, ruleID string) bool {
 		if edge.RuleID == ruleID {
 			return true
 		}
+	}
+	return false
+}
+
+func hasHVACRelatedLoop(loop HVACLoop, loopType string, loopName string) bool {
+	for _, relation := range loop.RelatedLoops {
+		if strings.EqualFold(relation.LoopType, loopType) && strings.EqualFold(relation.LoopName, loopName) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasHVACServiceChain(chains []HVACServicePath, plantLoop string, sourceNeedle string, airLoop string, terminalNeedle string) bool {
+	for _, chain := range chains {
+		if plantLoop != "" && !strings.EqualFold(chain.PlantLoop, plantLoop) {
+			continue
+		}
+		if airLoop != "" && !strings.EqualFold(chain.AirLoopName, airLoop) {
+			continue
+		}
+		if sourceNeedle != "" && !strings.Contains(strings.ToLower(chain.SourceComponent), strings.ToLower(sourceNeedle)) {
+			continue
+		}
+		if terminalNeedle != "" && !strings.Contains(strings.ToLower(chain.TerminalName), strings.ToLower(terminalNeedle)) {
+			continue
+		}
+		return true
 	}
 	return false
 }
