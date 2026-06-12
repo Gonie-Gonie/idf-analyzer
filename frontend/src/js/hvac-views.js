@@ -2349,69 +2349,58 @@ function buildRelationGraph(relations) {
       meta: [relation.relationScope === "space" ? "SpaceHVAC" : "", ruleEdgeCountLabel(relationRuleEdges)].filter(Boolean).join(" / ") || "Zone",
       objectIndex: relation.spaceName ? relation.spaceObjectIndex : relation.zoneObjectIndex,
     });
-    const terminalSource = (relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || [];
-    const terminalComponents = uniqueRelationComponents(terminalSource);
-    const terminalNodes = terminalComponents.length
-      ? terminalComponents.map((component) =>
-          ensureRelationNode(nodesByKey, {
-            key: relationComponentKey(component, "terminal"),
-            kind: "terminal",
-            column: "terminal",
-            label: component.objectName || componentDisplayName(component),
-            meta: [component.displayLabel || component.familyLabel || component.family, ruleEdgeCountLabel(ruleEdgesForComponent(component))].filter(Boolean).join(" / ") || component.objectType || "Equipment",
-            component,
-          }),
-        )
-      : [
-          ensureRelationNode(nodesByKey, {
-            key: `terminal:direct:${subjectKey}`,
-            kind: "terminal",
-            column: "terminal",
-            label: t("hvac.directZoneEquipment"),
-            meta: "Direct equipment",
-          }),
-        ];
-    const airNodes = (relation.airLoopNames || []).map((name) => {
-      return ensureRelationNode(nodesByKey, {
-        key: `air:${name}`,
-        kind: "air",
-        column: "air",
-        label: name,
-        meta: ruleEdgeCountLabel(ruleEdgesForLoop(name, "AirLoopHVAC")) || "AirLoopHVAC",
-      });
-    });
+    const terminalComponents = uniqueRelationComponents((relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || []);
     const sourceComponents = uniqueRelationComponents(relation.plantEquipment || []);
-    const plantNodes = sourceComponents.length
-      ? sourceComponents.map((component) =>
-          ensureRelationNode(nodesByKey, {
-            key: relationComponentKey(component, "source"),
-            kind: "source",
-            column: "plant",
-            label: component.objectName || componentDisplayName(component),
-            meta: [component.displayLabel || component.familyLabel || component.family, component.loopName].filter(Boolean).join(" / ") || (relation.plantLoopNames || []).join(", ") || "PlantLoop",
-            component,
-          }),
-        )
-      : (relation.plantLoopNames || []).map((name) =>
-          ensureRelationNode(nodesByKey, { key: `plant:${name}`, kind: "plant", column: "plant", label: name, meta: "PlantLoop" }),
-        );
-    for (const terminal of terminalNodes) {
-      addRelationLink(linksByKey, terminal, zoneNode, "terminal-zone", relation);
-    }
-    for (const air of airNodes) {
-      for (const terminal of terminalNodes) {
-        addRelationLink(linksByKey, air, terminal, "air-terminal", relation);
+    for (const chain of relation.serviceChains || []) {
+      const terminalComponent = findRelationComponentByLabel(terminalComponents, chain.terminalName || chain.component);
+      const sourceComponent = findRelationComponentByLabel(sourceComponents, chain.sourceComponent || chain.component);
+      const terminalNode =
+        terminalComponent || chain.terminalName || chain.component
+          ? ensureRelationNode(nodesByKey, {
+              key: terminalComponent ? relationComponentKey(terminalComponent, "terminal") : `terminal:${subjectKey}:${chain.terminalName || chain.component}`,
+              kind: "terminal",
+              column: "terminal",
+              label: terminalComponent?.objectName || chain.terminalName || chain.component || t("hvac.directZoneEquipment"),
+              meta: terminalComponent
+                ? [terminalComponent.displayLabel || terminalComponent.familyLabel || terminalComponent.family, ruleEdgeCountLabel(ruleEdgesForComponent(terminalComponent))].filter(Boolean).join(" / ") || terminalComponent.objectType || "Equipment"
+                : "Rule path",
+              component: terminalComponent,
+            })
+          : null;
+      const airNode = chain.airLoopName
+        ? ensureRelationNode(nodesByKey, {
+            key: `air:${chain.airLoopName}`,
+            kind: "air",
+            column: "air",
+            label: chain.airLoopName,
+            meta: ruleEdgeCountLabel(ruleEdgesForLoop(chain.airLoopName, "AirLoopHVAC")) || "AirLoopHVAC",
+          })
+        : null;
+      const plantNode =
+        sourceComponent || chain.sourceComponent || chain.plantLoop
+          ? ensureRelationNode(nodesByKey, {
+              key: sourceComponent ? relationComponentKey(sourceComponent, "source") : `plant:${chain.sourceComponent || chain.plantLoop}`,
+              kind: sourceComponent || chain.sourceComponent ? "source" : "plant",
+              column: "plant",
+              label: sourceComponent?.objectName || chain.sourceComponent || chain.plantLoop,
+              meta: sourceComponent
+                ? [sourceComponent.displayLabel || sourceComponent.familyLabel || sourceComponent.family, sourceComponent.loopName].filter(Boolean).join(" / ") || chain.plantLoop || "PlantLoop"
+                : chain.plantLoop || "Rule path",
+              component: sourceComponent,
+            })
+          : null;
+      if (airNode && terminalNode) {
+        addRelationLink(linksByKey, airNode, terminalNode, "air-terminal", relation);
       }
-    }
-    for (const plant of plantNodes) {
-      if (airNodes.length) {
-        for (const air of airNodes) {
-          addRelationLink(linksByKey, plant, air, "plant-air", relation);
-        }
-      } else {
-        for (const terminal of terminalNodes) {
-          addRelationLink(linksByKey, plant, terminal, "plant-terminal", relation);
-        }
+      if (terminalNode) {
+        addRelationLink(linksByKey, terminalNode, zoneNode, "terminal-zone", relation);
+      }
+      if (plantNode && airNode) {
+        addRelationLink(linksByKey, plantNode, airNode, "plant-air", relation);
+      } else if (plantNode && terminalNode) {
+        addRelationLink(linksByKey, plantNode, terminalNode, "plant-terminal", relation);
+      } else if (plantNode) {
+        addRelationLink(linksByKey, plantNode, zoneNode, "source-zone", relation);
       }
     }
   }
@@ -2448,6 +2437,14 @@ function ensureRelationNode(nodesByKey, node) {
     nodesByKey.set(node.key, { ...node, relatedKeys: [] });
   }
   return nodesByKey.get(node.key);
+}
+
+function findRelationComponentByLabel(components = [], label = "") {
+  const normalized = normalizeGraphName(label);
+  if (!normalized) {
+    return null;
+  }
+  return components.find((component) => normalizeGraphName(componentLabel(component)) === normalized || normalizeGraphName(component.objectName) === normalized) || null;
 }
 
 function addRelationLink(linksByKey, from, to, kind, relation) {
