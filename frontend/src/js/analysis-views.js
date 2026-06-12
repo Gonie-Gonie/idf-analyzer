@@ -375,44 +375,100 @@ function countBy(values, keyFn) {
 function renderMetricRow(metric) {
   const unit = metric.unit ? `<span class="summary-unit">${escapeHTML(metric.unit)}</span>` : "";
   const meta = renderMetricMeta(metric);
-  const compact = shouldRenderCompactMetricRow(metric) ? " compact" : "";
   return `
-    <div class="summary-row${compact}" role="row">
+    <div class="summary-row" role="row">
       <div class="summary-name" role="cell">
         <strong title="${escapeHTML(metric.name)}">${escapeHTML(metric.name)}</strong>
-        <span>${escapeHTML(metric.id)}</span>
-        ${meta}
       </div>
       <div class="summary-value" role="cell">
         <strong>${escapeHTML(metric.displayValue ?? "N/A")}</strong>
         ${unit}
       </div>
-      <span class="summary-status ${statusClass(metric.status)}" role="cell">${escapeHTML(metric.status || "missing")}</span>
+      ${meta}
+      ${renderMetricStatus(metric.status)}
     </div>`;
-}
-
-function shouldRenderCompactMetricRow(metric) {
-  const badges = metric.badges || [];
-  return String(metric.name || "").length > 34 ||
-    metric.visibility === "advanced" ||
-    badges.includes("inferred") ||
-    badges.includes("readiness");
 }
 
 function renderMetricMeta(metric) {
-  const badges = [
-    metric.source ? sourceLabel(metric.source) : "",
-    metric.confidence || "",
-    metric.visibility === "advanced" ? "advanced" : "",
-    ...(metric.badges || []),
-  ].filter(Boolean);
+  const badges = summaryBadgeMeta(metric);
   if (!badges.length && !metric.evidence) {
-    return "";
+    return `<div class="summary-meta" role="cell"></div>`;
   }
-  return `
-    <div class="summary-meta" title="${escapeHTML(metric.evidence || "")}">
-      ${[...new Set(badges)].map((badge) => `<small>${escapeHTML(badge)}</small>`).join("")}
-    </div>`;
+  const seen = new Set();
+  const tags = badges
+    .filter((badge) => {
+      const key = `${badge.label}:${badge.abbr}`;
+      if (seen.has(key)) {
+        return false;
+      }
+      seen.add(key);
+      return true;
+    })
+    .map((badge) => `<small title="${escapeHTML(badge.title)}" aria-label="${escapeHTML(badge.title)}">${escapeHTML(badge.abbr)}</small>`)
+    .join("");
+  return `<div class="summary-meta" role="cell">${tags}</div>`;
+}
+
+function summaryBadgeMeta(metric) {
+  const evidence = String(metric.evidence || "").trim();
+  const badges = [];
+  if (metric.source) {
+    const label = sourceLabel(metric.source);
+    badges.push({
+      label,
+      abbr: sourceAbbreviation(metric.source),
+      title: evidence ? `Source: ${label}. Evidence: ${evidence}` : `Source: ${label}`,
+    });
+  }
+  if (metric.confidence) {
+    const label = sourceLabel(metric.confidence);
+    badges.push({
+      label,
+      abbr: confidenceAbbreviation(metric.confidence),
+      title: evidence ? `Confidence: ${label}. Inference: ${evidence}` : `Confidence: ${label}`,
+    });
+  }
+  if (metric.visibility === "advanced") {
+    badges.push({
+      label: "Advanced",
+      abbr: "A",
+      title: evidence ? `Advanced metric. Evidence: ${evidence}` : "Advanced metric",
+    });
+  }
+  for (const badge of metric.badges || []) {
+    const label = sourceLabel(badge);
+    badges.push({
+      label,
+      abbr: badgeAbbreviation(badge),
+      title: evidence ? `${label}. Evidence: ${evidence}` : label,
+    });
+  }
+  return badges;
+}
+
+function renderMetricStatus(status) {
+  switch (status) {
+    case "ok":
+      return `<span class="summary-status summary-status-ok" role="cell" aria-label="OK"></span>`;
+    case "partial":
+      return `
+        <span class="summary-status summary-status-partial" role="cell" title="Partial" aria-label="Partial">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3 22 20H2z"></path>
+            <path d="M12 9v5"></path>
+            <path d="M12 17h.01"></path>
+          </svg>
+        </span>`;
+    default:
+      return `
+        <span class="summary-status summary-status-missing" role="cell" title="Missing" aria-label="Missing">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="m15 9-6 6"></path>
+            <path d="m9 9 6 6"></path>
+          </svg>
+        </span>`;
+  }
 }
 
 function metricMatchesQuery(metric, category, query) {
@@ -438,16 +494,43 @@ function groupBy(values, keyFn) {
 function sourceLabel(source) {
   return String(source || "")
     .replaceAll("_", " ")
-    .replace(/\b\w/g, (match) => match.toUpperCase());
+    .replace(/\b\w/g, (match) => match.toUpperCase())
+    .replace(/\bIdd\b/g, "IDD")
+    .replace(/\bHvac\b/g, "HVAC")
+    .replace(/\bIdf\b/g, "IDF");
 }
 
-function statusClass(status) {
-  switch (status) {
-    case "ok":
-      return "summary-status-ok";
-    case "partial":
-      return "summary-status-partial";
-    default:
-      return "summary-status-missing";
+function sourceAbbreviation(source) {
+  const normalized = String(source || "").toLowerCase();
+  if (normalized.includes("idd")) {
+    return "IDD";
   }
+  if (normalized.includes("geometry")) {
+    return "G";
+  }
+  if (normalized.includes("hvac")) {
+    return "H";
+  }
+  return badgeAbbreviation(source);
+}
+
+function confidenceAbbreviation(confidence) {
+  const normalized = String(confidence || "").toLowerCase();
+  if (normalized.includes("inferred")) {
+    return "I";
+  }
+  if (normalized.includes("partial")) {
+    return "P";
+  }
+  return badgeAbbreviation(confidence);
+}
+
+function badgeAbbreviation(value) {
+  return String(value || "")
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => part[0])
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
 }

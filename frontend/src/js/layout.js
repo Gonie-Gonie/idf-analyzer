@@ -2,17 +2,19 @@ import { elements } from "./state.js";
 import { resizeGeometry } from "./geometry-loader.js";
 
 const workspacePresetWidths = {
-  analysis: "44%",
+  analysis: "10%",
   balanced: "50%",
-  editor: "62%",
+  editor: "90%",
 };
+const defaultWorkspacePreset = "balanced";
 
 export function initializeWorkspaceSplitter() {
   const savedWidth = localStorage.getItem("idfAnalyzer.editorWidth");
-  if (savedWidth) {
-    elements.workspace.style.setProperty("--editor-width", savedWidth);
+  const initialWidth = savedWidth || workspacePresetWidths[defaultWorkspacePreset];
+  if (initialWidth) {
+    elements.workspace.style.setProperty("--editor-width", initialWidth);
   }
-  updateWorkspacePresetButtons(workspacePresetForWidth(savedWidth || workspacePresetWidths.analysis));
+  updateWorkspacePresetButtons(workspacePresetForWidth(initialWidth));
   elements.layoutPresetButtons?.forEach((button) => {
     button.addEventListener("click", () => applyWorkspacePreset(button.dataset.layoutPreset || "balanced"));
   });
@@ -22,15 +24,15 @@ export function initializeWorkspaceSplitter() {
   let dragRect = null;
   let splitterWidth = 0;
   let pendingClientX = 0;
-  let lastValue = savedWidth || "";
+  let lastValue = initialWidth || "";
 
   function applyWorkspaceDrag() {
     dragFrame = 0;
     if (!dragging || !dragRect) {
       return;
     }
-    const minLeft = 360;
-    const minRight = 360;
+    const minLeft = 96;
+    const minRight = 160;
     const nextWidth = Math.min(
       Math.max(pendingClientX - dragRect.left, minLeft),
       dragRect.width - splitterWidth - minRight,

@@ -17,18 +17,71 @@
           <p id="runtimeStatus" class="status-loading" data-i18n="status.loadingInterface">Loading interface</p>
         </div>
         <div class="toolbar" role="toolbar" aria-label="IDF controls">
-          <button id="openButton" type="button" data-i18n="action.open">Open</button>
+          <button id="openButton" class="toolbar-button" type="button" title="Open" aria-label="Open" data-i18n-title="action.open" data-i18n-aria-label="action.open">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <path d="M14 2v6h6"></path>
+              <path d="M8 13h8"></path>
+              <path d="M8 17h5"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.open">Open</span>
+          </button>
           <input id="fileInput" class="hidden-file-input" type="file" accept=".idf,.imf,.epjson,.json,.txt" />
-          <button id="saveButton" type="button" data-i18n="action.save">Save</button>
-          <button id="revertButton" type="button" disabled data-i18n="action.revert">Revert</button>
-          <div class="layout-presets" role="group" aria-label="Layout presets">
-            <button type="button" data-layout-preset="analysis">Analysis</button>
-            <button type="button" data-layout-preset="balanced">Balanced</button>
-            <button type="button" data-layout-preset="editor">Editor</button>
+          <button id="saveButton" class="toolbar-button" type="button" title="Save" aria-label="Save" data-i18n-title="action.save" data-i18n-aria-label="action.save">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <path d="M17 21v-8H7v8"></path>
+              <path d="M7 3v5h8"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.save">Save</span>
+          </button>
+          <button id="revertButton" class="toolbar-button" type="button" disabled title="Revert" aria-label="Revert" data-i18n-title="action.revert" data-i18n-aria-label="action.revert">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+              <path d="M3 4v6h6"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.revert">Revert</span>
+          </button>
+          <div class="toolbar-item layout-toolbar">
+            <div class="layout-presets" role="group" aria-label="Layout presets">
+              <button type="button" data-layout-preset="analysis" title="Editor 10%, analysis focus" aria-label="Layout: analysis focus">
+                <span class="layout-icon layout-icon-analysis" aria-hidden="true"><i></i></span>
+              </button>
+              <button type="button" data-layout-preset="balanced" title="Editor 50%, balanced view" aria-label="Layout: balanced view">
+                <span class="layout-icon layout-icon-balanced" aria-hidden="true"><i></i></span>
+              </button>
+              <button type="button" data-layout-preset="editor" title="Editor 90%, editor focus" aria-label="Layout: editor focus">
+                <span class="layout-icon layout-icon-editor" aria-hidden="true"><i></i></span>
+              </button>
+            </div>
+            <span class="toolbar-label">Layout</span>
           </div>
-          <button id="toolsButton" type="button" data-i18n="action.batch">Batch</button>
-          <button id="guideButton" type="button" data-i18n="action.guide">Guide</button>
-          <button id="settingsButton" type="button" data-i18n="action.settings">Settings</button>
+          <button id="toolsButton" class="toolbar-button" type="button" title="Batch" aria-label="Batch" data-i18n-title="action.batch" data-i18n-aria-label="action.batch">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="5" width="10" height="8" rx="1.5"></rect>
+              <rect x="8" y="3" width="10" height="8" rx="1.5"></rect>
+              <rect x="11" y="11" width="10" height="8" rx="1.5"></rect>
+              <path d="M6 9h4"></path>
+              <path d="M11 7h4"></path>
+              <path d="m16 14 2 1.5-2 1.5"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.batch">Batch</span>
+          </button>
+          <button id="guideButton" class="toolbar-button" type="button" title="Guide" aria-label="Guide" data-i18n-title="action.guide" data-i18n-aria-label="action.guide">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M9.1 9a3 3 0 1 1 5.1 2.2c-.9.6-1.7 1.2-1.7 2.6"></path>
+              <path d="M12 17h.01"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.guide">Guide</span>
+          </button>
+          <button id="settingsButton" class="toolbar-button" type="button" title="Settings" aria-label="Settings" data-i18n-title="action.settings" data-i18n-aria-label="action.settings">
+            <svg class="toolbar-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 1 1 4.2 17l.1-.1A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 1 1 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 1 1 19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z"></path>
+            </svg>
+            <span class="toolbar-label" data-i18n="action.settings">Settings</span>
+          </button>
         </div>
       </header>
 
@@ -87,12 +140,12 @@
         <section class="analysis-panel" aria-label="Analysis results">
           <nav class="tabs" aria-label="Result tabs">
             <button class="tab active" data-result-tab="summary" type="button" data-i18n="tab.summary">Summary</button>
+            <button class="tab" data-result-tab="geometry" type="button" data-i18n="tab.geometry">Geometry</button>
             <button class="tab" data-result-tab="profile" type="button" data-i18n="tab.profile">Profile</button>
             <button class="tab" data-result-tab="hvac" type="button" data-i18n="tab.hvac">HVAC</button>
+            <button class="tab" data-result-tab="diagnose" type="button" data-i18n="tab.diagnose">Diagnose</button>
             <button class="tab" data-result-tab="output" type="button" data-i18n="tab.output">Output</button>
             <button class="tab" data-result-tab="simulation" type="button" data-i18n="tab.simulation">Simulation</button>
-            <button class="tab" data-result-tab="diagnose" type="button" data-i18n="tab.diagnose">Diagnose</button>
-            <button class="tab" data-result-tab="geometry" type="button" data-i18n="tab.geometry">Geometry</button>
           </nav>
 
           <div class="result-pane active" id="summaryPane">

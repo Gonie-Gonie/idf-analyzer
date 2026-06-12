@@ -8,7 +8,7 @@ export const supportedLanguages = [
   ["fr", "Français"],
 ];
 
-export const defaultAnalyzeTabOrder = ["summary", "profile", "hvac", "output", "simulation", "diagnose", "geometry"];
+export const defaultAnalyzeTabOrder = ["summary", "geometry", "profile", "hvac", "diagnose", "output", "simulation"];
 
 const dictionaries = {
   en: {

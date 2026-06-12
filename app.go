@@ -1084,7 +1084,7 @@ func defaultAppSettings() AppSettings {
 		Appearance: AppearanceSettings{
 			Theme:            "system",
 			Language:         "en",
-			AnalysisTabOrder: []string{"summary", "profile", "hvac", "output", "simulation", "diagnose", "geometry"},
+			AnalysisTabOrder: []string{"summary", "geometry", "profile", "hvac", "diagnose", "output", "simulation"},
 			Geometry: GeometryAppearanceSettings{
 				Background: "#f7fafc",
 				Zone:       "#b8d7b0",
@@ -1235,7 +1235,7 @@ func normalizeAnalysisTabOrder(values []string, fallback []string) []string {
 	}
 	source := fallback
 	if len(source) == 0 {
-		source = []string{"summary", "profile", "hvac", "output", "simulation", "diagnose", "geometry"}
+		source = []string{"summary", "geometry", "profile", "hvac", "diagnose", "output", "simulation"}
 	}
 	for _, value := range source {
 		normalized := strings.ToLower(strings.TrimSpace(value))
