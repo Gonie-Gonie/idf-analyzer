@@ -270,11 +270,11 @@ function renderHVACRelationPicker(relations, active) {
 function renderHVACRelationChoice(relation, selectedKey) {
   const key = relationSelectionKey(relation);
   const selected = state.activeHVACView === "relation" && selectedKey === key;
+  const ruleEdges = ruleEdgesForRelation(relation);
   const meta = [
     relation.relationScope === "space" ? "SpaceHVAC" : "",
-    relation.confidence ? `${relation.confidence} confidence` : "",
-    relation.relationSource || "",
     [...new Set([...(relation.airLoopNames || []), ...(relation.plantLoopNames || [])])].join(", "),
+    ruleEdgeCountLabel(ruleEdges),
   ]
     .filter(Boolean)
     .join(" / ") || t("hvac.noTerminal");
@@ -865,16 +865,17 @@ function renderHVACComponent(component) {
   const displayName = componentDisplayName(component);
   const metaLabel = componentMetaLabel(component);
   const title = [displayName, metaLabel].filter(Boolean).join(" - ");
-  const badges = renderHVACEvidenceBadges([
-    component.exists === false ? "Unresolved" : "",
+  const ruleEdges = ruleEdgesForComponent(component);
+  const relatedLoopNames = verifiedCrossLoopNamesForComponent(component);
+  const badges = renderHVACRuleBadges([
+    component.exists === false ? "Missing object" : "",
     component.displayLabel || component.familyLabel || component.family,
     component.roleHere,
-    component.relationConfidence,
-    component.relationSource,
     component.listedInZoneEquipment ? "Zone equipment" : "",
     component.resolvedFromAirDistributionUnit ? "ADU resolved" : "",
     component.inletOnAirLoopDemandPath ? "Demand path" : "",
     component.outletMatchesZoneInlet ? "Zone inlet" : "",
+    ...ruleEdges.slice(0, 3).map((edge) => edge.ruleId),
   ]);
   return `
     <div class="hvac-component${existsClass}">
@@ -897,17 +898,17 @@ function renderHVACComponent(component) {
           ? `<div class="hvac-node-line compact water">${renderNodePill(component.waterInletNode, "Water In")}<span class="hvac-arrow">-&gt;</span>${renderNodePill(component.waterOutletNode, "Water Out")}</div>`
           : ""
       }
-      ${(component.relatedLoopNames || []).length ? renderComponentCrossLoopButtons(component) : ""}
+      ${relatedLoopNames.length ? renderComponentCrossLoopButtons(component, relatedLoopNames) : ""}
       ${renderHVACEditableFields(component.editableFields)}
     </div>`;
 }
 
-function renderComponentCrossLoopButtons(component) {
+function renderComponentCrossLoopButtons(component, relatedLoopNames = component.relatedLoopNames || []) {
   const graphKey = componentGraphKey(component);
   return `
     <div class="hvac-cross-loop-buttons">
       <small>${t("hvac.crossLoop")}</small>
-      ${(component.relatedLoopNames || [])
+      ${relatedLoopNames
         .map(
           (loopName) => `
             <button type="button" data-hvac-jump-loop-name="${escapeHTML(loopName)}" data-hvac-jump-graph-key="${escapeHTML(graphKey)}" title="${escapeHTML(loopName)}">
@@ -918,12 +919,147 @@ function renderComponentCrossLoopButtons(component) {
     </div>`;
 }
 
-function renderHVACEvidenceBadges(values = []) {
+function renderHVACRuleBadges(values = []) {
   const badges = [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))];
   if (!badges.length) {
     return "";
   }
-  return `<div class="hvac-evidence-badges">${badges.map((badge) => `<small>${escapeHTML(badge)}</small>`).join("")}</div>`;
+  return `<div class="hvac-rule-badges">${badges.map((badge) => `<small title="${escapeHTML(badge)}">${escapeHTML(shortRuleBadgeLabel(badge))}</small>`).join("")}</div>`;
+}
+
+function shortRuleBadgeLabel(value) {
+  const text = String(value || "").trim();
+  if (!text.includes(".")) {
+    return text;
+  }
+  const parts = text.split(".");
+  return parts[parts.length - 1].replace(/_/g, " ");
+}
+
+function hvacRuleEdges() {
+  return state.report?.hvac?.ruleGraph?.edges || [];
+}
+
+function hvacRuleNodesByID() {
+  const nodes = state.report?.hvac?.ruleGraph?.nodes || [];
+  return new Map(nodes.map((node) => [node.id, node]));
+}
+
+function ruleEdgesForComponent(component = {}) {
+  return uniqueRuleEdges(hvacRuleEdges().filter((edge) => ruleEdgeTouchesObject(edge, component.objectType, component.objectName, component.objectIndex)));
+}
+
+function ruleEdgesForLoop(loopName, loopType = "") {
+  return uniqueRuleEdges(hvacRuleEdges().filter((edge) => ruleEdgeTouchesObject(edge, loopType, loopName)));
+}
+
+function ruleEdgesForRelation(relation = {}) {
+  const candidates = [];
+  if (relation.spaceName) {
+    candidates.push({ objectType: "Space", objectName: relation.spaceName, objectIndex: relation.spaceObjectIndex });
+  }
+  if (relation.zoneName) {
+    candidates.push({ objectType: "Zone", objectName: relation.zoneName, objectIndex: relation.zoneObjectIndex });
+  }
+  for (const name of relation.airLoopNames || []) {
+    candidates.push({ objectType: "AirLoopHVAC", objectName: name });
+  }
+  for (const name of relation.plantLoopNames || []) {
+    candidates.push({ objectType: "PlantLoop", objectName: name });
+  }
+  for (const name of relation.condenserLoopNames || []) {
+    candidates.push({ objectType: "CondenserLoop", objectName: name });
+  }
+  for (const component of [...(relation.terminalUnits || []), ...(relation.zoneEquipment || []), ...(relation.plantEquipment || [])]) {
+    candidates.push({ objectType: component.objectType, objectName: component.objectName, objectIndex: component.objectIndex });
+  }
+  return uniqueRuleEdges(
+    hvacRuleEdges().filter((edge) =>
+      candidates.some((candidate) => ruleEdgeTouchesObject(edge, candidate.objectType, candidate.objectName, candidate.objectIndex)),
+    ),
+  );
+}
+
+function ruleEdgeTouchesObject(edge = {}, objectType = "", objectName = "", objectIndex = undefined) {
+  const index = Number(objectIndex);
+  if (Number.isFinite(index) && index >= 0 && Number(edge.sourceObjectIndex) === index) {
+    return true;
+  }
+  if (sameObjectRef(edge.sourceObjectType, edge.sourceObjectName, objectType, objectName)) {
+    return true;
+  }
+  const nodes = hvacRuleNodesByID();
+  for (const nodeID of [edge.fromId, edge.toId]) {
+    const node = nodes.get(nodeID);
+    if (!node) {
+      continue;
+    }
+    if (Number.isFinite(index) && index >= 0 && Number(node.objectIndex) === index) {
+      return true;
+    }
+    if (sameObjectRef(node.objectType, node.objectName, objectType, objectName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function sameObjectRef(leftType = "", leftName = "", rightType = "", rightName = "") {
+  return (
+    String(leftType || "").trim().toLowerCase() === String(rightType || "").trim().toLowerCase() &&
+    String(leftName || "").trim().toLowerCase() === String(rightName || "").trim().toLowerCase() &&
+    String(rightType || "").trim() !== "" &&
+    String(rightName || "").trim() !== ""
+  );
+}
+
+function uniqueRuleEdges(edges = []) {
+  const byID = new Map();
+  for (const edge of edges) {
+    if (!edge?.id || byID.has(edge.id)) {
+      continue;
+    }
+    byID.set(edge.id, edge);
+  }
+  return [...byID.values()].sort((left, right) => String(left.ruleId || "").localeCompare(String(right.ruleId || "")));
+}
+
+function ruleEdgeCountLabel(edges = []) {
+  if (!edges.length) {
+    return "";
+  }
+  return `${edges.length} rule edge${edges.length === 1 ? "" : "s"}`;
+}
+
+function ruleEdgeSummary(edges = []) {
+  return [...new Set(edges.map((edge) => edge.ruleId).filter(Boolean))].slice(0, 4).join(" / ");
+}
+
+function ruleEdgeTraceText(edge = {}) {
+  const source = [edge.sourceObjectType, edge.sourceObjectName].filter(Boolean).join(" ");
+  const fields = (edge.sourceFieldIndexes || []).map((index) => `F${Number(index) + 1}`).join(", ");
+  const nodes = (edge.nodeNames || []).join(" -> ");
+  return [source, fields ? `fields ${fields}` : "", nodes ? `nodes ${nodes}` : ""].filter(Boolean).join(" / ") || "Rule source";
+}
+
+function ruleEdgeSearchFields(edge = {}) {
+  return [
+    edge.ruleId,
+    edge.edgeKind,
+    edge.medium,
+    edge.sourceObjectType,
+    edge.sourceObjectName,
+    ...(edge.sourceFieldIndexes || []).map((index) => `field ${Number(index) + 1}`),
+    ...(edge.nodeNames || []),
+  ];
+}
+
+function verifiedCrossLoopNamesForComponent(component = {}) {
+  const hasRuleEdge = ruleEdgesForComponent(component).some((edge) => edge.ruleId === "crossloop.same_water_coil_air_and_plant");
+  if (!hasRuleEdge) {
+    return [];
+  }
+  return [...new Set(component.relatedLoopNames || [])].filter(Boolean);
 }
 
 function renderHVACEditableFields(fields = []) {
@@ -1017,8 +1153,8 @@ function renderHVACRelationTable(relations) {
           <span>${escapeHTML(t("hvac.terminalEquipment"))}</span>
           <span>AirLoop</span>
           <span>Plant / Condenser</span>
-          <span>${escapeHTML(t("common.source", {}, "Source"))}</span>
-          <span>${escapeHTML(t("common.evidence", {}, "Evidence"))}</span>
+          <span>Rule edges</span>
+          <span>Rule trace</span>
         </div>
         ${relations.map(renderHVACZoneRelation).join("")}
       </div>
@@ -1113,16 +1249,7 @@ function renderHVACRelationGraphDetail(relations) {
 function renderHVACZoneRelation(relation) {
   const terminalComponents = (relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || [];
   const terminalText = terminalComponents.map(componentDisplayName).filter(Boolean).join(", ") || "N/A";
-  const terminalEvidence = terminalComponents
-    .flatMap((item) => [
-      item.listedInZoneEquipment ? "listed" : "",
-      item.resolvedFromAirDistributionUnit ? "ADU" : "",
-      item.outletMatchesZoneInlet ? "outlet->zone" : "",
-      item.inletOnAirLoopDemandPath ? "demand path" : "",
-      ...(item.relationEvidence || []),
-    ])
-    .filter(Boolean);
-  const evidence = [...new Set([...(relation.evidence || []), ...terminalEvidence])].slice(0, 4);
+  const ruleEdges = ruleEdgesForRelation(relation);
   const plantText = [
     ...(relation.plantLoopNames || []),
     ...(relation.condenserLoopNames || []).map((name) => `Condenser: ${name}`),
@@ -1138,8 +1265,8 @@ function renderHVACZoneRelation(relation) {
       <span>${escapeHTML(terminalText)}</span>
       <span>${(relation.airLoopNames || []).map(escapeHTML).join(", ") || "N/A"}</span>
       <span>${escapeHTML(plantText)}</span>
-      <span>${escapeHTML([relation.confidence, relation.relationSource].filter(Boolean).join(" / ") || "N/A")}</span>
-      <span>${escapeHTML(evidence.join(" / ") || relationIssueSummary(relation))}</span>
+      <span>${escapeHTML(ruleEdgeCountLabel(ruleEdges) || "N/A")}</span>
+      <span>${escapeHTML(ruleEdgeSummary(ruleEdges) || relationIssueSummary(relation))}</span>
     </div>`;
 }
 
@@ -1243,6 +1370,7 @@ function renderHVACInspectorSelection(selected) {
     selected.loop?.name ||
     t("common.selection");
   elements.hvacInspectorStats.textContent = selected.kind || t("common.selection");
+  const componentRuleEdges = selected.component ? ruleEdgesForComponent(selected.component) : [];
   elements.hvacInspector.innerHTML = `
     <div class="hvac-inspector-title">
       <strong>${escapeHTML(title)}</strong>
@@ -1253,7 +1381,7 @@ function renderHVACInspectorSelection(selected) {
         ? `
           <div class="hvac-inspector-kv"><span>${t("common.type")}</span><strong>${escapeHTML(selected.component.objectType || "N/A")}</strong></div>
           <div class="hvac-inspector-kv"><span>Family</span><strong>${escapeHTML(componentMetaLabel(selected.component))}</strong></div>
-          <div class="hvac-inspector-kv"><span>Evidence</span><strong>${escapeHTML([selected.component.relationConfidence, selected.component.relationSource].filter(Boolean).join(" / ") || "N/A")}</strong></div>
+          <div class="hvac-inspector-kv"><span>Rule edges</span><strong>${escapeHTML(componentRuleEdges.length || "N/A")}</strong></div>
           <div class="hvac-inspector-kv"><span>${t("common.inlet")}</span><strong>${escapeHTML(selected.component.inletNode || "N/A")}</strong></div>
           <div class="hvac-inspector-kv"><span>${t("common.outlet")}</span><strong>${escapeHTML(selected.component.outletNode || "N/A")}</strong></div>`
         : ""
@@ -1412,13 +1540,11 @@ function zoneRelationMatchesQuery(relation, query) {
   }
   return [
     relation.zoneName,
-    relation.relationSource,
-    relation.confidence,
-    ...(relation.evidence || []),
+    ...ruleEdgesForRelation(relation).flatMap(ruleEdgeSearchFields),
     ...(relation.airLoopNames || []),
-    ...(relation.airLoopRelations || []).flatMap((item) => [item.loopName, item.source, item.confidence, ...(item.evidence || [])]),
+    ...(relation.airLoopRelations || []).flatMap((item) => [item.loopName]),
     ...(relation.plantLoopNames || []),
-    ...(relation.plantLoopRelations || []).flatMap((item) => [item.loopName, item.source, item.confidence, ...(item.evidence || [])]),
+    ...(relation.plantLoopRelations || []).flatMap((item) => [item.loopName]),
     ...(relation.condenserLoopNames || []),
     ...(relation.terminalUnits || []).flatMap((item) => componentSearchFields(item)),
     ...(relation.zoneEquipment || []).flatMap((item) => componentSearchFields(item)),
@@ -1478,7 +1604,7 @@ function componentGraphRelatedKeys(component) {
     component?.outletNode ? `node:${component.outletNode}` : "",
     component?.waterInletNode ? `node:${component.waterInletNode}` : "",
     component?.waterOutletNode ? `node:${component.waterOutletNode}` : "",
-    ...(component?.relatedLoopNames || []).map((name) => `loop-name:${name}`),
+    ...verifiedCrossLoopNamesForComponent(component).map((name) => `loop-name:${name}`),
   ].filter(Boolean);
 }
 
@@ -1490,15 +1616,13 @@ function componentSearchFields(component = {}) {
     component.familyLabel,
     component.displayLabel,
     component.roleHere,
-    component.relationSource,
-    component.relationConfidence,
     component.sourceOwner,
     component.sourceOwnerType,
     component.sourceOwnerName,
     component.typeFieldIndex,
     component.nameFieldIndex,
     component.expectedObjectType,
-    ...(component.relationEvidence || []),
+    ...ruleEdgesForComponent(component).flatMap(ruleEdgeSearchFields),
   ];
 }
 
@@ -1587,6 +1711,8 @@ function selectedRelationGraphItem(relations) {
 function renderSelectedHVACDetail(selected) {
   if (selected.kind === "component") {
     const component = selected.component || {};
+    const ruleEdges = ruleEdgesForComponent(component);
+    const relatedLoopNames = verifiedCrossLoopNamesForComponent(component);
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
@@ -1596,7 +1722,7 @@ function renderSelectedHVACDetail(selected) {
         <div class="hvac-detail-grid">
           <div><span>${t("common.object")}</span><strong>${renderObjectLink(component.objectIndex, component.objectType) || "N/A"}</strong></div>
           <div><span>Family</span><strong>${escapeHTML(componentMetaLabel(component))}</strong></div>
-          <div><span>Evidence</span><strong>${escapeHTML([component.relationConfidence, component.relationSource].filter(Boolean).join(" / ") || "N/A")}</strong></div>
+          <div><span>Rule edges</span><strong>${escapeHTML(ruleEdges.length || "N/A")}</strong></div>
           <div><span>${t("common.inlet")}</span><strong>${escapeHTML(component.inletNode || "N/A")}</strong></div>
           <div><span>${t("common.outlet")}</span><strong>${escapeHTML(component.outletNode || "N/A")}</strong></div>
           <div><span>${t("common.water")}</span><strong>${escapeHTML([component.waterInletNode, component.waterOutletNode].filter(Boolean).join(" -> ") || "N/A")}</strong></div>
@@ -1609,8 +1735,8 @@ function renderSelectedHVACDetail(selected) {
           ${component.expectedObjectType ? `<div><span>Expected type</span><strong>${escapeHTML(component.expectedObjectType)}</strong></div>` : ""}
           ${component.loopName ? `<div><span>${t("hvac.viewLoop")}</span><strong>${escapeHTML(component.loopName)}</strong></div>` : ""}
         </div>
-        ${renderHVACEvidenceBadges(component.relationEvidence || [])}
-        ${renderComponentCrossLoopMap(component)}
+        ${renderHVACRuleTraceList(ruleEdges)}
+        ${renderComponentCrossLoopMap(component, relatedLoopNames)}
         ${
           (selected.relations || []).length
             ? `<div class="hvac-detail-list">
@@ -1653,6 +1779,7 @@ function renderSelectedHVACDetail(selected) {
   if (selected.kind === "zone") {
     const relation = selected.relation;
     const loopNames = relation?.airLoopNames || (selected.loop?.name ? [selected.loop.name] : []);
+    const ruleEdges = ruleEdgesForRelation(relation);
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
@@ -1661,14 +1788,14 @@ function renderSelectedHVACDetail(selected) {
         </div>
         <div class="hvac-detail-grid">
           <div><span>${t("common.object")}</span><strong>${renderRelationSubjectLink(relation) || "N/A"}</strong></div>
-          <div><span>Confidence</span><strong>${escapeHTML([relation?.confidence, relation?.relationSource].filter(Boolean).join(" / ") || "N/A")}</strong></div>
+          <div><span>Rule edges</span><strong>${escapeHTML(ruleEdges.length || "N/A")}</strong></div>
           <div><span>Air loops</span><strong>${escapeHTML(loopNames.join(", ") || "N/A")}</strong></div>
           <div><span>Plant loops</span><strong>${escapeHTML((relation?.plantLoopNames || []).join(", ") || "N/A")}</strong></div>
           <div><span>Condenser loops</span><strong>${escapeHTML((relation?.condenserLoopNames || []).join(", ") || "N/A")}</strong></div>
           <div><span>${t("hvac.terminals")}</span><strong>${escapeHTML((relation?.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
           <div><span>${t("common.equipment")}</span><strong>${escapeHTML((relation?.zoneEquipment || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
         </div>
-        ${renderRelationEvidenceList(relation)}
+        ${renderHVACRuleTraceList(ruleEdges)}
       </section>`;
   }
   if (selected.kind === "plant" || selected.kind === "air") {
@@ -1679,7 +1806,7 @@ function renderSelectedHVACDetail(selected) {
           <span>${selected.kind === "plant" ? "PlantLoop" : "AirLoopHVAC"}</span>
         </div>
         <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${renderRelationSubjectLink(relation)} ${escapeHTML(relationDisplayName(relation))}</strong><span>${escapeHTML([relation.confidence, (relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ")].filter(Boolean).join(" / ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
+          ${(selected.relations || []).map((relation) => `<div><strong>${renderRelationSubjectLink(relation)} ${escapeHTML(relationDisplayName(relation))}</strong><span>${escapeHTML([ruleEdgeCountLabel(ruleEdgesForRelation(relation)), (relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ")].filter(Boolean).join(" / ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
         </div>
       </section>`;
   }
@@ -1708,45 +1835,27 @@ function renderSelectedHVACDetail(selected) {
     </section>`;
 }
 
-function renderRelationEvidenceList(relation = {}) {
-  const rows = [
-    ...(relation.evidence || []).map((evidence) => ({ label: relation.relationSource || "relation", confidence: relation.confidence || "", evidence })),
-    ...(relation.airLoopRelations || []).flatMap((item) =>
-      (item.evidence || []).map((evidence) => ({
-        label: item.loopName || "AirLoopHVAC",
-        confidence: item.confidence || "",
-        source: item.source || "",
-        evidence,
-      })),
-    ),
-    ...(relation.plantLoopRelations || []).flatMap((item) =>
-      (item.evidence || []).map((evidence) => ({
-        label: item.loopName || "PlantLoop",
-        confidence: item.confidence || "",
-        source: item.source || "",
-        evidence,
-      })),
-    ),
-  ];
+function renderHVACRuleTraceList(rows = []) {
   if (!rows.length) {
     return "";
   }
   return `
-    <div class="hvac-detail-list evidence">
+    <div class="hvac-detail-list hvac-rule-trace-list">
       ${rows
+        .slice(0, 12)
         .map(
-          (row) => `
+          (edge) => `
             <div>
-              <strong>${escapeHTML(row.label)}</strong>
-              <span>${escapeHTML([row.confidence, row.source, row.evidence].filter(Boolean).join(" / "))}</span>
+              <strong title="${escapeHTML(edge.ruleId || "")}">${escapeHTML(edge.ruleId || "rule edge")}</strong>
+              <span>${renderObjectLink(edge.sourceObjectIndex, edge.sourceObjectType)} ${escapeHTML(ruleEdgeTraceText(edge))}</span>
             </div>`,
         )
         .join("")}
     </div>`;
 }
 
-function renderComponentCrossLoopMap(component = {}) {
-  const relatedLoopNames = [...new Set(component.relatedLoopNames || [])].filter(Boolean);
+function renderComponentCrossLoopMap(component = {}, names = verifiedCrossLoopNamesForComponent(component)) {
+  const relatedLoopNames = [...new Set(names || [])].filter(Boolean);
   if (!relatedLoopNames.length) {
     return "";
   }
@@ -2232,12 +2341,13 @@ function buildRelationGraph(relations) {
   const linksByKey = new Map();
   for (const relation of relations) {
     const subjectKey = relationSelectionKey(relation);
+    const relationRuleEdges = ruleEdgesForRelation(relation);
     const zoneNode = ensureRelationNode(nodesByKey, {
       key: subjectKey,
       kind: "zone",
       column: "zone",
       label: relationDisplayName(relation),
-      meta: [relation.relationScope === "space" ? "SpaceHVAC" : "", relation.confidence, relation.relationSource].filter(Boolean).join(" / ") || "Zone",
+      meta: [relation.relationScope === "space" ? "SpaceHVAC" : "", ruleEdgeCountLabel(relationRuleEdges)].filter(Boolean).join(" / ") || "Zone",
       objectIndex: relation.spaceName ? relation.spaceObjectIndex : relation.zoneObjectIndex,
     });
     const terminalSource = (relation.terminalUnits || []).length ? relation.terminalUnits || [] : relation.zoneEquipment || [];
@@ -2249,7 +2359,7 @@ function buildRelationGraph(relations) {
             kind: "terminal",
             column: "terminal",
             label: component.objectName || componentDisplayName(component),
-            meta: [component.displayLabel || component.familyLabel || component.family, component.relationConfidence].filter(Boolean).join(" / ") || component.objectType || "Equipment",
+            meta: [component.displayLabel || component.familyLabel || component.family, ruleEdgeCountLabel(ruleEdgesForComponent(component))].filter(Boolean).join(" / ") || component.objectType || "Equipment",
             component,
           }),
         )
@@ -2259,17 +2369,16 @@ function buildRelationGraph(relations) {
             kind: "terminal",
             column: "terminal",
             label: t("hvac.directZoneEquipment"),
-            meta: t("hvac.inferred"),
+            meta: "Direct equipment",
           }),
         ];
     const airNodes = (relation.airLoopNames || []).map((name) => {
-      const relationMeta = (relation.airLoopRelations || []).find((item) => item.loopName === name);
       return ensureRelationNode(nodesByKey, {
         key: `air:${name}`,
         kind: "air",
         column: "air",
         label: name,
-        meta: [relationMeta?.confidence, relationMeta?.source].filter(Boolean).join(" / ") || "AirLoopHVAC",
+        meta: ruleEdgeCountLabel(ruleEdgesForLoop(name, "AirLoopHVAC")) || "AirLoopHVAC",
       });
     });
     const sourceComponents = uniqueRelationComponents(relation.plantEquipment || []);

@@ -3058,7 +3058,7 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .hvac-output-badges,
-.hvac-evidence-badges {
+.hvac-rule-badges {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -3066,7 +3066,7 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .hvac-output-badges small,
-.hvac-evidence-badges small {
+.hvac-rule-badges small {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--muted);
@@ -3075,9 +3075,16 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   font-weight: 700;
 }
 
-.hvac-evidence-badges small {
+.hvac-rule-badges small {
   background: var(--teal-soft);
   color: var(--teal-dark);
+}
+
+.hvac-rule-trace-list span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
 }
 
 .hvac-component {
