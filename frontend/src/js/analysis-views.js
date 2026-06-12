@@ -373,25 +373,53 @@ function countBy(values, keyFn) {
 }
 
 function renderMetricRow(metric) {
-  const unit = metric.unit ? `<span class="summary-unit">${escapeHTML(metric.unit)}</span>` : "";
+  const unit = metric.unit ? escapeHTML(metric.unit) : "";
   const meta = renderMetricMeta(metric);
+  const valueClass = isNumericSummaryMetric(metric) ? " summary-value-numeric" : "";
   return `
     <div class="summary-row" role="row">
       <div class="summary-name" role="cell">
         <strong title="${escapeHTML(metric.name)}">${escapeHTML(metric.name)}</strong>
       </div>
-      <div class="summary-value" role="cell">
-        <strong>${escapeHTML(metric.displayValue ?? "N/A")}</strong>
-        ${unit}
+      <div class="summary-value${valueClass}" role="cell">
+        ${renderMetricDisplayValue(metric)}
       </div>
+      <span class="summary-unit" role="cell">${unit}</span>
       ${meta}
-      ${renderMetricStatus(metric.status)}
+      ${renderMetricStatus(metric)}
     </div>`;
 }
 
+function isNumericSummaryMetric(metric) {
+  return (typeof metric.value === "number" && Number.isFinite(metric.value)) || Boolean(metric.unit);
+}
+
+function renderMetricDisplayValue(metric) {
+  const displayValue = String(metric.displayValue ?? "N/A");
+  if (!isNumericSummaryMetric(metric)) {
+    return `<strong>${escapeHTML(displayValue)}</strong>`;
+  }
+  const match = displayValue.match(/^(-?)(\d+)(\.\d+)?$/);
+  if (!match && isNumericSummaryMetric(metric)) {
+    return `
+      <strong class="summary-number">
+        <span class="summary-number-int">${escapeHTML(displayValue)}</span>
+        <span class="summary-number-frac"></span>
+      </strong>`;
+  }
+  if (!match) {
+    return `<strong>${escapeHTML(displayValue)}</strong>`;
+  }
+  return `
+    <strong class="summary-number">
+      <span class="summary-number-int">${escapeHTML(`${match[1]}${match[2]}`)}</span>
+      <span class="summary-number-frac">${escapeHTML(match[3] || "")}</span>
+    </strong>`;
+}
+
 function renderMetricMeta(metric) {
-  const badges = summaryBadgeMeta(metric);
-  if (!badges.length && !metric.evidence) {
+  const badges = summaryNoteBadges(metric);
+  if (!badges.length) {
     return `<div class="summary-meta" role="cell"></div>`;
   }
   const seen = new Set();
@@ -409,50 +437,44 @@ function renderMetricMeta(metric) {
   return `<div class="summary-meta" role="cell">${tags}</div>`;
 }
 
-function summaryBadgeMeta(metric) {
+function summaryNoteBadges(metric) {
   const evidence = String(metric.evidence || "").trim();
+  const rawBadges = new Set((metric.badges || []).map((badge) => String(badge || "").toLowerCase()));
+  const source = String(metric.source || "").toLowerCase();
+  const confidence = String(metric.confidence || "").toLowerCase();
   const badges = [];
-  if (metric.source) {
-    const label = sourceLabel(metric.source);
-    badges.push({
-      label,
-      abbr: sourceAbbreviation(metric.source),
-      title: evidence ? `Source: ${label}. Evidence: ${evidence}` : `Source: ${label}`,
-    });
+
+  if (rawBadges.has("inferred") || confidence === "inferred" || source.includes("inference") || source.includes("semantic_evidence")) {
+    badges.push(summaryNoteBadge("Inferred", "I", evidence ? `Inferred value. ${evidence}` : "Inferred value."));
   }
-  if (metric.confidence) {
-    const label = sourceLabel(metric.confidence);
-    badges.push({
-      label,
-      abbr: confidenceAbbreviation(metric.confidence),
-      title: evidence ? `Confidence: ${label}. Inference: ${evidence}` : `Confidence: ${label}`,
-    });
+  if (rawBadges.has("orientation")) {
+    badges.push(summaryNoteBadge("Orientation", "O", evidence ? `Orientation-dependent value. ${evidence}` : "Orientation-dependent value."));
   }
-  if (metric.visibility === "advanced") {
-    badges.push({
-      label: "Advanced",
-      abbr: "A",
-      title: evidence ? `Advanced metric. Evidence: ${evidence}` : "Advanced metric",
-    });
+  if (rawBadges.has("base-surface")) {
+    badges.push(summaryNoteBadge("Base surface", "B", evidence ? `Depends on base-surface resolution. ${evidence}` : "Depends on base-surface resolution."));
   }
-  for (const badge of metric.badges || []) {
-    const label = sourceLabel(badge);
-    badges.push({
-      label,
-      abbr: badgeAbbreviation(badge),
-      title: evidence ? `${label}. Evidence: ${evidence}` : label,
-    });
+  if (rawBadges.has("readiness")) {
+    badges.push(summaryNoteBadge("Readiness", "R", evidence ? `Readiness check. ${evidence}` : "Readiness check."));
+  }
+  if (rawBadges.has("diagnostic")) {
+    badges.push(summaryNoteBadge("Diagnostic", "D", evidence ? `Diagnostic summary. ${evidence}` : "Diagnostic summary."));
   }
   return badges;
 }
 
-function renderMetricStatus(status) {
+function summaryNoteBadge(label, abbr, title) {
+  return { label, abbr, title };
+}
+
+function renderMetricStatus(metric) {
+  const status = metric.status;
+  const title = metricStatusTitle(metric);
   switch (status) {
     case "ok":
       return `<span class="summary-status summary-status-ok" role="cell" aria-label="OK"></span>`;
     case "partial":
       return `
-        <span class="summary-status summary-status-partial" role="cell" title="Partial" aria-label="Partial">
+        <span class="summary-status summary-status-partial" role="cell" title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 3 22 20H2z"></path>
             <path d="M12 9v5"></path>
@@ -461,7 +483,7 @@ function renderMetricStatus(status) {
         </span>`;
     default:
       return `
-        <span class="summary-status summary-status-missing" role="cell" title="Missing" aria-label="Missing">
+        <span class="summary-status summary-status-missing" role="cell" title="${escapeHTML(title)}" aria-label="${escapeHTML(title)}">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="9"></circle>
             <path d="m15 9-6 6"></path>
@@ -469,6 +491,15 @@ function renderMetricStatus(status) {
           </svg>
         </span>`;
   }
+}
+
+function metricStatusTitle(metric) {
+  const status = metric.status === "partial" ? "Partial result" : "Missing result";
+  const evidence = String(metric.evidence || "").trim();
+  if (evidence) {
+    return `${status}. ${evidence}`;
+  }
+  return status;
 }
 
 function metricMatchesQuery(metric, category, query) {
@@ -498,39 +529,4 @@ function sourceLabel(source) {
     .replace(/\bIdd\b/g, "IDD")
     .replace(/\bHvac\b/g, "HVAC")
     .replace(/\bIdf\b/g, "IDF");
-}
-
-function sourceAbbreviation(source) {
-  const normalized = String(source || "").toLowerCase();
-  if (normalized.includes("idd")) {
-    return "IDD";
-  }
-  if (normalized.includes("geometry")) {
-    return "G";
-  }
-  if (normalized.includes("hvac")) {
-    return "H";
-  }
-  return badgeAbbreviation(source);
-}
-
-function confidenceAbbreviation(confidence) {
-  const normalized = String(confidence || "").toLowerCase();
-  if (normalized.includes("inferred")) {
-    return "I";
-  }
-  if (normalized.includes("partial")) {
-    return "P";
-  }
-  return badgeAbbreviation(confidence);
-}
-
-function badgeAbbreviation(value) {
-  return String(value || "")
-    .split(/[\s_-]+/)
-    .filter(Boolean)
-    .map((part) => part[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 }

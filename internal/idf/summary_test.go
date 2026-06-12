@@ -515,11 +515,33 @@ func TestAnalyzeSummaryCoreMetricsAndExports(t *testing.T) {
 	if _, ok := csvValues["object_count [-]"]; !ok {
 		t.Fatalf("CSV missing unitless object count name with [-] unit")
 	}
-	if got := csvValues["gross_floor_area [m2]"]; got != "200" {
-		t.Fatalf("CSV gross floor area = %q, want 200", got)
+	if got := csvValues["gross_floor_area [m2]"]; got != "200.0" {
+		t.Fatalf("CSV gross floor area = %q, want 200.0", got)
 	}
 	if got := csvValues["total_wwr [%]"]; got != "3.3" {
 		t.Fatalf("CSV total WWR = %q, want 3.3", got)
+	}
+}
+
+func TestFormatSummaryNumberUsesCompactDecimalPrecision(t *testing.T) {
+	tests := []struct {
+		name      string
+		value     float64
+		precision int
+		want      string
+	}{
+		{name: "large area", value: 4978.588, precision: 2, want: "4978.6"},
+		{name: "four displayed digits", value: 12.345, precision: 3, want: "12.3"},
+		{name: "small ratio keeps precision", value: 0.123, precision: 3, want: "0.123"},
+		{name: "integer numeric keeps one decimal", value: 5, precision: 2, want: "5.0"},
+		{name: "count precision stays integer", value: 42.2, precision: 0, want: "42"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatSummaryNumber(tt.value, tt.precision); got != tt.want {
+				t.Fatalf("formatSummaryNumber(%v, %d) = %q, want %q", tt.value, tt.precision, got, tt.want)
+			}
+		})
 	}
 }
 

@@ -430,13 +430,43 @@ func formatSummaryNumber(value float64, precision int) string {
 	if precision <= 0 {
 		return strconv.FormatInt(int64(math.Round(value)), 10)
 	}
-	text := strconv.FormatFloat(roundedNumber(value, precision), 'f', precision, 64)
-	text = strings.TrimRight(text, "0")
-	text = strings.TrimRight(text, ".")
-	if text == "-0" {
-		return "0"
+	displayPrecision := summaryDisplayPrecision(value, precision)
+	rounded := roundedNumber(value, displayPrecision)
+	if rounded == 0 {
+		rounded = 0
 	}
-	return text
+	return strconv.FormatFloat(rounded, 'f', displayPrecision, 64)
+}
+
+func summaryDisplayPrecision(value float64, precision int) int {
+	if precision <= 0 {
+		return 0
+	}
+	rounded := roundedNumber(value, precision)
+	if rounded == math.Round(rounded) {
+		return min(precision, 1)
+	}
+	if summaryDisplayedDigitCount(value, precision) >= 4 {
+		return min(precision, 1)
+	}
+	return precision
+}
+
+func summaryDisplayedDigitCount(value float64, precision int) int {
+	text := strconv.FormatFloat(math.Abs(roundedNumber(value, precision)), 'f', precision, 64)
+	count := 0
+	seenSignificant := false
+	for _, char := range text {
+		if char == '.' {
+			continue
+		}
+		if char == '0' && !seenSignificant {
+			continue
+		}
+		seenSignificant = true
+		count++
+	}
+	return count
 }
 
 func isFinitePositiveOrZero(value float64) bool {
