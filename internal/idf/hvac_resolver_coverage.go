@@ -74,7 +74,7 @@ func HVACResolverCoverageMatrix() []HVACResolverCoverageItem {
 		{ObjectType: "ZoneHVAC:OutdoorAirUnit:EquipmentList", Family: "zone_equipment_component_list", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:RefrigerationChillerSet", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
-		{ObjectType: "ZoneHVAC:UserDefined", Family: "zone_equipment", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone},
+		{ObjectType: "ZoneHVAC:ForcedAir:UserDefined", Family: "zone_equipment", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "Coil:Cooling:Water", Family: "water_coil", Resolver: "crossloop.same_water_coil_air_and_plant", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "Coil:Heating:Water", Family: "water_coil", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "Coil:Heating:Steam", Family: "water_coil", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone},

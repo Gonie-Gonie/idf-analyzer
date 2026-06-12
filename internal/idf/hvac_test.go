@@ -824,6 +824,65 @@ func TestAnalyzeHVACRefrigerationChillerSetUsesCatalogForAirChillers(t *testing.
 	}
 }
 
+func TestAnalyzeHVACForcedAirUserDefinedUsesCatalogForDirectZoneService(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "West Zone"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "West Zone"},
+			{Value: "West Zone Equipment"},
+			{Value: "Zone1WindACAirOutletNode"},
+			{Value: ""},
+			{Value: "West Zone Air Node"},
+			{Value: "Zone1WindACAirInletNode"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "West Zone Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:ForcedAir:UserDefined"},
+			{Value: "Zone1WindAC"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 3, Type: "ZoneHVAC:ForcedAir:UserDefined", Fields: []Field{
+			{Value: "Zone1WindAC"},
+			{Value: "Zone 1 Window AC Model Program Manager"},
+			{Value: "Zone 1 Window AC Init Program Manager"},
+			{Value: "Zone1WindACAirInletNode"},
+			{Value: "Zone1WindACAirOutletNode"},
+			{Value: "Zone1WindACOAInNode"},
+			{Value: "Zone1WindACExhNode"},
+			{Value: "0"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "West Zone")
+	if relation == nil {
+		t.Fatalf("West Zone relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("user-defined forced air relation resolved unexpected air terminal/loop: %#v", relation)
+	}
+	equipment := findHVACTestingComponent(relation.ZoneEquipment, "Zone1WindAC")
+	if equipment == nil {
+		t.Fatalf("zone equipment = %#v, want Zone1WindAC", relation.ZoneEquipment)
+	}
+	if equipment.ObjectType != "ZoneHVAC:ForcedAir:UserDefined" || equipment.RoleHere != "zone_equipment" || !equipment.ListedInZoneEquipment {
+		t.Fatalf("user-defined forced air metadata = %#v, want listed direct zone equipment", equipment)
+	}
+	if equipment.InletNode != "Zone1WindACAirInletNode" || equipment.InletFieldIndex != 3 {
+		t.Fatalf("user-defined forced air inlet = %#v, want catalog-derived primary inlet at field 3", equipment)
+	}
+	if equipment.OutletNode != "Zone1WindACAirOutletNode" || equipment.OutletFieldIndex != 4 {
+		t.Fatalf("user-defined forced air outlet = %#v, want catalog-derived primary outlet at field 4", equipment)
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "", "", "Zone1WindAC") {
+		t.Fatalf("service chains = %#v, want ForcedAir:UserDefined -> zone path", relation.ServiceChains)
+	}
+}
+
 func TestAnalyzeHVACFourPipeFanCoilUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

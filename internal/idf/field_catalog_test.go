@@ -341,6 +341,30 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			role:       fieldRoleObjectRef,
 		},
 		{
+			objectType: "ZoneHVAC:ForcedAir:UserDefined",
+			fieldIndex: 3,
+			fieldName:  "Primary Air Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "ZoneHVAC:ForcedAir:UserDefined",
+			fieldIndex: 4,
+			fieldName:  "Primary Air Outlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "ZoneHVAC:ForcedAir:UserDefined",
+			fieldIndex: 8,
+			fieldName:  "Plant Connection 1 Inlet Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "ZoneHVAC:ForcedAir:UserDefined",
+			fieldIndex: 16,
+			fieldName:  "Ambient Zone Name",
+			role:       fieldRoleZoneRef,
+		},
+		{
 			objectType: "ZoneHVAC:LowTemperatureRadiant:SurfaceGroup",
 			fieldIndex: 1,
 			fieldName:  "Surface Name",
