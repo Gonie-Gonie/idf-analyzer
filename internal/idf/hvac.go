@@ -2134,34 +2134,6 @@ func hvacComponentReferenceFromPair(ctx *hvacContext, obj Object, pair hvacCompo
 	return reference, true
 }
 
-func referencedHVACComponentKeysDepth(ctx *hvacContext, component HVACComponent, depth int) map[string]bool {
-	keys := map[string]bool{}
-	visited := map[string]bool{}
-	var visit func(HVACComponent, int)
-	visit = func(current HVACComponent, remaining int) {
-		if remaining < 0 || !current.Exists {
-			return
-		}
-		currentKey := hvacComponentKey(current)
-		if currentKey == "" || visited[currentKey] {
-			return
-		}
-		visited[currentKey] = true
-		for _, reference := range ctx.componentReferencesByFromKey[currentKey] {
-			key := hvacObjectKey(reference.TargetObjectType, reference.TargetObjectName)
-			if key == "" || key == currentKey {
-				continue
-			}
-			keys[key] = true
-			if remaining > 0 && reference.TargetExists {
-				visit(newHVACComponent(ctx, reference.TargetObjectType, reference.TargetObjectName), remaining-1)
-			}
-		}
-	}
-	visit(component, depth)
-	return keys
-}
-
 func componentReferencedByZoneHVAC(ctx *hvacContext, wantedKey string) bool {
 	if wantedKey == "" {
 		return false
@@ -2175,7 +2147,10 @@ func componentReferencedByZoneHVAC(ctx *hvacContext, wantedKey string) bool {
 			continue
 		}
 		component := newHVACComponent(ctx, obj.Type, name)
-		if keys := referencedHVACComponentKeysDepth(ctx, component, 4); keys[wantedKey] {
+		if hvacComponentKey(component) == wantedKey {
+			return true
+		}
+		if typedHVACComponentReferenceKeys(ctx, component)[wantedKey] {
 			return true
 		}
 	}
