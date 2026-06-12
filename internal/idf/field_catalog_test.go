@@ -299,6 +299,30 @@ func TestFieldCatalogCoversAirTerminalFamilies(t *testing.T) {
 			role:       fieldRoleObjectTypeRef,
 		},
 		{
+			objectType: "ZoneHVAC:HybridUnitaryHVAC",
+			fieldIndex: 8,
+			fieldName:  "Return Air Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "ZoneHVAC:HybridUnitaryHVAC",
+			fieldIndex: 10,
+			fieldName:  "Supply Air Node Name",
+			role:       fieldRoleNodeRef,
+		},
+		{
+			objectType: "ZoneHVAC:HybridUnitaryHVAC",
+			fieldIndex: 23,
+			fieldName:  "Design Specification Outdoor Air Object Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
+			objectType: "ZoneHVAC:HybridUnitaryHVAC",
+			fieldIndex: 36,
+			fieldName:  "Mode 1 Supply Air Temperature Lookup Table Name",
+			role:       fieldRoleObjectRef,
+		},
+		{
 			objectType: "ZoneHVAC:LowTemperatureRadiant:SurfaceGroup",
 			fieldIndex: 1,
 			fieldName:  "Surface Name",

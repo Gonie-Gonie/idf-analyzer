@@ -69,7 +69,7 @@ func HVACResolverCoverageMatrix() []HVACResolverCoverageItem {
 		{ObjectType: "ZoneHVAC:CoolingPanel:RadiantConvective:Water", Family: "zone_equipment", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone, TestFixture: "field_catalog_test.go"},
 		{ObjectType: "ZoneHVAC:Dehumidifier:DX", Family: "zone_equipment", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:EnergyRecoveryVentilator", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
-		{ObjectType: "ZoneHVAC:HybridUnitaryHVAC", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone},
+		{ObjectType: "ZoneHVAC:HybridUnitaryHVAC", Family: "zone_equipment", Resolver: "nodeRoleFieldResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:OutdoorAirUnit", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:OutdoorAirUnit:EquipmentList", Family: "zone_equipment_component_list", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},
 		{ObjectType: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow", Family: "zone_equipment", Resolver: "typedComponentReferenceResolver", Status: hvacResolverDone, TestFixture: "hvac_test.go"},

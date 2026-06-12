@@ -649,6 +649,117 @@ func TestAnalyzeHVACIdealLoadsAirSystemBuildsDirectZoneServiceChain(t *testing.T
 	}
 }
 
+func TestAnalyzeHVACHybridUnitaryHVACUsesCatalogForDirectZoneService(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Main Zone"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Main Zone"},
+			{Value: "Main Zone Equipment List"},
+			{Value: "Main Zone Inlet Node"},
+			{Value: "Main Return Air Node Name"},
+			{Value: "Main Zone Node"},
+			{Value: "Main Zone Outlet Node"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Main Zone Equipment List"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:HybridUnitaryHVAC"},
+			{Value: "MUNTERSEPX5000"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: ""},
+			{Value: ""},
+		}},
+		{Index: 3, Type: "ZoneHVAC:HybridUnitaryHVAC", Fields: []Field{
+			{Value: "MUNTERSEPX5000"},
+			{Value: "ALWAYS_ON"},
+			{Value: ""},
+			{Value: "MinSupplyT"},
+			{Value: "MaxSupplyT"},
+			{Value: "MinSupplyHR"},
+			{Value: "MaxSupplyHR"},
+			{Value: "Automatic"},
+			{Value: "Main Return Air Node Name"},
+			{Value: "Outside Air Inlet Node"},
+			{Value: "Main Zone Inlet Node"},
+			{Value: "Main Relief Node"},
+			{Value: "2.51"},
+			{Value: ""},
+			{Value: "Yes"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "1"},
+			{Value: "10"},
+			{Value: "Electricity"},
+			{Value: "NaturalGas"},
+			{Value: "DistrictCooling"},
+			{Value: ""},
+			{Value: "SZ DSOA SPACE2-1"},
+			{Value: "Mode0 Standby"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Mode0_Power_lookup"},
+			{Value: ""},
+			{Value: ""},
+			{Value: ""},
+			{Value: ""},
+			{Value: ""},
+			{Value: "0"},
+			{Value: "0"},
+			{Value: "Mode1_IEC"},
+			{Value: "Mode1_TSA_lookup"},
+			{Value: "Mode1_wSA_lookup"},
+			{Value: "Mode1_Power_lookup"},
+			{Value: "Mode1_FanPower_lookup"},
+			{Value: "Mode1_ESP_lookup"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Mode1_water_lookup"},
+			{Value: "-20"},
+			{Value: "100"},
+			{Value: "0"},
+			{Value: "0.03"},
+			{Value: "0"},
+			{Value: "100"},
+			{Value: "-20"},
+			{Value: "100"},
+			{Value: "0"},
+			{Value: "0.03"},
+			{Value: "0"},
+			{Value: "100"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: "0.715"},
+			{Value: "0.964"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	relation := findHVACTestingZoneRelation(report, "Main Zone")
+	if relation == nil {
+		t.Fatalf("Main Zone relation not found: %#v", report.ZoneRelations)
+	}
+	if len(relation.AirLoopNames) != 0 || len(relation.TerminalUnits) != 0 {
+		t.Fatalf("hybrid unitary relation resolved unexpected air terminal/loop: %#v", relation)
+	}
+	equipment := findHVACTestingComponent(relation.ZoneEquipment, "MUNTERSEPX5000")
+	if equipment == nil {
+		t.Fatalf("zone equipment = %#v, want HybridUnitaryHVAC", relation.ZoneEquipment)
+	}
+	if equipment.ObjectType != "ZoneHVAC:HybridUnitaryHVAC" || equipment.RoleHere != "zone_equipment" || !equipment.ListedInZoneEquipment {
+		t.Fatalf("hybrid equipment metadata = %#v, want listed direct zone equipment", equipment)
+	}
+	if equipment.InletNode != "Main Return Air Node Name" || equipment.InletFieldIndex != 8 {
+		t.Fatalf("hybrid inlet = %#v, want catalog-derived return node at field 8", equipment)
+	}
+	if equipment.OutletNode != "Main Zone Inlet Node" || equipment.OutletFieldIndex != 10 {
+		t.Fatalf("hybrid outlet = %#v, want catalog-derived supply node at field 10", equipment)
+	}
+	if !hasHVACServiceChainComponent(relation.ServiceChains, "", "", "MUNTERSEPX5000") {
+		t.Fatalf("service chains = %#v, want HybridUnitaryHVAC -> zone path", relation.ServiceChains)
+	}
+}
+
 func TestAnalyzeHVACFourPipeFanCoilUsesCatalogForInternalComponents(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

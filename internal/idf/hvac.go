@@ -1122,7 +1122,7 @@ func newHVACComponent(ctx *hvacContext, objectType string, objectNameValue strin
 			if component.WaterOutletNode == "" {
 				component.WaterOutletNode = usage.NodeName
 			}
-		case "inlet", "air_inlet", "zone_inlet", "condenser_inlet":
+		case "inlet", "air_inlet", "zone_inlet", "zone_return", "return_air", "condenser_inlet":
 			if component.InletNode == "" {
 				component.InletNode = usage.NodeName
 				component.InletFieldIndex = usage.FieldIndex
