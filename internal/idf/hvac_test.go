@@ -1,6 +1,7 @@
 package idf
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -165,6 +166,16 @@ func TestAnalyzeHVACBuildsLoopAndZoneRelations(t *testing.T) {
 	} {
 		if !hasHVACRuleEdge(report.RuleGraph, ruleID) {
 			t.Fatalf("rule graph missing %s edge: %#v", ruleID, report.RuleGraph.Edges)
+		}
+	}
+	encoded, err := json.Marshal(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonText := string(encoded)
+	for _, forbidden := range []string{"relationSource", "relationConfidence", "relationEvidence", `"confidence"`, `"evidence"`, `"inferred"`, `"weak"`} {
+		if strings.Contains(jsonText, forbidden) {
+			t.Fatalf("HVAC JSON contains legacy relation vocabulary %q:\n%s", forbidden, jsonText)
 		}
 	}
 }

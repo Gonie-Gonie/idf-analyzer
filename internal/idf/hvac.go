@@ -143,9 +143,9 @@ type HVACComponent struct {
 	NodeUsages              []HVACNodeUsage `json:"nodeUsages,omitempty"`
 	RelatedLoopNames        []string        `json:"relatedLoopNames,omitempty"`
 	EditableFields          []HVACEditField `json:"editableFields,omitempty"`
-	RelationSource          string          `json:"relationSource,omitempty"`
-	RelationConfidence      string          `json:"relationConfidence,omitempty"`
-	RelationEvidence        []string        `json:"relationEvidence,omitempty"`
+	RelationSource          string          `json:"-"`
+	RelationConfidence      string          `json:"-"`
+	RelationEvidence        []string        `json:"-"`
 	ListedInZoneEquipment   bool            `json:"listedInZoneEquipment,omitempty"`
 	ResolvedFromADU         bool            `json:"resolvedFromAirDistributionUnit,omitempty"`
 	DistributionUnitName    string          `json:"distributionUnitName,omitempty"`
@@ -189,9 +189,9 @@ type HVACZoneChain struct {
 	SpaceName          string             `json:"spaceName,omitempty"`
 	SpaceObjectIndex   int                `json:"spaceObjectIndex,omitempty"`
 	RelationScope      string             `json:"relationScope,omitempty"`
-	RelationSource     string             `json:"relationSource,omitempty"`
-	Confidence         string             `json:"confidence,omitempty"`
-	Evidence           []string           `json:"evidence,omitempty"`
+	RelationSource     string             `json:"-"`
+	Confidence         string             `json:"-"`
+	Evidence           []string           `json:"-"`
 	Nodes              HVACZoneNodes      `json:"nodes,omitempty"`
 	AirLoopNames       []string           `json:"airLoopNames,omitempty"`
 	AirLoopRelations   []HVACLoopRelation `json:"airLoopRelations,omitempty"`
@@ -228,9 +228,9 @@ type HVACZoneNodeSource struct {
 type HVACLoopRelation struct {
 	LoopName   string   `json:"loopName"`
 	LoopType   string   `json:"loopType"`
-	Source     string   `json:"source"`
-	Confidence string   `json:"confidence"`
-	Evidence   []string `json:"evidence,omitempty"`
+	Source     string   `json:"-"`
+	Confidence string   `json:"-"`
+	Evidence   []string `json:"-"`
 }
 
 type HVACServicePath struct {
@@ -240,8 +240,8 @@ type HVACServicePath struct {
 	Component       string   `json:"component,omitempty"`
 	PlantLoop       string   `json:"plantLoop,omitempty"`
 	SourceComponent string   `json:"sourceComponent,omitempty"`
-	Confidence      string   `json:"confidence,omitempty"`
-	Evidence        string   `json:"evidence,omitempty"`
+	Confidence      string   `json:"-"`
+	Evidence        string   `json:"-"`
 	SourceRelations []string `json:"sourceRelations,omitempty"`
 }
 
