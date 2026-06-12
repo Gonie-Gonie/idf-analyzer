@@ -685,6 +685,54 @@ func TestAnalyzeHVACBuildsPlantOnlyRadiantServiceChain(t *testing.T) {
 	}
 }
 
+func TestAnalyzeHVACVRFTerminalUsesCatalogForInternalComponents(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "ZoneHVAC:TerminalUnit:VariableRefrigerantFlow", Fields: []Field{
+			{Value: "Office VRF Terminal"},
+			{Value: "Always On"},
+			{Value: "Office VRF Inlet"},
+			{Value: "Office VRF Outlet"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "0"},
+			{Value: "0"},
+			{Value: "Always On"},
+			{Value: "DrawThrough"},
+			{Value: "Fan:ConstantVolume"},
+			{Value: "Office VRF Fan"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Coil:Cooling:DX:VariableRefrigerantFlow"},
+			{Value: "Office VRF Cooling Coil"},
+			{Value: "Coil:Heating:DX:VariableRefrigerantFlow"},
+			{Value: "Office VRF Heating Coil"},
+		}},
+		{Index: 1, Type: "Fan:ConstantVolume", Fields: []Field{{Value: "Office VRF Fan"}}},
+		{Index: 2, Type: "Coil:Cooling:DX:VariableRefrigerantFlow", Fields: []Field{{Value: "Office VRF Cooling Coil"}}},
+		{Index: 3, Type: "Coil:Heating:DX:VariableRefrigerantFlow", Fields: []Field{{Value: "Office VRF Heating Coil"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	for _, target := range []struct {
+		objectType string
+		name       string
+	}{
+		{objectType: "Fan:ConstantVolume", name: "Office VRF Fan"},
+		{objectType: "Coil:Cooling:DX:VariableRefrigerantFlow", name: "Office VRF Cooling Coil"},
+		{objectType: "Coil:Heating:DX:VariableRefrigerantFlow", name: "Office VRF Heating Coil"},
+	} {
+		if !hasHVACComponentReference(report.ComponentReferences, "Office VRF Terminal", target.objectType, target.name, "internal_component_reference") {
+			t.Fatalf("component references = %#v, want VRF terminal -> %s %s", report.ComponentReferences, target.objectType, target.name)
+		}
+	}
+	if !hasHVACRuleEdge(report.RuleGraph, hvacRuleComponentReferencesComponent) || !hasHVACRuleEdge(report.RuleGraph, hvacRuleComponentServesParent) {
+		t.Fatalf("rule graph missing VRF internal component edges: %#v", report.RuleGraph.Edges)
+	}
+}
+
 func TestAnalyzeHVACBuildsAirLoopDemandGraphFromSupplyAndReturnPaths(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "AirLoopHVAC", Fields: []Field{

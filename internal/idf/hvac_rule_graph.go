@@ -845,7 +845,10 @@ func hvacRuleMediumForComponent(objectType string) string {
 }
 
 func hvacReferenceTargetServesParent(reference HVACComponentReference) bool {
-	return isAirTerminalType(reference.FromObjectType) && isWaterCoilType(reference.TargetObjectType)
+	if isAirTerminalType(reference.FromObjectType) && isWaterCoilType(reference.TargetObjectType) {
+		return true
+	}
+	return isDirectZoneEquipmentType(reference.FromObjectType) && isHVACComponentType(reference.TargetObjectType)
 }
 
 func hvacRuleAirLoopDemandEdgeRule(role string) string {
