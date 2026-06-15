@@ -866,7 +866,7 @@ func hvacCouplingTypeAndRoleForObject(objectType string) (string, string) {
 		return "control_overlay", "setpoint_manager"
 	case strings.HasPrefix(lower, "controller:"):
 		return "control_overlay", "controller"
-	case strings.HasPrefix(lower, "availabilitymanager:"):
+	case strings.HasPrefix(lower, "availabilitymanager:") || lower == "availabilitymanagerassignmentlist":
 		return "control_overlay", "availability_manager"
 	case strings.HasPrefix(lower, "energymanagementsystem:") || strings.HasPrefix(lower, "pythonplugin:") || strings.HasPrefix(lower, "externalinterface:"):
 		return "control_overlay", "ems_external"

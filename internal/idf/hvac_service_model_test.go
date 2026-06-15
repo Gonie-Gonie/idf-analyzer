@@ -41,6 +41,71 @@ func TestHVACServiceModelReferenceLargeOfficeZonePaths(t *testing.T) {
 	}
 }
 
+func TestHVACServiceModelExternalFixtureMatrix(t *testing.T) {
+	fixtures := []struct {
+		name       string
+		path       string
+		assertions []func(*testing.T, HVACServiceModel)
+	}{
+		{
+			name: "heatfloor radiant plant",
+			path: "testdata/hvac_external/heatfloor.idf",
+			assertions: []func(*testing.T, HVACServiceModel){
+				func(t *testing.T, model HVACServiceModel) {
+					if !hasAnyServicePath(model, "radiant_heating", "radiant", "radiant_floor") {
+						t.Fatalf("heatfloor service model missing radiant floor heating path: %#v", model.ZoneServices)
+					}
+				},
+				func(t *testing.T, model HVACServiceModel) {
+					if hasServicePathWithAirLoop(model, "radiant") {
+						t.Fatalf("radiant fixture should not force radiant paths through an air loop: %#v", model.ZoneServices)
+					}
+				},
+			},
+		},
+		{
+			name: "office vrf erv",
+			path: "testdata/hvac_external/Office_1_default.idf",
+			assertions: []func(*testing.T, HVACServiceModel){
+				func(t *testing.T, model HVACServiceModel) {
+					if !hasAnyServicePath(model, "cooling", "direct_zone_refrigerant", "vrf_indoor") {
+						t.Fatalf("office fixture missing VRF cooling service path: %#v", model.ZoneServices)
+					}
+				},
+				func(t *testing.T, model HVACServiceModel) {
+					if !hasAnyServicePath(model, "heating", "direct_zone_refrigerant", "vrf_indoor") {
+						t.Fatalf("office fixture missing VRF heating service path: %#v", model.ZoneServices)
+					}
+				},
+				func(t *testing.T, model HVACServiceModel) {
+					if !hasAnyServicePath(model, "ventilation", "ventilation_only", "erv") {
+						t.Fatalf("office fixture missing ERV ventilation service path: %#v", model.ZoneServices)
+					}
+				},
+			},
+		},
+	}
+	for _, fixture := range fixtures {
+		t.Run(fixture.name, func(t *testing.T) {
+			text, err := os.ReadFile(fixture.path)
+			if err != nil {
+				t.Fatalf("read fixture: %v", err)
+			}
+			doc, err := Parse(string(text))
+			if err != nil {
+				t.Fatalf("parse fixture: %v", err)
+			}
+			report := AnalyzeHVAC(doc)
+			if len(report.ServiceModel.ZoneServices) == 0 {
+				t.Fatalf("%s produced no zone services", fixture.path)
+			}
+			for _, assert := range fixture.assertions {
+				assert(t, report.ServiceModel)
+			}
+		})
+	}
+}
+
 func TestHVACServiceModelKeepsFanCoilAsDirectZoneDelivery(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
@@ -88,6 +153,88 @@ func TestHVACServiceModelKeepsFanCoilAsDirectZoneDelivery(t *testing.T) {
 			t.Fatalf("fan coil path gained an air loop: %#v", path)
 		}
 		if path.DeliveryEquipment.DeliveryType != "fan_coil" || path.DeliveryEquipment.RequiresAirLoop {
+			t.Fatalf("fan coil delivery classification = %#v", path.DeliveryEquipment)
+		}
+	}
+}
+
+func TestHVACServiceModelBuildsHydronicFanCoilPlantPath(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office", Comment: "Zone Name"},
+			{Value: "Office Equipment", Comment: "Zone Conditioning Equipment List Name"},
+			{Value: "Office Supply Inlet", Comment: "Zone Air Inlet Node or NodeList Name"},
+			{Value: "", Comment: "Zone Air Exhaust Node or NodeList Name"},
+			{Value: "Office Zone Air Node", Comment: "Zone Air Node Name"},
+			{Value: "", Comment: "Zone Return Air Node or NodeList Name"},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment", Comment: "Name"},
+			{Value: "ZoneHVAC:FourPipeFanCoil", Comment: "Zone Equipment 1 Object Type"},
+			{Value: "Office FPFC", Comment: "Zone Equipment 1 Name"},
+			{Value: "1", Comment: "Zone Equipment 1 Cooling Sequence"},
+			{Value: "1", Comment: "Zone Equipment 1 Heating or No-Load Sequence"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:FourPipeFanCoil", Fields: []Field{
+			{Value: "Office FPFC", Comment: "Name"},
+			{Value: "", Comment: "Availability Schedule Name"},
+			{Value: "Autosize", Comment: "Maximum Supply Air Flow Rate"},
+			{Value: "Office Supply Inlet", Comment: "Air Inlet Node Name"},
+			{Value: "Office Zone Air Node", Comment: "Air Outlet Node Name"},
+			{Value: "HW Inlet", Comment: "Hot Water Inlet Node Name"},
+			{Value: "HW Outlet", Comment: "Hot Water Outlet Node Name"},
+			{Value: "CHW Inlet", Comment: "Chilled Water Inlet Node Name"},
+			{Value: "CHW Outlet", Comment: "Chilled Water Outlet Node Name"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Office Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Loop Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "Supply Inlet"},
+			{Value: "Supply Outlet"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Demand Inlet"},
+			{Value: "Demand Outlet"},
+			{Value: "Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "Demand Branches"},
+			{Value: "Fan Coil Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Fan Coil Branch"},
+			{Value: ""},
+			{Value: "ZoneHVAC:FourPipeFanCoil"},
+			{Value: "Office FPFC"},
+			{Value: "HW Inlet"},
+			{Value: "HW Outlet"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	office := findHVACTestingZoneService(report.ServiceModel, "Office")
+	if office == nil {
+		t.Fatalf("Office zone service not found: %#v", report.ServiceModel.ZoneServices)
+	}
+	for _, serviceKind := range []string{"cooling", "heating"} {
+		path := findZoneServicePath(office.Paths, serviceKind, "direct_zone_hydronic", "Office Water Loop", "", "Office FPFC")
+		if path == nil {
+			t.Fatalf("Office paths = %#v, want %s PlantLoop -> FanCoil -> Zone path", office.Paths, serviceKind)
+		}
+		if path.AirLoop != nil {
+			t.Fatalf("hydronic fan coil path gained an air loop: %#v", path)
+		}
+		if path.DeliveryEquipment.DeliveryType != "fan_coil" || !path.DeliveryEquipment.CanUsePlantLoop {
 			t.Fatalf("fan coil delivery classification = %#v", path.DeliveryEquipment)
 		}
 	}
@@ -280,6 +427,114 @@ func TestHVACServiceModelBuildsRadiantPlantPath(t *testing.T) {
 	}
 }
 
+func TestHVACServiceModelLinksLoopSupportingCouplingsToServicePaths(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "ZoneHVAC:LowTemperatureRadiant:VariableFlow"},
+			{Value: "Office Radiant"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:LowTemperatureRadiant:VariableFlow", Fields: []Field{
+			{Value: "Office Radiant"},
+			{Value: "Radiant Design"},
+			{Value: ""},
+			{Value: "Office"},
+			{Value: "Office Radiant Surface"},
+			{Value: "100"},
+			{Value: "Autosize"},
+			{Value: "Autosize"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+		{Index: 4, Type: "PlantLoop", Fields: []Field{
+			{Value: "Heating Water Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: "TES Operation"},
+			{Value: "HW Setpoint"},
+			{Value: "80"},
+			{Value: "20"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "HW Supply Inlet"},
+			{Value: "HW Supply Outlet"},
+			{Value: "HW Supply Branches"},
+			{Value: ""},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+			{Value: "HW Demand Branches"},
+			{Value: ""},
+		}},
+		{Index: 5, Type: "BranchList", Fields: []Field{
+			{Value: "HW Supply Branches"},
+			{Value: "Storage Branch"},
+		}},
+		{Index: 6, Type: "Branch", Fields: []Field{
+			{Value: "Storage Branch"},
+			{Value: ""},
+			{Value: "ThermalStorage:Ice:Simple"},
+			{Value: "Ice Tank"},
+			{Value: "TES Inlet"},
+			{Value: "TES Outlet"},
+		}},
+		{Index: 7, Type: "BranchList", Fields: []Field{
+			{Value: "HW Demand Branches"},
+			{Value: "Radiant Branch"},
+		}},
+		{Index: 8, Type: "Branch", Fields: []Field{
+			{Value: "Radiant Branch"},
+			{Value: ""},
+			{Value: "ZoneHVAC:LowTemperatureRadiant:VariableFlow"},
+			{Value: "Office Radiant"},
+			{Value: "HW Demand Inlet"},
+			{Value: "HW Demand Outlet"},
+		}},
+		{Index: 9, Type: "ThermalStorage:Ice:Simple", Fields: []Field{{Value: "Ice Tank"}}},
+		{Index: 10, Type: "PlantEquipmentOperation:ThermalEnergyStorage", Fields: []Field{{Value: "TES Operation"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	office := findHVACTestingZoneService(report.ServiceModel, "Office")
+	if office == nil {
+		t.Fatalf("Office zone service not found: %#v", report.ServiceModel.ZoneServices)
+	}
+	path := findZoneServicePath(office.Paths, "radiant_heating", "radiant", "Heating Water Loop", "", "Office Radiant")
+	if path == nil {
+		t.Fatalf("Office paths = %#v, want radiant service path", office.Paths)
+	}
+	if len(path.SupportingCouplings) == 0 {
+		t.Fatalf("radiant path missing supporting loop couplings: %#v", path)
+	}
+	storage := findSystemCouplingByObject(report.ServiceModel.Couplings, "ThermalStorage:Ice:Simple", "Ice Tank")
+	if storage == nil {
+		t.Fatalf("couplings = %#v, want Ice Tank thermal storage coupling", report.ServiceModel.Couplings)
+	}
+	if !stringSliceContains(path.SupportingCouplings, storage.ID) {
+		t.Fatalf("path supporting couplings = %#v, want %s", path.SupportingCouplings, storage.ID)
+	}
+	if !hasLoopRef(storage.ConnectedLoops, "PlantLoop", "Heating Water Loop") {
+		t.Fatalf("storage connected loops = %#v, want Heating Water Loop", storage.ConnectedLoops)
+	}
+	if path.Delivery.ObjectName == "Ice Tank" || componentRefsContainObject(path.Conditioning, "ThermalStorage:Ice:Simple", "Ice Tank") {
+		t.Fatalf("supporting storage leaked into primary service path: %#v", path)
+	}
+	if !hasSystemCoupling(report.ServiceModel.Couplings, "PlantEquipmentOperation:ThermalEnergyStorage", "operation_scheme", "thermal_storage_operation") {
+		t.Fatalf("couplings = %#v, want thermal storage operation scheme coupling", report.ServiceModel.Couplings)
+	}
+}
+
 func TestHVACServiceModelBuildsVRFRefrigerantPath(t *testing.T) {
 	vrfSystemFields := make([]Field, 37)
 	vrfSystemFields[0] = Field{Value: "Office VRF Outdoor"}
@@ -359,6 +614,8 @@ func TestHVACServiceModelClassifiesSupportingSystemCouplings(t *testing.T) {
 		{Index: 18, Type: "Generator:FuelCell", Fields: []Field{{Value: "Fuel Cell"}}},
 		{Index: 19, Type: "Generator:FuelCell:ExhaustGasToWaterHeatExchanger", Fields: []Field{{Value: "Fuel Cell HX"}}},
 		{Index: 20, Type: "Generator:FuelSupply", Fields: []Field{{Value: "Fuel Supply"}}},
+		{Index: 21, Type: "Controller:WaterCoil", Fields: []Field{{Value: "Water Coil Controller"}}},
+		{Index: 22, Type: "AvailabilityManagerAssignmentList", Fields: []Field{{Value: "Availability Managers"}}},
 	}}
 
 	report := AnalyzeHVAC(doc)
@@ -389,6 +646,8 @@ func TestHVACServiceModelClassifiesSupportingSystemCouplings(t *testing.T) {
 		{"Generator:FuelCell", "generator", "fuel_cell"},
 		{"Generator:FuelCell:ExhaustGasToWaterHeatExchanger", "heat_recovery", "fuel_cell_heat_recovery"},
 		{"Generator:FuelSupply", "source_sink", "fuel_supply"},
+		{"Controller:WaterCoil", "control_overlay", "controller"},
+		{"AvailabilityManagerAssignmentList", "control_overlay", "availability_manager"},
 	} {
 		if !hasSystemCoupling(couplings, expected.objectType, expected.couplingType, expected.role) {
 			t.Fatalf("couplings = %#v, missing %#v", couplings, expected)
@@ -399,6 +658,114 @@ func TestHVACServiceModelClassifiesSupportingSystemCouplings(t *testing.T) {
 	}
 	if !hasEnergyNetwork(report.ServiceModel, "service_water") {
 		t.Fatalf("networks = %#v, want service water network", report.ServiceModel.Networks)
+	}
+}
+
+func TestHVACServiceModelKeepsCondenserHeatRejectionOutOfZoneServices(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "CondenserLoop", Fields: []Field{
+			{Value: "Condenser Loop"},
+			{Value: "Water"},
+			{Value: ""},
+			{Value: ""},
+			{Value: "Cnd Setpoint"},
+			{Value: "35"},
+			{Value: "5"},
+			{Value: "Autosize"},
+			{Value: "0"},
+			{Value: "Autosize"},
+			{Value: "Cnd Supply Inlet"},
+			{Value: "Cnd Supply Outlet"},
+			{Value: "Cnd Branches"},
+			{Value: ""},
+		}},
+		{Index: 1, Type: "BranchList", Fields: []Field{
+			{Value: "Cnd Branches"},
+			{Value: "Tower Branch"},
+		}},
+		{Index: 2, Type: "Branch", Fields: []Field{
+			{Value: "Tower Branch"},
+			{Value: ""},
+			{Value: "CoolingTower:SingleSpeed"},
+			{Value: "Heat Rejection Tower"},
+			{Value: "Cnd Supply Inlet"},
+			{Value: "Cnd Supply Outlet"},
+		}},
+		{Index: 3, Type: "CoolingTower:SingleSpeed", Fields: []Field{{Value: "Heat Rejection Tower"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	coupling := findSystemCoupling(report.ServiceModel.Couplings, "CoolingTower:SingleSpeed", "heat_rejection", "cooling_tower")
+	if coupling == nil {
+		t.Fatalf("couplings = %#v, want cooling tower heat rejection coupling", report.ServiceModel.Couplings)
+	}
+	if !hasConnectedLoop(*coupling, "CondenserLoop", "Condenser Loop") {
+		t.Fatalf("cooling tower coupling = %#v, want connected condenser loop", coupling)
+	}
+	for _, zone := range report.ServiceModel.ZoneServices {
+		for _, path := range zone.Paths {
+			if strings.EqualFold(path.Delivery.ObjectType, "CoolingTower:SingleSpeed") {
+				t.Fatalf("cooling tower leaked into zone service path: %#v", path)
+			}
+		}
+	}
+}
+
+func TestHVACServiceModelSeparatesServiceWaterNetworkFromZoneServices(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "ZoneHVAC:PackagedTerminalAirConditioner"},
+			{Value: "Office PTAC"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:PackagedTerminalAirConditioner", Fields: []Field{
+			{Value: "Office PTAC"},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Office Supply Inlet"},
+			{Value: "Office Zone Air Node"},
+		}},
+		{Index: 4, Type: "WaterHeater:Mixed", Fields: []Field{{Value: "DHW Heater"}}},
+		{Index: 5, Type: "WaterUse:Equipment", Fields: []Field{{Value: "Lavatory"}}},
+		{Index: 6, Type: "WaterUse:Connections", Fields: []Field{{Value: "Lavatory Connections"}}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	if !hasEnergyNetwork(report.ServiceModel, "service_water") {
+		t.Fatalf("networks = %#v, want service water network", report.ServiceModel.Networks)
+	}
+	for _, expected := range []struct {
+		objectType string
+		role       string
+	}{
+		{"WaterHeater:Mixed", "water_heater"},
+		{"WaterUse:Equipment", "water_use"},
+		{"WaterUse:Connections", "water_use"},
+	} {
+		if !hasSystemCoupling(report.ServiceModel.Couplings, expected.objectType, "service_water", expected.role) {
+			t.Fatalf("couplings = %#v, missing service water %#v", report.ServiceModel.Couplings, expected)
+		}
+	}
+	for _, zone := range report.ServiceModel.ZoneServices {
+		for _, path := range zone.Paths {
+			if path.ServiceKind == "service_water" || path.PathType == "service_water" {
+				t.Fatalf("service water leaked into HVAC zone service: %#v", path)
+			}
+			if strings.HasPrefix(normalizeFieldCatalogKey(path.Delivery.ObjectType), "water") {
+				t.Fatalf("water object leaked into HVAC delivery: %#v", path)
+			}
+		}
 	}
 }
 
@@ -457,6 +824,28 @@ func findHVACTestingZoneService(model HVACServiceModel, zoneName string) *ZoneSe
 
 func hasZoneServicePath(paths []ZoneServicePath, serviceKind string, pathType string, plantLoop string, airLoop string, deliveryNeedle string) bool {
 	return findZoneServicePath(paths, serviceKind, pathType, plantLoop, airLoop, deliveryNeedle) != nil
+}
+
+func hasAnyServicePath(model HVACServiceModel, serviceKind string, pathType string, deliveryType string) bool {
+	for _, summary := range model.ZoneServices {
+		for _, path := range summary.Paths {
+			if path.ServiceKind == serviceKind && path.PathType == pathType && path.DeliveryEquipment.DeliveryType == deliveryType {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasServicePathWithAirLoop(model HVACServiceModel, pathType string) bool {
+	for _, summary := range model.ZoneServices {
+		for _, path := range summary.Paths {
+			if path.PathType == pathType && path.AirLoop != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func findZoneServicePath(paths []ZoneServicePath, serviceKind string, pathType string, plantLoop string, airLoop string, deliveryNeedle string) *ZoneServicePath {
@@ -525,8 +914,45 @@ func servicePathGoldenRows(paths []ZoneServicePath) []servicePathGoldenRow {
 }
 
 func hasSystemCoupling(couplings []SystemCoupling, objectType string, couplingType string, role string) bool {
-	for _, coupling := range couplings {
+	return findSystemCoupling(couplings, objectType, couplingType, role) != nil
+}
+
+func findSystemCoupling(couplings []SystemCoupling, objectType string, couplingType string, role string) *SystemCoupling {
+	for index := range couplings {
+		coupling := couplings[index]
 		if strings.EqualFold(coupling.Object.ObjectType, objectType) && coupling.CouplingType == couplingType && coupling.Role == role {
+			return &couplings[index]
+		}
+	}
+	return nil
+}
+
+func findSystemCouplingByObject(couplings []SystemCoupling, objectType string, objectName string) *SystemCoupling {
+	for index := range couplings {
+		coupling := couplings[index]
+		if strings.EqualFold(coupling.Object.ObjectType, objectType) && strings.EqualFold(coupling.Object.ObjectName, objectName) {
+			return &couplings[index]
+		}
+	}
+	return nil
+}
+
+func hasLoopRef(refs []LoopRef, loopType string, loopName string) bool {
+	for _, ref := range refs {
+		if strings.EqualFold(ref.Type, loopType) && strings.EqualFold(ref.Name, loopName) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasConnectedLoop(coupling SystemCoupling, loopType string, loopName string) bool {
+	return hasLoopRef(coupling.ConnectedLoops, loopType, loopName)
+}
+
+func componentRefsContainObject(refs []ComponentRef, objectType string, objectName string) bool {
+	for _, ref := range refs {
+		if strings.EqualFold(ref.ObjectType, objectType) && strings.EqualFold(ref.ObjectName, objectName) {
 			return true
 		}
 	}

@@ -317,27 +317,6 @@ function renderHVACDiagnosticsCard(count, active) {
     </button>`;
 }
 
-function relationSelectionKey(relation = {}) {
-  if (relation.spaceName) {
-    return `space:${relation.spaceName}`;
-  }
-  return relation.zoneName ? `zone:${relation.zoneName}` : "";
-}
-
-function relationDisplayName(relation = {}) {
-  if (relation.spaceName) {
-    return relation.zoneName ? `${relation.spaceName} / ${relation.zoneName}` : relation.spaceName;
-  }
-  return relation.zoneName || t("common.blank");
-}
-
-function renderRelationSubjectLink(relation = {}) {
-  if (relation.spaceName) {
-    return renderObjectLink(relation.spaceObjectIndex, "Space");
-  }
-  return renderObjectLink(relation.zoneObjectIndex, "Zone");
-}
-
 function handleHVACNavigationClick(event) {
   const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
   if (loopJump) {
@@ -1084,33 +1063,6 @@ function ruleEdgesForLoop(loopName, loopType = "") {
   return uniqueRuleEdges(hvacRuleEdges().filter((edge) => ruleEdgeTouchesObject(edge, loopType, loopName)));
 }
 
-function ruleEdgesForRelation(relation = {}) {
-  const candidates = [];
-  if (relation.spaceName) {
-    candidates.push({ objectType: "Space", objectName: relation.spaceName, objectIndex: relation.spaceObjectIndex });
-  }
-  if (relation.zoneName) {
-    candidates.push({ objectType: "Zone", objectName: relation.zoneName, objectIndex: relation.zoneObjectIndex });
-  }
-  for (const name of relation.airLoopNames || []) {
-    candidates.push({ objectType: "AirLoopHVAC", objectName: name });
-  }
-  for (const name of relation.plantLoopNames || []) {
-    candidates.push({ objectType: "PlantLoop", objectName: name });
-  }
-  for (const name of relation.condenserLoopNames || []) {
-    candidates.push({ objectType: "CondenserLoop", objectName: name });
-  }
-  for (const component of [...(relation.terminalUnits || []), ...(relation.zoneEquipment || []), ...(relation.plantEquipment || [])]) {
-    candidates.push({ objectType: component.objectType, objectName: component.objectName, objectIndex: component.objectIndex });
-  }
-  return uniqueRuleEdges(
-    hvacRuleEdges().filter((edge) =>
-      candidates.some((candidate) => ruleEdgeTouchesObject(edge, candidate.objectType, candidate.objectName, candidate.objectIndex)),
-    ),
-  );
-}
-
 function ruleEdgeTouchesObject(edge = {}, objectType = "", objectName = "", objectIndex = undefined) {
   const index = Number(objectIndex);
   if (Number.isFinite(index) && index >= 0 && Number(edge.sourceObjectIndex) === index) {
@@ -1153,17 +1105,6 @@ function uniqueRuleEdges(edges = []) {
     byID.set(edge.id, edge);
   }
   return [...byID.values()].sort((left, right) => String(left.ruleId || "").localeCompare(String(right.ruleId || "")));
-}
-
-function ruleEdgeCountLabel(edges = []) {
-  if (!edges.length) {
-    return "";
-  }
-  return `${edges.length} trace link${edges.length === 1 ? "" : "s"}`;
-}
-
-function ruleEdgeSummary(edges = []) {
-  return [...new Set(edges.map((edge) => edge.ruleId).filter(Boolean))].slice(0, 4).join(" / ");
 }
 
 function ruleEdgeTraceText(edge = {}) {
@@ -2380,10 +2321,6 @@ function renderHVACInspectorSelection(selected) {
           <div class="hvac-inspector-kv"><span>${t("common.outlet")}</span><strong>${escapeHTML(selected.component.outletNode || "N/A")}</strong></div>`
         : ""
     }
-    ${
-      selected.relations
-        ? `<div class="hvac-tag-list">${selected.relations.map((relation) => `<span>${escapeHTML(relationDisplayName(relation))}</span>`).join("") || `<span>N/A</span>`}</div>`
-        : ""
     }`;
 }
 
@@ -2429,17 +2366,6 @@ function connectedSystemsForSelection(selected) {
   for (const loopName of verifiedCrossLoopNamesForComponent(component)) {
     const loop = findHVACLoopByName(loopName);
     add(loopName, loop?.type || "", false, componentGraphKey(component));
-  }
-  for (const relation of selected.relations || []) {
-    for (const loopName of relation.airLoopNames || []) {
-      add(loopName, "AirLoopHVAC", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
-    }
-    for (const loopName of relation.plantLoopNames || []) {
-      add(loopName, "PlantLoop", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
-    }
-    for (const loopName of relation.condenserLoopNames || []) {
-      add(loopName, "CondenserLoop", normalizeGraphName(loopName) === normalizeGraphName(currentLoopName), componentGraphKey(component));
-    }
   }
   return systems.slice(0, 10);
 }
@@ -2719,20 +2645,6 @@ function renderSelectedHVACDetail(selected) {
         </div>
         ${renderHVACTraceDrawer(ruleEdges.map((edge) => [edge.ruleId, edge.sourceObjectName, hvacSourceFieldLabel(component)].filter(Boolean).join(" / ")))}
         ${renderComponentCrossLoopMap(component, relatedLoopNames)}
-        ${
-          (selected.relations || []).length
-            ? `<div class="hvac-detail-list">
-                ${(selected.relations || [])
-                  .map(
-                    (relation) =>
-                      `<div><strong>${renderRelationSubjectLink(relation)} ${escapeHTML(relationDisplayName(relation))}</strong><span>${escapeHTML(
-                        [...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"),
-                      )}</span></div>`,
-                  )
-                  .join("")}
-              </div>`
-            : ""
-        }
         ${renderHVACEditableFields(component.editableFields)}
       </section>`;
   }
@@ -2759,9 +2671,7 @@ function renderSelectedHVACDetail(selected) {
       </section>`;
   }
   if (selected.kind === "zone") {
-    const relation = selected.relation;
-    const loopNames = relation?.airLoopNames || (selected.loop?.name ? [selected.loop.name] : []);
-    const ruleEdges = ruleEdgesForRelation(relation);
+    const loop = selected.loop || {};
     return `
       <section class="hvac-graph-detail">
         <div class="hvac-section-head">
@@ -2769,37 +2679,8 @@ function renderSelectedHVACDetail(selected) {
           <span>Zone</span>
         </div>
         <div class="hvac-detail-grid">
-          <div><span>${t("common.object")}</span><strong>${renderRelationSubjectLink(relation) || "N/A"}</strong></div>
-          <div><span>Air loops</span><strong>${escapeHTML(loopNames.join(", ") || "N/A")}</strong></div>
-          <div><span>Plant loops</span><strong>${escapeHTML((relation?.plantLoopNames || []).join(", ") || "N/A")}</strong></div>
-          <div><span>Condenser loops</span><strong>${escapeHTML((relation?.condenserLoopNames || []).join(", ") || "N/A")}</strong></div>
-          <div><span>${t("hvac.terminals")}</span><strong>${escapeHTML((relation?.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
-          <div><span>${t("common.equipment")}</span><strong>${escapeHTML((relation?.zoneEquipment || []).map((item) => item.objectName || item.objectType).join(", ") || "N/A")}</strong></div>
-        </div>
-        ${renderHVACTraceDrawer(ruleEdges.map((edge) => [edge.ruleId, edge.sourceObjectName].filter(Boolean).join(" / ")))}
-      </section>`;
-  }
-  if (selected.kind === "plant" || selected.kind === "air") {
-    return `
-      <section class="hvac-graph-detail">
-        <div class="hvac-section-head">
-          <h3>${escapeHTML(selected.loopName)}</h3>
-          <span>${selected.kind === "plant" ? "PlantLoop" : "AirLoopHVAC"}</span>
-        </div>
-        <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${renderRelationSubjectLink(relation)} ${escapeHTML(relationDisplayName(relation))}</strong><span>${escapeHTML((relation.terminalUnits || []).map((item) => item.objectName || item.objectType).join(", ") || t("hvac.noTerminal"))}</span></div>`).join("") || `<div class="empty">${t("profile.noMatchingZones")}</div>`}
-        </div>
-      </section>`;
-  }
-  if (selected.kind === "link") {
-    return `
-      <section class="hvac-graph-detail">
-        <div class="hvac-section-head">
-          <h3>${t("common.connection")}</h3>
-          <span>${escapeHTML(t("hvac.relatedZoneCount", { count: (selected.relations || []).length }))}</span>
-        </div>
-        <div class="hvac-detail-list">
-          ${(selected.relations || []).map((relation) => `<div><strong>${renderRelationSubjectLink(relation)} ${escapeHTML(relationDisplayName(relation))}</strong><span>${escapeHTML([...new Set([...(relation.plantLoopNames || []), ...(relation.airLoopNames || [])])].join(" -> ") || t("hvac.serviceRelation"))}</span></div>`).join("")}
+          <div><span>${t("hvac.connectedSystems", {}, "Connected systems")}</span><strong>${escapeHTML(loop.name ? `${loop.type || "Loop"} ${loop.name}` : "N/A")}</strong></div>
+          <div><span>${t("hvac.relatedZones")}</span><strong>${escapeHTML((loop.relatedZones || []).length)}</strong></div>
         </div>
       </section>`;
   }

@@ -110,3 +110,22 @@ func TestFrontendHVACRendererAvoidsResolverConfidenceVocabulary(t *testing.T) {
 		}
 	}
 }
+
+func TestFrontendHVACRendererAvoidsLegacyRelationGraphImplementation(t *testing.T) {
+	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	if err != nil {
+		t.Fatalf("read hvac views: %v", err)
+	}
+	text := string(content)
+	for _, forbidden := range []string{
+		"selected.relations",
+		"ruleEdgeCountLabel",
+		"ruleEdgeSummary",
+		"ruleEdgesForRelation(",
+		`t("hvac.terminals"`,
+	} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("hvac renderer still contains legacy relation implementation %q", forbidden)
+		}
+	}
+}
