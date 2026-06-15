@@ -20,28 +20,37 @@ const (
 )
 
 type ProfileReport struct {
-	ZoneCount       int                      `json:"zoneCount"`
-	ItemCount       int                      `json:"itemCount"`
-	GroupCount      int                      `json:"groupCount"`
-	Dimensions      []ProfileDimensionOption `json:"dimensions"`
-	MetricOptions   []ProfileMetricOption    `json:"metricOptions"`
-	ZoneProfiles    []ZoneProfile            `json:"zoneProfiles"`
-	Groups          []ProfileGroup           `json:"groups"`
-	Matrix          []ProfileMatrixRow       `json:"matrix"`
-	Schedules       []ScheduleSummary        `json:"schedules"`
-	Warnings        []ProfileWarning         `json:"warnings"`
-	DefaultSettings ProfileAnalysisSettings  `json:"defaultSettings"`
+	ZoneCount           int                         `json:"zoneCount"`
+	ItemCount           int                         `json:"itemCount"`
+	GroupCount          int                         `json:"groupCount"`
+	Dimensions          []ProfileDimensionOption    `json:"dimensions"`
+	MetricOptions       []ProfileMetricOption       `json:"metricOptions"`
+	ZoneProfiles        []ZoneProfile               `json:"zoneProfiles"`
+	Groups              []ProfileGroup              `json:"groups"`
+	Matrix              []ProfileMatrixRow          `json:"matrix"`
+	Schedules           []ScheduleSummary           `json:"schedules"`
+	GraphDataset        ProfileGraphDataset         `json:"graphDataset"`
+	ScheduleClusters    []ProfileScheduleCluster    `json:"scheduleClusters"`
+	Outliers            []ProfileOutlierHint        `json:"outliers"`
+	ParameterCandidates []ProfileParameterCandidate `json:"parameterCandidates"`
+	Warnings            []ProfileWarning            `json:"warnings"`
+	DefaultSettings     ProfileAnalysisSettings     `json:"defaultSettings"`
 }
 
 type ProfileAnalysisSettings struct {
-	EnabledDimensions   []string             `json:"enabledDimensions"`
-	DisplayMetrics      map[string]string    `json:"displayMetrics"`
-	GroupingMetrics     map[string]string    `json:"groupingMetrics"`
-	NumericTolerance    float64              `json:"numericTolerance"`
-	ScheduleCompareMode string               `json:"scheduleCompareMode"`
-	GraphMode           string               `json:"graphMode"`
-	ScheduleSummaryMode string               `json:"scheduleSummaryMode"`
-	ApplyBehavior       ProfileApplyBehavior `json:"applyBehavior"`
+	EnabledDimensions   []string              `json:"enabledDimensions"`
+	DisplayMetrics      map[string]string     `json:"displayMetrics"`
+	GroupingMetrics     map[string]string     `json:"groupingMetrics"`
+	NumericTolerance    float64               `json:"numericTolerance"`
+	ScheduleCompareMode string                `json:"scheduleCompareMode"`
+	GraphMode           string                `json:"graphMode"`
+	MetricMode          string                `json:"metricMode"`
+	TimeView            string                `json:"timeView"`
+	CompareMode         string                `json:"compareMode"`
+	ScaleMode           string                `json:"scaleMode"`
+	GraphDeck           ProfileGraphDeckState `json:"graphDeck"`
+	ScheduleSummaryMode string                `json:"scheduleSummaryMode"`
+	ApplyBehavior       ProfileApplyBehavior  `json:"applyBehavior"`
 }
 
 type ProfileApplyBehavior struct {
@@ -255,6 +264,7 @@ func AnalyzeProfile(doc Document) ProfileReport {
 	report.Warnings = append(report.Warnings, ctx.warnings...)
 	report.Groups = buildDefaultProfileGroups(report.ZoneProfiles, report.DefaultSettings)
 	report.GroupCount = len(report.Groups)
+	enrichProfileGraphDeck(&report)
 	return report
 }
 
@@ -287,6 +297,17 @@ func defaultProfileAnalysisSettings() ProfileAnalysisSettings {
 		NumericTolerance:    0.001,
 		ScheduleCompareMode: "name",
 		GraphMode:           "actual_value",
+		MetricMode:          "actual",
+		TimeView:            "year",
+		CompareMode:         "single",
+		ScaleMode:           "auto",
+		GraphDeck: ProfileGraphDeckState{
+			ScopeType:   "group",
+			MetricMode:  "actual",
+			TimeView:    "year",
+			CompareMode: "single",
+			ScaleMode:   "auto",
+		},
 		ScheduleSummaryMode: "annual_heatmap",
 		ApplyBehavior: ProfileApplyBehavior{
 			DefaultMode:           "clone",

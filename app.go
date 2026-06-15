@@ -1290,7 +1290,16 @@ func normalizeProfileSettings(settings idf.ProfileAnalysisSettings, defaults idf
 		settings.NumericTolerance = defaults.NumericTolerance
 	}
 	settings.ScheduleCompareMode = normalizeProfileChoice(settings.ScheduleCompareMode, []string{"none", "name", "resolved"}, defaults.ScheduleCompareMode)
-	settings.GraphMode = normalizeProfileChoice(settings.GraphMode, []string{"multiplier", "actual_value"}, defaults.GraphMode)
+	settings.GraphMode = normalizeProfileChoice(settings.GraphMode, []string{"multiplier", "actual_value", "actual", "design", "annual"}, defaults.GraphMode)
+	settings.MetricMode = normalizeProfileChoice(settings.MetricMode, []string{"design", "multiplier", "actual", "annual"}, profileMetricModeSetting(settings.GraphMode, defaults.MetricMode))
+	settings.TimeView = normalizeProfileChoice(settings.TimeView, []string{"day", "week", "month", "year", "duration", "rules"}, defaults.TimeView)
+	settings.CompareMode = normalizeProfileChoice(settings.CompareMode, []string{"single", "overlay", "small_multiples", "ranking", "similarity", "outliers"}, defaults.CompareMode)
+	settings.ScaleMode = normalizeProfileChoice(settings.ScaleMode, []string{"auto", "shared", "design_peak", "multiplier_0_1", "percentile"}, defaults.ScaleMode)
+	settings.GraphDeck.ScopeType = normalizeProfileChoice(settings.GraphDeck.ScopeType, []string{"group", "zone", "schedule", "dimension", "selection"}, defaults.GraphDeck.ScopeType)
+	settings.GraphDeck.MetricMode = normalizeProfileChoice(settings.GraphDeck.MetricMode, []string{"design", "multiplier", "actual", "annual"}, settings.MetricMode)
+	settings.GraphDeck.TimeView = normalizeProfileChoice(settings.GraphDeck.TimeView, []string{"day", "week", "month", "year", "duration", "rules"}, settings.TimeView)
+	settings.GraphDeck.CompareMode = normalizeProfileChoice(settings.GraphDeck.CompareMode, []string{"single", "overlay", "small_multiples", "ranking", "similarity", "outliers"}, settings.CompareMode)
+	settings.GraphDeck.ScaleMode = normalizeProfileChoice(settings.GraphDeck.ScaleMode, []string{"auto", "shared", "design_peak", "multiplier_0_1", "percentile"}, settings.ScaleMode)
 	settings.ScheduleSummaryMode = normalizeProfileChoice(settings.ScheduleSummaryMode, []string{
 		"representative_day",
 		"representative_week",
@@ -1305,6 +1314,19 @@ func normalizeProfileSettings(settings idf.ProfileAnalysisSettings, defaults idf
 	}
 	settings.ApplyBehavior.ReplaceExistingPolicy = normalizeProfileChoice(settings.ApplyBehavior.ReplaceExistingPolicy, []string{"replace", "keep", "duplicate"}, defaults.ApplyBehavior.ReplaceExistingPolicy)
 	return settings
+}
+
+func profileMetricModeSetting(graphMode string, fallback string) string {
+	switch strings.ToLower(strings.TrimSpace(graphMode)) {
+	case "multiplier":
+		return "multiplier"
+	case "design":
+		return "design"
+	case "annual":
+		return "annual"
+	default:
+		return fallback
+	}
 }
 
 func normalizeProfileChoice(value string, allowed []string, fallback string) string {

@@ -206,6 +206,151 @@ Schedule:Compact,
 	}
 }
 
+func TestProfileGraphDatasetBuildsDeckSeries(t *testing.T) {
+	doc, err := Parse(profileFixtureIDF)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	profile := AnalyzeProfile(doc)
+	if profile.GraphDataset.DefaultDeck.MetricMode != "actual" {
+		t.Fatalf("default graph metric mode = %q, want actual", profile.GraphDataset.DefaultDeck.MetricMode)
+	}
+	if !containsString(profile.GraphDataset.MetricModes, "design") || !containsString(profile.GraphDataset.MetricModes, "annual") {
+		t.Fatalf("metric modes missing design/annual: %#v", profile.GraphDataset.MetricModes)
+	}
+	lighting := findProfileSeries(profile.GraphDataset.Series, "zone", "Office A", ProfileDimensionLighting)
+	if lighting == nil {
+		t.Fatalf("lighting series for Office A not found")
+	}
+	if len(lighting.AnnualMultiplierProfile) != 8760 {
+		t.Fatalf("annual multiplier length = %d, want 8760", len(lighting.AnnualMultiplierProfile))
+	}
+	if len(lighting.WeekMultiplierProfile) != 168 {
+		t.Fatalf("week multiplier length = %d, want 168", len(lighting.WeekMultiplierProfile))
+	}
+	if len(lighting.DayMultiplierProfile) != 72 {
+		t.Fatalf("day multiplier length = %d, want 72", len(lighting.DayMultiplierProfile))
+	}
+	if lighting.DesignValue != 10.5 || lighting.AnnualContribution <= 0 {
+		t.Fatalf("lighting series design/annual = %v/%v, want design 10.5 and annual > 0", lighting.DesignValue, lighting.AnnualContribution)
+	}
+}
+
+func TestProfileScheduleSimilarityClustersSameContentNames(t *testing.T) {
+	doc, err := Parse(profileFixtureIDF + `
+Schedule:Compact,
+  OfficeSchedCopy,          !- Name
+  Fraction,                 !- Schedule Type Limits Name
+  Through: 12/31,           !- Field 1
+  For: Weekdays,            !- Field 2
+  Until: 09:00,             !- Field 3
+  0.05,                     !- Field 4
+  Until: 18:00,             !- Field 5
+  1,                        !- Field 6
+  Until: 24:00,             !- Field 7
+  0.05,                     !- Field 8
+  For: Saturday,            !- Field 9
+  Until: 09:00,             !- Field 10
+  0,                        !- Field 11
+  Until: 15:00,             !- Field 12
+  0.5,                      !- Field 13
+  Until: 24:00,             !- Field 14
+  0,                        !- Field 15
+  For: Sunday,              !- Field 16
+  Until: 24:00,             !- Field 17
+  0;                        !- Field 18
+
+ElectricEquipment,
+  Office B Plug Load,       !- Name
+  Office B,                 !- Zone or ZoneList Name
+  OfficeSchedCopy,          !- Schedule Name
+  Watts/Area,               !- Design Level Calculation Method
+  ,                         !- Design Level
+  8;                        !- Watts per Zone Floor Area
+`)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	profile := AnalyzeProfile(doc)
+	foundCluster := false
+	foundHint := false
+	for _, cluster := range profile.ScheduleClusters {
+		if cluster.SameContentDifferentNames && containsString(cluster.ScheduleNames, "OfficeSched") && containsString(cluster.ScheduleNames, "OfficeSchedCopy") {
+			foundCluster = true
+			break
+		}
+	}
+	for _, hint := range profile.Outliers {
+		if hint.RuleID == "different_name_same_schedule_hash" {
+			foundHint = true
+			break
+		}
+	}
+	if !foundCluster || !foundHint {
+		t.Fatalf("same-content schedule names cluster=%v hint=%v clusters=%#v hints=%#v", foundCluster, foundHint, profile.ScheduleClusters, profile.Outliers)
+	}
+}
+
+func TestProfileOutliersAndParameterCandidates(t *testing.T) {
+	doc, err := Parse(profileFixtureIDF + `
+Zone,
+  Office C,                 !- Name
+  0,                        !- Direction of Relative North
+  0,                        !- X Origin
+  0,                        !- Y Origin
+  0,                        !- Z Origin
+  1,                        !- Type
+  1,                        !- Multiplier
+  3,                        !- Ceiling Height
+  300;                      !- Volume
+
+BuildingSurface:Detailed,
+  Office C Floor,           !- Name
+  Floor,                    !- Surface Type
+  Floor Construction,       !- Construction Name
+  Office C,                 !- Zone Name
+  Ground,                   !- Outside Boundary Condition
+  ,                         !- Outside Boundary Condition Object
+  NoSun,                    !- Sun Exposure
+  NoWind,                   !- Wind Exposure
+  0.5,                      !- View Factor to Ground
+  4,                        !- Number of Vertices
+  0, 0, 0,
+  10, 0, 0,
+  10, 10, 0,
+  0, 10, 0;
+
+Lights,
+  Office C Lights,          !- Name
+  Office C,                 !- Zone or ZoneList Name
+  OfficeSched,              !- Schedule Name
+  Watts/Area,               !- Design Level Calculation Method
+  ,                         !- Lighting Level
+  90;                       !- Watts per Zone Floor Area
+`)
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	profile := AnalyzeProfile(doc)
+	foundOutlier := false
+	for _, hint := range profile.Outliers {
+		if hint.RuleID == "robust_value_outlier" && hint.ZoneName == "Office C" && hint.Dimension == ProfileDimensionLighting {
+			foundOutlier = true
+			break
+		}
+	}
+	foundCandidate := false
+	for _, candidate := range profile.ParameterCandidates {
+		if candidate.Dimension == ProfileDimensionLighting && candidate.CurrentMax >= 90 && candidate.ApplyRequest != nil {
+			foundCandidate = true
+			break
+		}
+	}
+	if !foundOutlier || !foundCandidate {
+		t.Fatalf("lighting outlier=%v candidate=%v outliers=%#v candidates=%#v", foundOutlier, foundCandidate, profile.Outliers, profile.ParameterCandidates)
+	}
+}
+
 func TestApplyProfileClonesSourceObjectsToTargetZone(t *testing.T) {
 	doc, err := Parse(profileFixtureIDF + `
 Zone,
@@ -257,6 +402,24 @@ Zone,
 	if !foundPeople || !foundLights {
 		t.Fatalf("updated document missing cloned profile objects: people=%v lights=%v", foundPeople, foundLights)
 	}
+}
+
+func findProfileSeries(series []ProfileGraphSeries, scopeType string, zoneName string, dimension string) *ProfileGraphSeries {
+	for index := range series {
+		if series[index].ScopeType == scopeType && series[index].ZoneName == zoneName && series[index].Dimension == dimension {
+			return &series[index]
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func assertProfileDimension(t *testing.T, zone ZoneProfile, dimension string, want float64, tolerance float64) {

@@ -23,6 +23,43 @@ Zone,
   Office;
 `
 
+const cliProfileFixtureIDF = `
+Version,
+  24.1;
+
+Schedule:Constant,
+  AlwaysOn,                 !- Name
+  Fraction,                 !- Schedule Type Limits Name
+  1;                        !- Hourly Value
+
+Zone,
+  Office;
+
+BuildingSurface:Detailed,
+  Office Floor,             !- Name
+  Floor,                    !- Surface Type
+  Floor Construction,       !- Construction Name
+  Office,                   !- Zone Name
+  Ground,                   !- Outside Boundary Condition
+  ,                         !- Outside Boundary Condition Object
+  NoSun,                    !- Sun Exposure
+  NoWind,                   !- Wind Exposure
+  0.5,                      !- View Factor to Ground
+  4,                        !- Number of Vertices
+  0, 0, 0,
+  10, 0, 0,
+  10, 10, 0,
+  0, 10, 0;
+
+Lights,
+  Office Lights,            !- Name
+  Office,                   !- Zone or ZoneList Name
+  AlwaysOn,                 !- Schedule Name
+  Watts/Area,               !- Design Level Calculation Method
+  ,                         !- Lighting Level
+  12;                       !- Watts per Zone Floor Area
+`
+
 func TestCLISummaryWritesText(t *testing.T) {
 	input := writeCLITestInput(t, cliFixtureIDF)
 	var stdout bytes.Buffer
@@ -67,6 +104,40 @@ func TestCLICleanSemanticDuplicates(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "Office 2") {
 		t.Fatalf("cleaned output did not rename duplicate zone:\n%s", string(content))
+	}
+}
+
+func TestCLIProfileExports(t *testing.T) {
+	input := writeCLITestInput(t, cliProfileFixtureIDF)
+
+	var graphOut bytes.Buffer
+	var graphErr bytes.Buffer
+	code := runCLI([]string{"profile-graph", "-format", "json", input}, strings.NewReader(""), &graphOut, &graphErr)
+	if code != 0 {
+		t.Fatalf("runCLI profile-graph exit = %d, stderr = %s", code, graphErr.String())
+	}
+	if !strings.Contains(graphOut.String(), `"series"`) || !strings.Contains(graphOut.String(), `"metricModes"`) {
+		t.Fatalf("profile-graph output missing graph fields:\n%s", graphOut.String())
+	}
+
+	var qaOut bytes.Buffer
+	var qaErr bytes.Buffer
+	code = runCLI([]string{"profile-qa", "-format", "text", input}, strings.NewReader(""), &qaOut, &qaErr)
+	if code != 0 {
+		t.Fatalf("runCLI profile-qa exit = %d, stderr = %s", code, qaErr.String())
+	}
+	if !strings.Contains(qaOut.String(), "Profile QA outliers") {
+		t.Fatalf("profile-qa text missing heading:\n%s", qaOut.String())
+	}
+
+	var schedulesOut bytes.Buffer
+	var schedulesErr bytes.Buffer
+	code = runCLI([]string{"profile-schedules", "-format", "csv", input}, strings.NewReader(""), &schedulesOut, &schedulesErr)
+	if code != 0 {
+		t.Fatalf("runCLI profile-schedules exit = %d, stderr = %s", code, schedulesErr.String())
+	}
+	if !strings.Contains(schedulesOut.String(), "AlwaysOn") || !strings.Contains(schedulesOut.String(), "operating_hours") {
+		t.Fatalf("profile-schedules csv missing schedule:\n%s", schedulesOut.String())
 	}
 }
 
