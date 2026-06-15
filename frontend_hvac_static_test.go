@@ -19,6 +19,12 @@ func TestFrontendHVACDefaultUICopyAvoidsDebugAndLegacyTerms(t *testing.T) {
 		"Terminal / Equipment",
 		"Plant / Condenser",
 		"terminal:direct",
+		"terminalComponents",
+		"buildRelationGraph",
+		"plant-terminal",
+		"source-zone",
+		`data-hvac-open-view="relation"`,
+		"relation-link:",
 		"Zone relations",
 		"hvac.inferred",
 		"Inferred",
@@ -45,5 +51,62 @@ func TestFrontendHVACStartsOnZoneServices(t *testing.T) {
 	}
 	if !strings.Contains(string(content), `activeHVACView: "services"`) {
 		t.Fatalf("state.js should default HVAC to Zone Services view")
+	}
+}
+
+func TestFrontendHVACServiceDOMContracts(t *testing.T) {
+	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	if err != nil {
+		t.Fatalf("read hvac views: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		"function buildServiceGraph(paths, couplings)",
+		"function bundleServiceGraphLinks",
+		"hvac-service-table-row",
+		"hvac-service-svg",
+		"hvac-edge-bundle-badge",
+		"hvac-trace-drawer",
+		"renderHVACViewTab(\"services\"",
+		"renderHVACViewTab(\"couplings\"",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("hvac service renderer is missing DOM contract %q", required)
+		}
+	}
+}
+
+func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
+	content, err := os.ReadFile("frontend/src/styles.css")
+	if err != nil {
+		t.Fatalf("read styles: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		".hvac-graph-link.service.bundled",
+		".hvac-edge-bundle-badge",
+		".hvac-service-link-group:hover .hvac-edge-label",
+		".hvac-graph-link.medium-chilled-water",
+		".hvac-graph-link.medium-hot-water",
+		".hvac-graph-link.medium-refrigerant",
+		".hvac-graph-link.medium-electricity",
+		".hvac-graph-link.medium-control",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("hvac service styles are missing %q", required)
+		}
+	}
+}
+
+func TestFrontendHVACRendererAvoidsResolverConfidenceVocabulary(t *testing.T) {
+	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	if err != nil {
+		t.Fatalf("read hvac views: %v", err)
+	}
+	text := strings.ToLower(string(content))
+	for _, forbidden := range []string{"confidence", "inferred", "weak", "unsupported"} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("hvac renderer contains resolver confidence vocabulary %q", forbidden)
+		}
 	}
 }

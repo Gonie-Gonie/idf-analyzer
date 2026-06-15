@@ -1,6 +1,7 @@
 package idf
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -138,6 +139,63 @@ func TestHVACServiceModelClassifiesPackagedLocalEquipment(t *testing.T) {
 		if strings.Contains(strings.ToLower(path.Delivery.DisplayFamily), "terminal") {
 			t.Fatalf("PTHP delivery label still looks terminal-like: %#v", path.Delivery)
 		}
+	}
+}
+
+func TestHVACServiceModelPackagedLocalPathGoldenJSON(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "ZoneHVAC:PackagedTerminalHeatPump"},
+			{Value: "Office PTHP"},
+			{Value: "1"},
+			{Value: "1"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:PackagedTerminalHeatPump", Fields: []Field{
+			{Value: "Office PTHP"},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Office Supply Inlet"},
+			{Value: "Office Zone Air Node"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	office := findHVACTestingZoneService(report.ServiceModel, "Office")
+	if office == nil {
+		t.Fatalf("Office zone service not found: %#v", report.ServiceModel.ZoneServices)
+	}
+	gotBytes, err := json.MarshalIndent(servicePathGoldenRows(office.Paths), "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const want = `[
+  {
+    "serviceKind": "cooling",
+    "pathType": "direct_zone_air",
+    "deliveryType": "pthp",
+    "delivery": "Office PTHP",
+    "source": "Local DX"
+  },
+  {
+    "serviceKind": "heating",
+    "pathType": "direct_zone_air",
+    "deliveryType": "pthp",
+    "delivery": "Office PTHP",
+    "source": "Local electric/gas/heat pump"
+  }
+]`
+	if string(gotBytes) != want {
+		t.Fatalf("packaged local service path JSON mismatch\nwant:\n%s\n\ngot:\n%s", want, string(gotBytes))
 	}
 }
 
@@ -427,6 +485,43 @@ func findZoneServicePath(paths []ZoneServicePath, serviceKind string, pathType s
 		return &paths[index]
 	}
 	return nil
+}
+
+type servicePathGoldenRow struct {
+	ServiceKind       string `json:"serviceKind"`
+	PathType          string `json:"pathType"`
+	DeliveryType      string `json:"deliveryType"`
+	Delivery          string `json:"delivery"`
+	Source            string `json:"source,omitempty"`
+	PlantLoop         string `json:"plantLoop,omitempty"`
+	AirLoop           string `json:"airLoop,omitempty"`
+	RefrigerantSystem string `json:"refrigerantSystem,omitempty"`
+}
+
+func servicePathGoldenRows(paths []ZoneServicePath) []servicePathGoldenRow {
+	rows := make([]servicePathGoldenRow, 0, len(paths))
+	for _, path := range paths {
+		row := servicePathGoldenRow{
+			ServiceKind:  path.ServiceKind,
+			PathType:     path.PathType,
+			DeliveryType: path.DeliveryEquipment.DeliveryType,
+			Delivery:     path.Delivery.ObjectName,
+		}
+		if path.SourceSystem != nil {
+			row.Source = path.SourceSystem.Name
+		}
+		if path.PlantLoop != nil {
+			row.PlantLoop = path.PlantLoop.Name
+		}
+		if path.AirLoop != nil {
+			row.AirLoop = path.AirLoop.Name
+		}
+		if path.RefrigerantSystem != nil {
+			row.RefrigerantSystem = path.RefrigerantSystem.Name
+		}
+		rows = append(rows, row)
+	}
+	return rows
 }
 
 func hasSystemCoupling(couplings []SystemCoupling, objectType string, couplingType string, role string) bool {

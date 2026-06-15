@@ -2839,6 +2839,10 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   stroke: var(--teal);
 }
 
+.hvac-graph-link.service.bundled {
+  stroke-width: 3.6;
+}
+
 .hvac-graph-link.service.support {
   stroke-dasharray: 6 5;
 }
@@ -2979,6 +2983,28 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 .hvac-service-link-group.selected .hvac-edge-label,
 .hvac-service-link-group.related .hvac-edge-label {
   opacity: 1;
+}
+
+.hvac-edge-bundle-badge {
+  cursor: pointer;
+}
+
+.hvac-edge-bundle-badge rect {
+  fill: var(--surface);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--ink), transparent 72%));
+}
+
+.hvac-edge-bundle-badge text {
+  fill: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.hvac-service-link-group.dimmed .hvac-edge-bundle-badge {
+  opacity: 0.28;
 }
 
 .hvac-graph-detail {
