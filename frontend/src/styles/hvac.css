@@ -8,8 +8,10 @@
 
 .hvac-pane {
   flex: 1;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
   padding: 12px;
@@ -17,6 +19,7 @@
 }
 
 .hvac-summary {
+  flex: 0 0 auto;
   margin-bottom: 12px;
   position: relative;
   z-index: 30;
@@ -192,10 +195,12 @@
 }
 
 .hvac-layout {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
   gap: 12px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .hvac-layout.inspector-collapsed {
@@ -205,6 +210,12 @@
 .hvac-main,
 .hvac-side {
   min-width: 0;
+  min-height: 0;
+}
+
+.hvac-main {
+  display: flex;
+  flex-direction: column;
 }
 
 .hvac-layout.inspector-collapsed .hvac-side {
@@ -213,7 +224,11 @@
 
 .hvac-side {
   display: grid;
+  align-content: start;
   gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .hvac-graph,
@@ -225,7 +240,8 @@
 }
 
 .hvac-graph {
-  min-height: 360px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -830,10 +846,12 @@
 
 .hvac-graph-link.service {
   stroke: var(--teal);
+  opacity: 0.72;
 }
 
 .hvac-graph-link.service.bundled {
-  stroke-width: 3.6;
+  stroke-width: 3;
+  opacity: 0.64;
 }
 
 .hvac-graph-link.service.support {
@@ -980,6 +998,9 @@
 
 .hvac-edge-bundle-badge {
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
 .hvac-edge-bundle-badge rect {
@@ -996,8 +1017,14 @@
   pointer-events: none;
 }
 
+.hvac-service-link-group:hover .hvac-edge-bundle-badge,
+.hvac-service-link-group.selected .hvac-edge-bundle-badge,
+.hvac-service-link-group.related .hvac-edge-bundle-badge {
+  opacity: 1;
+}
+
 .hvac-service-link-group.dimmed .hvac-edge-bundle-badge {
-  opacity: 0.28;
+  opacity: 0;
 }
 
 .hvac-graph-detail {

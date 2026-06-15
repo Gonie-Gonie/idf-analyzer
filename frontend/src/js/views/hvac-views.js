@@ -1781,8 +1781,8 @@ function serviceGraphColumnForRole(role = "") {
 }
 
 function layoutServiceGraphNodes(nodes = []) {
-  const top = 94;
-  const rowGap = 86;
+  const top = 100;
+  const rowGap = 96;
   let maxColumnCount = 1;
   for (const column of serviceGraphColumns) {
     const columnNodes = nodes
@@ -2076,12 +2076,13 @@ function renderServiceLink(link) {
   const selected = graphSelectionClass(link.key, link.relatedKeys || []);
   const fromPort = graphPortPoint(link.from, link.support ? "out" : "out");
   const toPort = graphPortPoint(link.to, link.support ? "target" : "in");
-  const d = link.support ? orthogonalPath(fromPort, toPort, "vertical") : orthogonalPath(fromPort, toPort);
+  const d = serviceLinkPath(fromPort, toPort, link);
   const medium = mediumClass(link.medium);
   const bundleCount = Number(link.bundleCount || 0);
   const label = bundleCount > 1 ? `${link.label || ""} x${bundleCount}` : link.label || "";
-  const labelX = (fromPort.x + toPort.x) / 2;
-  const labelY = (fromPort.y + toPort.y) / 2 - 7;
+  const labelPoint = serviceLinkLabelPoint(fromPort, toPort, link);
+  const labelX = labelPoint.x;
+  const labelY = labelPoint.y;
   return `
     <g class="hvac-service-link-group ${bundleCount > 1 ? "bundled" : ""} ${selected}">
       <path class="hvac-graph-link service ${medium} ${link.support ? "support" : ""} ${bundleCount > 1 ? "bundled" : ""} ${selected}"
@@ -2118,13 +2119,24 @@ function graphPortPoint(node, portId) {
   }
 }
 
-function orthogonalPath(from, to, mode = "horizontal") {
-  if (mode === "vertical") {
-    const midY = (from.y + to.y) / 2;
-    return `M${from.x},${from.y} V${midY} H${to.x} V${to.y}`;
+function serviceLinkPath(from, to, link = {}) {
+  const dx = Math.max(70, Math.abs(to.x - from.x) * 0.46);
+  if (link.support) {
+    const lift = Math.max(34, Math.min(96, Math.abs(to.y - from.y) * 0.32 + 34));
+    return `M${from.x},${from.y} C${from.x},${from.y - lift} ${to.x},${to.y + lift} ${to.x},${to.y}`;
   }
-  const midX = (from.x + to.x) / 2;
-  return `M${from.x},${from.y} H${midX} V${to.y} H${to.x}`;
+  const fan = Math.max(0, Math.min(70, Math.abs(to.y - from.y) * 0.18));
+  const c1x = from.x + dx;
+  const c2x = to.x - dx;
+  const c1y = from.y + (to.y >= from.y ? fan : -fan);
+  const c2y = to.y - (to.y >= from.y ? fan : -fan);
+  return `M${from.x},${from.y} C${c1x},${c1y} ${c2x},${c2y} ${to.x},${to.y}`;
+}
+
+function serviceLinkLabelPoint(from, to, link = {}) {
+  const x = from.x + (to.x - from.x) * 0.62;
+  const y = from.y + (to.y - from.y) * 0.62 - (link.support ? 15 : 10);
+  return { x, y };
 }
 
 function renderHVACServiceGraphDetail(paths, couplings) {

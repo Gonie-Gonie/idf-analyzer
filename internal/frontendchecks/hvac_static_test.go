@@ -67,6 +67,7 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 		"function serviceGraphNodeIdentity",
 		"function layoutServiceGraphNodes",
 		"function isPhysicalServiceCoupling",
+		"function serviceLinkPath",
 		"function bundleServiceGraphLinks",
 		"hvac-service-svg",
 		"hvac-edge-bundle-badge",
@@ -119,6 +120,7 @@ func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
 	for _, required := range []string{
 		".hvac-graph-link.service.bundled",
 		".hvac-edge-bundle-badge",
+		".hvac-service-link-group:hover .hvac-edge-bundle-badge",
 		".hvac-service-link-group:hover .hvac-edge-label",
 		".hvac-graph-link.medium-chilled-water",
 		".hvac-graph-link.medium-hot-water",
@@ -128,6 +130,24 @@ func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
 	} {
 		if !strings.Contains(text, required) {
 			t.Fatalf("hvac service styles are missing %q", required)
+		}
+	}
+}
+
+func TestFrontendHVACGraphAreaOwnsScroll(t *testing.T) {
+	content, err := os.ReadFile(repoPath("frontend/src/styles/hvac.css"))
+	if err != nil {
+		t.Fatalf("read HVAC styles: %v", err)
+	}
+	text := string(content)
+	for _, required := range []string{
+		".hvac-pane {\n  flex: 1;\n  display: flex;\n  flex-direction: column;",
+		".hvac-layout {\n  flex: 1 1 auto;\n  min-height: 0;",
+		".hvac-main {\n  display: flex;\n  flex-direction: column;",
+		".hvac-graph {\n  flex: 1 1 auto;\n  min-height: 0;\n  overflow: auto;",
+	} {
+		if !strings.Contains(text, required) {
+			t.Fatalf("HVAC graph scroll contract missing %q", required)
 		}
 	}
 }
