@@ -16,7 +16,7 @@ export const state = {
   activeProfileGroupId: "",
   activeProfileZoneName: "",
   activeHVACLoopId: "",
-  activeHVACView: "relation",
+  activeHVACView: "services",
   activeHVACNodeName: "",
   activeHVACGraphKey: "",
   hvacGraphScale: "fit",

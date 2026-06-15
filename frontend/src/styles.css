@@ -2165,6 +2165,34 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   color: var(--teal-dark);
 }
 
+.hvac-view-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 3px;
+}
+
+.hvac-view-tab {
+  min-height: 28px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hvac-view-tab:hover,
+.hvac-view-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .empty.compact {
   min-height: 38px;
   padding: 9px;
@@ -2230,7 +2258,8 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .hvac-loop-svg,
-.hvac-relation-svg {
+.hvac-relation-svg,
+.hvac-service-svg {
   display: block;
   width: 100%;
   min-height: 420px;
@@ -2240,7 +2269,8 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 }
 
 .hvac-graphic-shell.scale-compact .hvac-loop-svg,
-.hvac-graphic-shell.scale-compact .hvac-relation-svg {
+.hvac-graphic-shell.scale-compact .hvac-relation-svg,
+.hvac-graphic-shell.scale-compact .hvac-service-svg {
   min-height: 320px;
 }
 
@@ -2554,6 +2584,19 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   color: var(--teal-dark);
 }
 
+.hvac-graph-node.air_loop rect,
+.hvac-graph-node.unit_ventilator rect,
+.hvac-graph-node.erv rect {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+}
+
+.hvac-graph-node.air_loop,
+.hvac-graph-node.unit_ventilator,
+.hvac-graph-node.erv {
+  color: var(--teal-dark);
+}
+
 .hvac-graph-node.demand rect,
 .hvac-graph-node.terminal rect {
   fill: var(--warn-bg);
@@ -2565,6 +2608,23 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   color: var(--amber);
 }
 
+.hvac-graph-node.air_terminal rect,
+.hvac-graph-node.vav_reheat_terminal rect,
+.hvac-graph-node.constant_volume_terminal rect,
+.hvac-graph-node.fan_powered_terminal rect,
+.hvac-graph-node.adu rect {
+  fill: color-mix(in srgb, var(--amber) 18%, var(--surface));
+  stroke: var(--amber);
+}
+
+.hvac-graph-node.air_terminal,
+.hvac-graph-node.vav_reheat_terminal,
+.hvac-graph-node.constant_volume_terminal,
+.hvac-graph-node.fan_powered_terminal,
+.hvac-graph-node.adu {
+  color: #a16207;
+}
+
 .hvac-graph-node.plant rect,
 .hvac-graph-node.source rect {
   fill: var(--ok-bg);
@@ -2574,6 +2634,98 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 .hvac-graph-node.plant,
 .hvac-graph-node.source {
   color: var(--green);
+}
+
+.hvac-graph-node.plant_loop rect,
+.hvac-graph-node.thermal_storage rect,
+.hvac-graph-node.heat_recovery rect,
+.hvac-graph-node.water_system rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-graph-node.plant_loop,
+.hvac-graph-node.thermal_storage,
+.hvac-graph-node.heat_recovery,
+.hvac-graph-node.water_system {
+  color: var(--green);
+}
+
+.hvac-graph-node.refrigerant_system rect,
+.hvac-graph-node.vrf_indoor rect,
+.hvac-graph-node.direct_expansion rect {
+  fill: color-mix(in srgb, #38bdf8 18%, var(--surface));
+  stroke: #0284c7;
+}
+
+.hvac-graph-node.refrigerant_system,
+.hvac-graph-node.vrf_indoor,
+.hvac-graph-node.direct_expansion {
+  color: #0369a1;
+}
+
+.hvac-graph-node.fan_coil rect,
+.hvac-graph-node.ptac rect,
+.hvac-graph-node.pthp rect,
+.hvac-graph-node.direct_zone_unit rect,
+.hvac-graph-node.zone_hvac rect {
+  fill: color-mix(in srgb, var(--focus) 14%, var(--surface));
+  stroke: var(--focus);
+}
+
+.hvac-graph-node.fan_coil,
+.hvac-graph-node.ptac,
+.hvac-graph-node.pthp,
+.hvac-graph-node.direct_zone_unit,
+.hvac-graph-node.zone_hvac {
+  color: var(--focus);
+}
+
+.hvac-graph-node.radiant_floor rect,
+.hvac-graph-node.radiant_panel rect,
+.hvac-graph-node.baseboard rect {
+  fill: color-mix(in srgb, #ef4444 13%, var(--surface));
+  stroke: #dc2626;
+}
+
+.hvac-graph-node.radiant_floor,
+.hvac-graph-node.radiant_panel,
+.hvac-graph-node.baseboard {
+  color: #b91c1c;
+}
+
+.hvac-graph-node.ideal_loads rect,
+.hvac-graph-node.support_chip rect {
+  fill: var(--surface-3);
+  stroke: var(--muted);
+}
+
+.hvac-graph-node.ideal_loads,
+.hvac-graph-node.support_chip {
+  color: var(--muted);
+}
+
+.hvac-graph-node.renewable_power rect,
+.hvac-graph-node.energy_storage rect,
+.hvac-graph-node.electric_distribution rect {
+  fill: color-mix(in srgb, #facc15 18%, var(--surface));
+  stroke: #ca8a04;
+}
+
+.hvac-graph-node.renewable_power,
+.hvac-graph-node.energy_storage,
+.hvac-graph-node.electric_distribution {
+  color: #854d0e;
+}
+
+.hvac-graph-node.fault_overlay rect {
+  fill: color-mix(in srgb, var(--red) 10%, var(--surface));
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+}
+
+.hvac-graph-node.fault_overlay {
+  color: var(--red);
 }
 
 .hvac-graph-node.zone rect {
@@ -2683,6 +2835,48 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   stroke: var(--focus);
 }
 
+.hvac-graph-link.service {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.service.support {
+  stroke-dasharray: 6 5;
+}
+
+.hvac-graph-link.medium-air {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.medium-chilled-water {
+  stroke: #2563eb;
+}
+
+.hvac-graph-link.medium-hot-water,
+.hvac-graph-link.medium-fuel {
+  stroke: #dc2626;
+}
+
+.hvac-graph-link.medium-condenser-water,
+.hvac-graph-link.medium-service-water {
+  stroke: #0891b2;
+}
+
+.hvac-graph-link.medium-refrigerant {
+  stroke: #0284c7;
+}
+
+.hvac-graph-link.medium-electricity {
+  stroke: #ca8a04;
+}
+
+.hvac-graph-link.medium-control {
+  stroke: var(--focus);
+}
+
+.hvac-graph-link.medium-fault {
+  stroke: var(--red);
+}
+
 .hvac-graph-link:hover,
 .hvac-graph-link.selected {
   stroke-width: 5;
@@ -2742,6 +2936,49 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
 .hvac-legend-zone {
   background: var(--selected-soft);
   border-color: var(--focus);
+}
+
+.hvac-legend-chilled-water {
+  background: color-mix(in srgb, #2563eb 16%, var(--surface));
+  border-color: #2563eb;
+}
+
+.hvac-legend-hot-water {
+  background: color-mix(in srgb, #dc2626 14%, var(--surface));
+  border-color: #dc2626;
+}
+
+.hvac-legend-refrigerant {
+  background: color-mix(in srgb, #0284c7 15%, var(--surface));
+  border-color: #0284c7;
+}
+
+.hvac-legend-electricity {
+  background: color-mix(in srgb, #ca8a04 18%, var(--surface));
+  border-color: #ca8a04;
+}
+
+.hvac-legend-control {
+  background: var(--selected-soft);
+  border-color: var(--focus);
+}
+
+.hvac-edge-label {
+  opacity: 0;
+  pointer-events: none;
+  fill: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  transition: opacity 120ms ease;
+}
+
+.hvac-service-link-group:hover .hvac-edge-label,
+.hvac-service-link-group.selected .hvac-edge-label,
+.hvac-service-link-group.related .hvac-edge-label {
+  opacity: 1;
 }
 
 .hvac-graph-detail {
@@ -3413,6 +3650,198 @@ body.analysis-expanded-active .analysis-expanded-pane .geometry-body {
   color: var(--muted);
   cursor: default;
   font-weight: 700;
+}
+
+.hvac-service-table-shell {
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-service-table {
+  display: grid;
+  min-width: 1120px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.hvac-service-table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(90px, 0.58fr)
+    minmax(170px, 1.14fr)
+    minmax(130px, 0.8fr)
+    minmax(130px, 0.8fr)
+    minmax(180px, 1.1fr)
+    minmax(140px, 0.85fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  border: 0;
+  border-bottom: 1px solid var(--surface-2);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.hvac-service-table-row:hover,
+.hvac-service-table-row.selected {
+  background: var(--teal-soft);
+}
+
+.hvac-service-table-row.related {
+  background: color-mix(in srgb, var(--teal-soft), transparent 42%);
+}
+
+.hvac-service-table-row.dimmed {
+  opacity: 0.48;
+}
+
+.hvac-service-table-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-head);
+  color: var(--muted);
+  cursor: default;
+  font-weight: 700;
+}
+
+.hvac-service-table-row span,
+.hvac-service-table-row strong,
+.hvac-service-table-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.hvac-service-table-row strong,
+.hvac-service-table-row small {
+  display: block;
+}
+
+.hvac-service-table-row small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.hvac-service-shell {
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-service-svg {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-2), transparent 74%) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--surface-2), transparent 74%) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface-3), var(--surface) 48%);
+  background-size: 46px 46px;
+}
+
+.hvac-service-lane {
+  pointer-events: none;
+}
+
+.hvac-service-lane rect {
+  fill: color-mix(in srgb, var(--surface), transparent 8%);
+  stroke: color-mix(in srgb, var(--line), transparent 8%);
+  stroke-width: 1;
+}
+
+.hvac-service-lane text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hvac-coupling-overview {
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 10px;
+}
+
+.hvac-coupling-grid,
+.hvac-network-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.hvac-coupling-card,
+.hvac-network-card {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  color: var(--ink);
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  text-align: left;
+}
+
+.hvac-coupling-card {
+  cursor: pointer;
+}
+
+.hvac-coupling-card:hover,
+.hvac-coupling-card.selected,
+.hvac-coupling-card:focus-visible {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  outline: none;
+}
+
+.hvac-coupling-card strong,
+.hvac-coupling-card span,
+.hvac-coupling-card small,
+.hvac-network-card strong,
+.hvac-network-card span,
+.hvac-network-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-coupling-card span,
+.hvac-network-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-coupling-card small,
+.hvac-network-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-trace-drawer {
+  margin-top: 10px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.hvac-trace-drawer summary {
+  min-height: 32px;
+  cursor: pointer;
+  padding: 7px 9px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hvac-trace-drawer .hvac-detail-list {
+  margin: 0;
+  padding: 0 9px 9px;
 }
 
 .hvac-inspector-section {
@@ -6590,6 +7019,19 @@ th.input-jump-highlight {
 
   .hvac-layout,
   .hvac-loop-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .hvac-view-tabs {
+    width: 100%;
+  }
+
+  .hvac-view-tab {
+    flex: 1 1 110px;
+  }
+
+  .hvac-coupling-grid,
+  .hvac-network-list {
     grid-template-columns: 1fr;
   }
 

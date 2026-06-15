@@ -49,6 +49,17 @@ func TestHVACResolverCoverageMatrixRegistersChecklistFamilies(t *testing.T) {
 		"Fan:*",
 		"Pump:*",
 		"SetpointManager:*",
+		"ThermalStorage:Ice:*",
+		"ThermalStorage:ChilledWater:*",
+		"ElectricLoadCenter:*",
+		"Generator:Photovoltaic",
+		"WaterHeater:*",
+		"WaterUse:*",
+		"PlantEquipmentOperation:ThermalEnergyStorage",
+		"EnergyManagementSystem:*",
+		"PythonPlugin:*",
+		"ExternalInterface:*",
+		"FaultModel:*",
 	} {
 		if !seen[objectType] {
 			t.Fatalf("coverage matrix missing checklist object type %q", objectType)

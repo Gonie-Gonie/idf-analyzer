@@ -15,6 +15,7 @@ type HVACReport struct {
 	NodeCount           int                      `json:"nodeCount"`
 	WarningCount        int                      `json:"warningCount"`
 	Loops               []HVACLoop               `json:"loops"`
+	ServiceModel        HVACServiceModel         `json:"serviceModel"`
 	ZoneRelations       []HVACZoneChain          `json:"zoneRelations"`
 	NodeUsages          []HVACNodeUsage          `json:"nodeUsages"`
 	NodeOutputVariables []HVACNodeOutputVariable `json:"nodeOutputVariables,omitempty"`
@@ -377,8 +378,10 @@ func AnalyzeHVAC(doc Document) HVACReport {
 	applyLoopZoneRelations(loops, relations)
 	ruleGraph := buildHVACRuleGraph(ctx, loops, relations)
 	attachHVACServiceChains(relations, ruleGraph)
+	serviceModel := buildHVACServiceModel(ctx, loops, relations, ruleGraph)
 	report := HVACReport{
 		Loops:               loops,
+		ServiceModel:        serviceModel,
 		ZoneRelations:       relations,
 		NodeUsages:          append([]HVACNodeUsage(nil), ctx.nodeUsages...),
 		NodeOutputVariables: HVACNodeOutputVariables(),
