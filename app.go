@@ -977,14 +977,7 @@ func (a *App) SaveSettings(settings AppSettings) (*SettingsResult, error) {
 }
 
 func writeDocumentInOriginalFormat(doc idf.Document, original *epinput.Model) string {
-	if original != nil && original.Format == epinput.FormatEPJSON {
-		model := epinput.FromIDFDocument(doc, epinput.FormatEPJSON)
-		output, err := epinput.Write(model, epinput.FormatEPJSON)
-		if err == nil {
-			return output
-		}
-	}
-	return doc.String()
+	return epinput.WriteDocumentLikeOriginal(doc, original)
 }
 
 func writeOutputDocumentInOriginalFormat(originalText string, doc idf.Document, original *epinput.Model) string {

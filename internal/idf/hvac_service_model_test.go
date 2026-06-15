@@ -858,9 +858,9 @@ func TestHVACServiceModelSeparatesTrueAirTerminalsFromZoneEquipment(t *testing.T
 
 func TestHVACFrontendDefaultCopyHidesRuleGraphVocabulary(t *testing.T) {
 	for _, path := range []string{
-		"../../frontend/src/js/hvac-views.js",
+		"../../frontend/src/js/views/hvac-views.js",
 		"../../frontend/src/js/i18n.js",
-		"../../frontend/src/styles.css",
+		"../../frontend/src/styles/hvac.css",
 	} {
 		content, err := os.ReadFile(path)
 		if err != nil {

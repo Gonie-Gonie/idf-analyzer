@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"archive/zip"
@@ -65,7 +65,7 @@ func TestCLISummaryWritesText(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := runCLI([]string{"summary", "-format", "text", input}, strings.NewReader(""), &stdout, &stderr)
+	code := runCLI([]string{"summary", "-format", "text", input}, strings.NewReader(""), &stdout, &stderr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI summary exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -79,7 +79,7 @@ func TestCLIConvertYAML(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := runCLI([]string{"convert", "-to", "yaml", input}, strings.NewReader(""), &stdout, &stderr)
+	code := runCLI([]string{"convert", "-to", "yaml", input}, strings.NewReader(""), &stdout, &stderr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI convert yaml exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -94,7 +94,7 @@ func TestCLICleanSemanticDuplicates(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := runCLI([]string{"clean", "-rules", "none", "-semantic-duplicates", "-o", output, input}, strings.NewReader(""), &stdout, &stderr)
+	code := runCLI([]string{"clean", "-rules", "none", "-semantic-duplicates", "-o", output, input}, strings.NewReader(""), &stdout, &stderr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI clean exit = %d, stderr = %s", code, stderr.String())
 	}
@@ -112,7 +112,7 @@ func TestCLIProfileExports(t *testing.T) {
 
 	var graphOut bytes.Buffer
 	var graphErr bytes.Buffer
-	code := runCLI([]string{"profile-graph", "-format", "json", input}, strings.NewReader(""), &graphOut, &graphErr)
+	code := runCLI([]string{"profile-graph", "-format", "json", input}, strings.NewReader(""), &graphOut, &graphErr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI profile-graph exit = %d, stderr = %s", code, graphErr.String())
 	}
@@ -122,7 +122,7 @@ func TestCLIProfileExports(t *testing.T) {
 
 	var qaOut bytes.Buffer
 	var qaErr bytes.Buffer
-	code = runCLI([]string{"profile-qa", "-format", "text", input}, strings.NewReader(""), &qaOut, &qaErr)
+	code = runCLI([]string{"profile-qa", "-format", "text", input}, strings.NewReader(""), &qaOut, &qaErr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI profile-qa exit = %d, stderr = %s", code, qaErr.String())
 	}
@@ -132,7 +132,7 @@ func TestCLIProfileExports(t *testing.T) {
 
 	var schedulesOut bytes.Buffer
 	var schedulesErr bytes.Buffer
-	code = runCLI([]string{"profile-schedules", "-format", "csv", input}, strings.NewReader(""), &schedulesOut, &schedulesErr)
+	code = runCLI([]string{"profile-schedules", "-format", "csv", input}, strings.NewReader(""), &schedulesOut, &schedulesErr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI profile-schedules exit = %d, stderr = %s", code, schedulesErr.String())
 	}
@@ -147,7 +147,7 @@ func TestCLIConvertTableXLSX(t *testing.T) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
-	code := runCLI([]string{"convert", "-to", "table", "-o", output, input}, strings.NewReader(""), &stdout, &stderr)
+	code := runCLI([]string{"convert", "-to", "table", "-o", output, input}, strings.NewReader(""), &stdout, &stderr, "0.4.1")
 	if code != 0 {
 		t.Fatalf("runCLI convert table exit = %d, stderr = %s", code, stderr.String())
 	}

@@ -1,5 +1,5 @@
 import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
-import { renderDeferredGeometry, renderDiagnostics, renderEmpty, renderReport } from "./analysis-views.js";
+import { renderDeferredGeometry, renderDiagnostics, renderEmpty, renderReport } from "./views/analysis-views.js";
 import { preloadGeometryRenderer, renderGeometry } from "./geometry-loader.js";
 import { t } from "./i18n.js";
 

@@ -18,18 +18,18 @@ import {
   scheduleAutoAnalyze,
   updateDocumentActions,
 } from "./actions.js";
-import { renderDiagnostics, renderEmpty, renderReport, renderSummary } from "./analysis-views.js";
+import { renderDiagnostics, renderEmpty, renderReport, renderSummary } from "./views/analysis-views.js";
 import { renderGeometry, resizeGeometry, setGeometryMode, setGeometrySelectionAid, setGeometryStory } from "./geometry-loader.js";
-import { initializeDiagnoseFixes } from "./diagnose-fixes.js";
-import { initializeHVACControls } from "./hvac-views.js";
-import { initializeOutputControls } from "./output-views.js";
+import { initializeDiagnoseFixes } from "./views/diagnose-fixes.js";
+import { initializeHVACControls } from "./views/hvac-views.js";
+import { initializeOutputControls } from "./views/output-views.js";
 import {
   configureInputViews,
   setInputFilter,
   setTableOrientation,
   switchInputView,
   syncTextViewFromRawCaret,
-} from "./input-views.js";
+} from "./views/input-views.js";
 import { initializeVerticalSplitters, initializeWorkspaceSplitter } from "./layout.js";
 import {
   focusInputObject,
@@ -41,8 +41,8 @@ import {
   switchResultTab,
   undoViewNavigation,
 } from "./navigation.js";
-import { initializeProfileControls, renderProfile } from "./profile-views.js";
-import { initializeSimulationControls, loadSimulationEnvironment } from "./simulation-views.js";
+import { initializeProfileControls, renderProfile } from "./views/profile-views.js";
+import { initializeSimulationControls, loadSimulationEnvironment } from "./views/simulation-views.js";
 import { normalizeAnalyzeTabOrder, t, translatePage } from "./i18n.js";
 import { initializeKeyboardShortcuts } from "./shortcuts.js";
 

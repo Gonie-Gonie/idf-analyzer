@@ -83,6 +83,17 @@ func ToIDFDocument(model *Model) idf.Document {
 	return doc
 }
 
+func WriteDocumentLikeOriginal(doc idf.Document, original *Model) string {
+	if original != nil && original.Format == FormatEPJSON {
+		model := FromIDFDocument(doc, FormatEPJSON)
+		output, err := Write(model, FormatEPJSON)
+		if err == nil {
+			return output
+		}
+	}
+	return doc.String()
+}
+
 func WriteIDF(model *Model) string {
 	return ToIDFDocument(model).String()
 }

@@ -1,6 +1,6 @@
-import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
-import { t } from "./i18n.js";
-import { recordViewHistory } from "./view-history.js";
+import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "../state.js";
+import { t } from "../i18n.js";
+import { recordViewHistory } from "../view-history.js";
 
 const SEMANTIC_BASIC_LINE_BUDGET = 250;
 

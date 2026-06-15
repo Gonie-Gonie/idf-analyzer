@@ -1,16 +1,17 @@
-package main
+package frontendchecks
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestFrontendHVACDefaultUICopyAvoidsDebugAndLegacyTerms(t *testing.T) {
 	files := []string{
-		"frontend/src/js/hvac-views.js",
-		"frontend/src/js/i18n.js",
-		"frontend/src/js/state.js",
+		repoPath("frontend/src/js/views/hvac-views.js"),
+		repoPath("frontend/src/js/i18n.js"),
+		repoPath("frontend/src/js/state.js"),
 	}
 	forbidden := []string{
 		"Rule edges",
@@ -46,7 +47,7 @@ func TestFrontendHVACDefaultUICopyAvoidsDebugAndLegacyTerms(t *testing.T) {
 }
 
 func TestFrontendHVACStartsOnZoneServices(t *testing.T) {
-	content, err := os.ReadFile("frontend/src/js/state.js")
+	content, err := os.ReadFile(repoPath("frontend/src/js/state.js"))
 	if err != nil {
 		t.Fatalf("read state.js: %v", err)
 	}
@@ -56,7 +57,7 @@ func TestFrontendHVACStartsOnZoneServices(t *testing.T) {
 }
 
 func TestFrontendHVACServiceDOMContracts(t *testing.T) {
-	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	content, err := os.ReadFile(repoPath("frontend/src/js/views/hvac-views.js"))
 	if err != nil {
 		t.Fatalf("read hvac views: %v", err)
 	}
@@ -79,9 +80,9 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 }
 
 func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
-	content, err := os.ReadFile("frontend/src/styles.css")
+	content, err := os.ReadFile(repoPath("frontend/src/styles/hvac.css"))
 	if err != nil {
-		t.Fatalf("read styles: %v", err)
+		t.Fatalf("read HVAC styles: %v", err)
 	}
 	text := string(content)
 	for _, required := range []string{
@@ -101,7 +102,7 @@ func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
 }
 
 func TestFrontendHVACRendererAvoidsResolverConfidenceVocabulary(t *testing.T) {
-	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	content, err := os.ReadFile(repoPath("frontend/src/js/views/hvac-views.js"))
 	if err != nil {
 		t.Fatalf("read hvac views: %v", err)
 	}
@@ -114,7 +115,7 @@ func TestFrontendHVACRendererAvoidsResolverConfidenceVocabulary(t *testing.T) {
 }
 
 func TestFrontendHVACRendererAvoidsLegacyRelationGraphImplementation(t *testing.T) {
-	content, err := os.ReadFile("frontend/src/js/hvac-views.js")
+	content, err := os.ReadFile(repoPath("frontend/src/js/views/hvac-views.js"))
 	if err != nil {
 		t.Fatalf("read hvac views: %v", err)
 	}
@@ -130,4 +131,8 @@ func TestFrontendHVACRendererAvoidsLegacyRelationGraphImplementation(t *testing.
 			t.Fatalf("hvac renderer still contains legacy relation implementation %q", forbidden)
 		}
 	}
+}
+
+func repoPath(path string) string {
+	return filepath.Join("..", "..", filepath.FromSlash(path))
 }

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 
+	appcli "github.com/Gonie-Gonie/idf-analyzer/internal/cli"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/simulation"
 	"github.com/wailsapp/wails/v2"
@@ -36,7 +37,7 @@ type wailsAppConfig struct {
 }
 
 func main() {
-	if handled, exitCode := maybeRunCLI(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); handled {
+	if handled, exitCode := appcli.MaybeRun(os.Args[1:], os.Stdin, os.Stdout, os.Stderr, currentAppInfo().Version); handled {
 		os.Exit(exitCode)
 	}
 

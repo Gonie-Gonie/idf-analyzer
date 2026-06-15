@@ -1,6 +1,6 @@
-import * as THREE from "../vendor/three.module.js";
-import { elements, escapeHTML, state } from "./state.js";
-import { t } from "./i18n.js";
+import * as THREE from "../../vendor/three.module.js";
+import { elements, escapeHTML, state } from "../state.js";
+import { t } from "../i18n.js";
 
 let rendererState = null;
 

@@ -10,7 +10,7 @@ import {
   resolveInputJumpTargets,
   switchInputView,
   syncRawTextToObjectField,
-} from "./input-views.js";
+} from "./views/input-views.js";
 import {
   captureViewSnapshot,
   popRedoSnapshot,

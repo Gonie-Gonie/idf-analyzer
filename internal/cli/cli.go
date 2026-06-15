@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bytes"
@@ -23,15 +23,15 @@ type cliInput struct {
 	Doc     idf.Document
 }
 
-func maybeRunCLI(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) (bool, int) {
+func MaybeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, version string) (bool, int) {
 	if len(args) == 0 {
 		return false, 0
 	}
 	if args[0] == "cli" {
-		return true, runCLI(args[1:], stdin, stdout, stderr)
+		return true, runCLI(args[1:], stdin, stdout, stderr, version)
 	}
 	if isCLICommand(args[0]) || args[0] == "-h" || args[0] == "--help" || args[0] == "help" || args[0] == "version" || args[0] == "--version" {
-		return true, runCLI(args, stdin, stdout, stderr)
+		return true, runCLI(args, stdin, stdout, stderr, version)
 	}
 	return false, 0
 }
@@ -45,13 +45,16 @@ func isCLICommand(value string) bool {
 	}
 }
 
-func runCLI(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func runCLI(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, version string) int {
 	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" || args[0] == "help" {
 		writeCLIHelp(stdout)
 		return 0
 	}
 	if args[0] == "version" || args[0] == "--version" {
-		fmt.Fprintln(stdout, currentAppInfo().Version)
+		if strings.TrimSpace(version) == "" {
+			version = "0.0.0"
+		}
+		fmt.Fprintln(stdout, version)
 		return 0
 	}
 
@@ -302,7 +305,7 @@ func cliClean(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 
 	resultText := string(input.Content)
 	if preview.RemovedCount > 0 || idf.CleanupCompacts(ruleIDs) || len(semanticFixes) > 0 {
-		resultText = writeDocumentInOriginalFormat(updated, input.Model)
+		resultText = epinput.WriteDocumentLikeOriginal(updated, input.Model)
 	}
 	if err := writeCLITextOutput(*output, []byte(resultText), stdout); err != nil {
 		return err

@@ -1,0 +1,315 @@
+@media (max-width: 1260px) {
+  .summary-head,
+  .geometry-head {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .summary-tools,
+  .geometry-tools {
+    flex: 1 1 100%;
+  }
+
+  .hvac-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hvac-side {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+
+  .profile-layout {
+    grid-template-columns: minmax(230px, 34%) minmax(0, 1fr);
+  }
+
+  .profile-graph-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-graph-toolbar {
+    grid-template-columns: minmax(0, 1fr) repeat(2, minmax(132px, 170px));
+  }
+
+  .profile-similarity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 920px) {
+  .topbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .workspace,
+  .split-results {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace {
+    grid-template-rows: minmax(0, 42%) minmax(0, 58%);
+  }
+
+  .workspace-splitter {
+    display: none;
+  }
+
+  .editor-panel {
+    min-height: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .summary-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .geometry-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .summary-tools {
+    justify-content: stretch;
+  }
+
+  .geometry-tools {
+    justify-content: stretch;
+  }
+
+  .geometry-control-group,
+  .geometry-sync-toggle,
+  .geometry-visibility-controls {
+    flex: 1 1 100%;
+  }
+
+  .geometry-sync-toggle,
+  .geometry-visibility-controls {
+    padding-left: 0;
+    padding-top: 8px;
+    border-left: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .summary-tools input,
+  .summary-tools button,
+  .summary-tools select,
+  .geometry-tools button,
+  .geometry-tools select {
+    flex: 1 1 160px;
+    width: auto;
+  }
+
+  .hvac-layout,
+  .hvac-loop-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .hvac-view-tabs {
+    width: 100%;
+  }
+
+  .hvac-view-tab {
+    flex: 1 1 110px;
+  }
+
+  .hvac-coupling-grid,
+  .hvac-network-list,
+  .hvac-support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-settings-grid {
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  }
+
+  .profile-live-controls {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .profile-live-select {
+    width: 100%;
+  }
+
+  .profile-graph-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-preset-row {
+    align-items: stretch;
+  }
+
+  .profile-preset-button {
+    flex: 1 1 145px;
+  }
+
+  .geometry-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cleanup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cleanup-candidates {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 560px) {
+  .toolbar {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  button,
+  .toolbar-link,
+  .toolbar-item {
+    flex: 1 1 45%;
+  }
+
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table-row {
+    grid-template-columns: 52px minmax(110px, 1fr) 64px;
+  }
+
+  .table-row span:nth-child(3) {
+    display: none;
+  }
+
+  .summary-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name name status"
+      "value unit meta";
+    align-items: start;
+    gap: 4px;
+  }
+
+  .summary-name {
+    grid-area: name;
+  }
+
+  .summary-value {
+    grid-area: value;
+    min-width: 0;
+  }
+
+  .summary-unit {
+    grid-area: unit;
+    padding-left: 4px;
+  }
+
+  .summary-meta {
+    grid-area: meta;
+    justify-content: flex-start;
+  }
+
+  .hvac-component-main,
+  .hvac-warning,
+  .hvac-node-usage,
+  .hvac-relation-row {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-status {
+    grid-area: status;
+    justify-self: start;
+  }
+
+  .geometry-body {
+    grid-template-rows: minmax(220px, 1fr) 8px minmax(180px, var(--geometry-details-height, 44%));
+  }
+
+  .geometry-property-list div,
+  .geometry-related-row {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-list div {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-field,
+  .settings-inline-control {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .settings-save-status {
+    margin-right: 0;
+  }
+
+  .profile-dialog {
+    padding: 10px;
+  }
+
+  .profile-dialog-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profile-dialog-actions button {
+    width: 100%;
+  }
+
+  .profile-cluster-row,
+  .profile-ranking-row,
+  .profile-source-accordion summary {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-scatter {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 780px) {
+  .guide-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-nav {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .tool-nav {
+    position: static;
+    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  }
+
+  .guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-metric-card dl {
+    grid-template-columns: 1fr;
+  }
+
+  .cleanup-candidate-head {
+    grid-template-columns: 1fr;
+  }
+}

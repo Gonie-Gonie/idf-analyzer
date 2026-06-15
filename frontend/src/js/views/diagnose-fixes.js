@@ -1,6 +1,6 @@
-import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "./state.js";
-import { markDocumentChanged, scheduleAnalyzeAfterPaint } from "./actions.js";
-import { t } from "./i18n.js";
+import { backend, elements, escapeHTML, setStatus, state, updateTextStats } from "../state.js";
+import { markDocumentChanged, scheduleAnalyzeAfterPaint } from "../actions.js";
+import { t } from "../i18n.js";
 
 const compactFormattingRuleID = "compact_formatting";
 let refreshTimer = 0;

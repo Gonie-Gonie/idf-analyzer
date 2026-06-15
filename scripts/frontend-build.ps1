@@ -31,21 +31,14 @@ if (-not (Test-Path $entry)) {
 
 $modules = @(
     "actions.js",
-    "analysis-views.js",
     "app-info.js",
     "geometry-loader.js",
-    "geometry-view.js",
-    "hvac-views.js",
-    "input-views.js",
     "layout.js",
     "main.js",
     "navigation.js",
-    "output-views.js",
-    "profile-views.js",
     "sample.js",
     "settings-client.js",
     "shortcuts.js",
-    "simulation-views.js",
     "state.js",
     "tools.js",
     "view-history.js"
@@ -59,6 +52,14 @@ foreach ($module in $modules) {
 }
 
 $nestedModules = @(
+    "views/analysis-views.js",
+    "views/diagnose-fixes.js",
+    "views/geometry-view.js",
+    "views/hvac-views.js",
+    "views/input-views.js",
+    "views/output-views.js",
+    "views/profile-views.js",
+    "views/simulation-views.js",
     "tools/multi-simulation.js"
 )
 
@@ -71,7 +72,14 @@ foreach ($module in $nestedModules) {
 
 $styles = @(
     "styles.css",
-    "styles/simulation.css"
+    "styles/base.css",
+    "styles/geometry.css",
+    "styles/hvac.css",
+    "styles/output.css",
+    "styles/profile.css",
+    "styles/responsive.css",
+    "styles/simulation.css",
+    "styles/workspace.css"
 )
 
 foreach ($style in $styles) {

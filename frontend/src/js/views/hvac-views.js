@@ -1,5 +1,5 @@
-import { backend, elements, escapeHTML, state } from "./state.js";
-import { t } from "./i18n.js";
+import { backend, elements, escapeHTML, state } from "../state.js";
+import { t } from "../i18n.js";
 
 export function initializeHVACControls() {
   state.hvacInspectorCollapsed = readHVACInspectorCollapsed();

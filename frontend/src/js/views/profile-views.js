@@ -1,6 +1,6 @@
-import { backend, elements, escapeHTML, setStatus, state } from "./state.js";
-import { getCurrentAppSettings, saveAppSettings } from "./settings-client.js";
-import { profileDimensionLabel as i18nProfileDimensionLabel, profileMetricLabel, t } from "./i18n.js";
+import { backend, elements, escapeHTML, setStatus, state } from "../state.js";
+import { getCurrentAppSettings, saveAppSettings } from "../settings-client.js";
+import { profileDimensionLabel as i18nProfileDimensionLabel, profileMetricLabel, t } from "../i18n.js";
 
 let lastProfileView = null;
 
@@ -438,11 +438,11 @@ function renderProfileSeriesCard(series, deck, sharedMax = 0) {
           <strong>${escapeHTML(series.dimensionLabel || profileDimensionLabel(series.dimension))}</strong>
           <span>${escapeHTML(series.label || series.zoneName || series.groupName || "")}</span>
         </div>
-        <button class="profile-pin-button ${pinned ? "active" : ""}" type="button" title="${escapeHTML(t("profile.pinSeries", {}, "Pin series"))}" aria-label="${escapeHTML(t("profile.pinSeries", {}, "Pin series"))}" data-profile-pin-series="${escapeHTML(series.id)}">◎</button>
+        <button class="profile-pin-button ${pinned ? "active" : ""}" type="button" title="${escapeHTML(t("profile.pinSeries", {}, "Pin series"))}" aria-label="${escapeHTML(t("profile.pinSeries", {}, "Pin series"))}" data-profile-pin-series="${escapeHTML(series.id)}">??/button>
       </div>
       <div class="profile-graph-meta">
         <span>${escapeHTML(schedule)}</span>
-        <span>${escapeHTML(metric.label)} · ${escapeHTML(formatGraphNumber(Math.max(...metric.values, 0), metric.unit))}</span>
+        <span>${escapeHTML(metric.label)} 쨌 ${escapeHTML(formatGraphNumber(Math.max(...metric.values, 0), metric.unit))}</span>
       </div>
       ${warnings}
       ${renderGraphVisual(metric.graphData, metric.values, max, { label: series.dimensionLabel || series.dimension, value: series.designValue }, metric.unit)}
@@ -590,7 +590,7 @@ function renderProfileCandidateRow(candidate) {
     <button class="profile-qa-row candidate ${escapeHTML(candidate.severity || "info")}" type="button" data-profile-candidate-id="${escapeHTML(candidate.id)}" data-profile-dimension="${escapeHTML(candidate.dimension || "")}">
       <strong>${escapeHTML(candidate.label || candidate.id)}</strong>
       <span>${escapeHTML(candidate.reason || "")}</span>
-      <small>${escapeHTML(`${(candidate.zoneNames || []).length} zones · ${formatGraphNumber(candidate.currentMin, "")}..${formatGraphNumber(candidate.currentMax, "")}`)}</small>
+      <small>${escapeHTML(`${(candidate.zoneNames || []).length} zones 쨌 ${formatGraphNumber(candidate.currentMin, "")}..${formatGraphNumber(candidate.currentMax, "")}`)}</small>
     </button>`;
 }
 
@@ -1074,7 +1074,7 @@ function profileGraphDeckStats(profile, series, deck) {
   if (deck.compareMode === "outliers") {
     return `${(profile.outliers || []).length} QA hints / ${(profile.parameterCandidates || []).length} candidates`;
   }
-  return `${series.length} series · ${deck.metricMode} · ${deck.timeView} · ${deck.compareMode}`;
+  return `${series.length} series 쨌 ${deck.metricMode} 쨌 ${deck.timeView} 쨌 ${deck.compareMode}`;
 }
 
 function profileMatrixCellClasses(summary, row) {

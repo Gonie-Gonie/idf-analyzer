@@ -1,4 +1,4 @@
-package main
+package frontendchecks
 
 import (
 	"os"
@@ -8,9 +8,9 @@ import (
 
 func TestFrontendProfileGraphDeckContracts(t *testing.T) {
 	files := map[string]string{
-		"profile views": readTestFile(t, "frontend/src/js/profile-views.js"),
+		"profile views": readTestFile(t, "frontend/src/js/views/profile-views.js"),
 		"state":         readTestFile(t, "frontend/src/js/state.js"),
-		"styles":        readTestFile(t, "frontend/src/styles.css"),
+		"styles":        readTestFile(t, "frontend/src/styles/profile.css"),
 	}
 	required := map[string][]string{
 		"profile views": {
@@ -51,7 +51,7 @@ func TestFrontendProfileGraphDeckContracts(t *testing.T) {
 }
 
 func TestFrontendProfileMatrixCellsDriveDeckSelection(t *testing.T) {
-	content := readTestFile(t, "frontend/src/js/profile-views.js")
+	content := readTestFile(t, "frontend/src/js/views/profile-views.js")
 	for _, term := range []string{
 		"function selectProfileMatrixCell",
 		"data-profile-schedule-hash",
@@ -67,7 +67,7 @@ func TestFrontendProfileMatrixCellsDriveDeckSelection(t *testing.T) {
 
 func readTestFile(t *testing.T, path string) string {
 	t.Helper()
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(repoPath(path))
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

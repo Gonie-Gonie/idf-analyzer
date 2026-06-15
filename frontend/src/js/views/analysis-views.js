@@ -1,11 +1,11 @@
-import { elements, escapeHTML, state } from "./state.js";
-import { renderGeometry } from "./geometry-loader.js";
+import { elements, escapeHTML, state } from "../state.js";
+import { renderGeometry } from "../geometry-loader.js";
 import { renderHVAC } from "./hvac-views.js";
 import { renderInputViews } from "./input-views.js";
 import { renderOutput } from "./output-views.js";
 import { renderProfile } from "./profile-views.js";
 import { renderSimulation } from "./simulation-views.js";
-import { t } from "./i18n.js";
+import { t } from "../i18n.js";
 
 export function renderReport() {
   const report = state.report;

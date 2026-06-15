@@ -1,5 +1,5 @@
-import { backend, elements, escapeHTML, setStatus, state } from "./state.js";
-import { t } from "./i18n.js";
+import { backend, elements, escapeHTML, setStatus, state } from "../state.js";
+import { t } from "../i18n.js";
 import { renderHVACLoopDiagram } from "./hvac-views.js";
 import { openStandardOutputApplyDialog } from "./output-views.js";
 

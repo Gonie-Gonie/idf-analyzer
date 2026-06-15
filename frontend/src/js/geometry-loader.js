@@ -39,7 +39,7 @@ async function loadGeometryModule() {
     return geometryModule;
   }
   if (!geometryModulePromise) {
-    geometryModulePromise = import("./geometry-view.js").then((module) => {
+    geometryModulePromise = import("./views/geometry-view.js").then((module) => {
       geometryModule = module;
       return module;
     });

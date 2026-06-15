@@ -1,0 +1,2005 @@
+.hvac-tools input {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--control);
+  color: var(--ink);
+}
+
+.hvac-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 12px;
+  background: var(--bg);
+}
+
+.hvac-summary {
+  margin-bottom: 12px;
+  position: relative;
+  z-index: 30;
+}
+
+.hvac-navigator {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 8px;
+}
+
+.hvac-nav-card {
+  min-width: 0;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  overflow: visible;
+}
+
+.hvac-nav-card.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--teal) 28%, transparent);
+}
+
+.hvac-nav-card[open] {
+  z-index: 40;
+  box-shadow: var(--shadow-menu);
+}
+
+.hvac-nav-card summary,
+.hvac-nav-action {
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+}
+
+.hvac-nav-card summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.hvac-nav-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.hvac-nav-action {
+  border: 1px solid var(--line);
+}
+
+.hvac-nav-card summary span,
+.hvac-nav-action span,
+.hvac-nav-choice span,
+.hvac-nav-choice small {
+  min-width: 0;
+}
+
+.hvac-nav-card summary strong,
+.hvac-nav-action strong,
+.hvac-nav-choice span {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-nav-card summary em,
+.hvac-nav-action em,
+.hvac-nav-choice small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-nav-card summary b,
+.hvac-nav-action b {
+  min-width: 34px;
+  min-height: 30px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-strong);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}
+
+.hvac-nav-card.active summary b,
+.hvac-nav-action.active b {
+  background: var(--teal);
+  color: #ffffff;
+}
+
+.hvac-nav-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 45;
+  max-height: min(320px, 48vh);
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-menu);
+  padding: 5px;
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-nav-choice {
+  width: 100%;
+  min-height: 42px;
+  border-color: transparent;
+  background: transparent;
+  padding: 6px 8px;
+  display: block;
+  text-align: left;
+}
+
+.hvac-nav-choice:hover,
+.hvac-nav-choice.active {
+  border-color: var(--teal);
+  background: var(--surface);
+  color: var(--teal-dark);
+}
+
+.hvac-view-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 3px;
+}
+
+.hvac-view-tab {
+  min-height: 28px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hvac-view-tab:hover,
+.hvac-view-tab.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.empty.compact {
+  min-height: 38px;
+  padding: 9px;
+}
+
+.hvac-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
+  gap: 12px;
+  align-items: start;
+}
+
+.hvac-layout.inspector-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.hvac-main,
+.hvac-side {
+  min-width: 0;
+}
+
+.hvac-layout.inspector-collapsed .hvac-side {
+  display: none;
+}
+
+.hvac-side {
+  display: grid;
+  gap: 12px;
+}
+
+.hvac-graph,
+.hvac-inspector-section {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.hvac-graph {
+  min-height: 360px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.hvac-graphic-shell {
+  width: 100%;
+  min-width: min(820px, 100%);
+  padding: 10px;
+}
+
+.hvac-graphic-shell.scale-fit,
+.hvac-graphic-shell.scale-compact {
+  min-width: 0;
+}
+
+.hvac-graphic-shell.scale-actual {
+  min-width: var(--hvac-graph-width, 1120px);
+}
+
+.hvac-graphic-shell.scale-compact {
+  max-width: 760px;
+}
+
+.hvac-loop-svg,
+.hvac-relation-svg,
+.hvac-service-svg {
+  display: block;
+  width: 100%;
+  min-height: 420px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.hvac-graphic-shell.scale-compact .hvac-loop-svg,
+.hvac-graphic-shell.scale-compact .hvac-relation-svg,
+.hvac-graphic-shell.scale-compact .hvac-service-svg {
+  min-height: 320px;
+}
+
+.hvac-loop-svg {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-2), transparent 68%) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--surface-2), transparent 68%) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface-3), var(--surface) 50%);
+  background-size: 42px 42px;
+}
+
+.hvac-loop-side-panel {
+  fill: color-mix(in srgb, var(--muted), var(--surface) 78%);
+  stroke: color-mix(in srgb, var(--muted), transparent 62%);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.hvac-loop-path,
+.hvac-loop-connector,
+.hvac-loop-branch-path {
+  fill: none;
+  stroke: var(--ink-strong);
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  cursor: pointer;
+}
+
+.hvac-loop-branch-path {
+  stroke-width: 2.4;
+}
+
+.hvac-loop-path:hover,
+.hvac-loop-path.selected,
+.hvac-loop-connector:hover,
+.hvac-loop-connector.selected,
+.hvac-loop-branch-path:hover,
+.hvac-loop-branch-path.selected {
+  stroke: var(--focus);
+  stroke-width: 4.5;
+}
+
+.hvac-loop-path.related,
+.hvac-loop-connector.related,
+.hvac-loop-branch-path.related {
+  stroke: var(--teal-dark);
+  stroke-width: 3.8;
+}
+
+.hvac-loop-path.dimmed,
+.hvac-loop-connector.dimmed,
+.hvac-loop-branch-path.dimmed {
+  opacity: 0.18;
+}
+
+.hvac-loop-arrow-marker {
+  fill: var(--ink-strong);
+}
+
+.hvac-arrow-marker {
+  fill: var(--teal);
+}
+
+.hvac-loop-divider {
+  stroke: color-mix(in srgb, var(--muted), transparent 42%);
+  stroke-dasharray: 4 5;
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+.hvac-loop-label,
+.hvac-loop-name,
+.hvac-column-title {
+  fill: var(--ink);
+  font-weight: 700;
+}
+
+.hvac-loop-label {
+  fill: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.hvac-loop-name,
+.hvac-column-title {
+  font-size: 15px;
+}
+
+.hvac-loop-side-note {
+  fill: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.hvac-loop-endpoint {
+  cursor: pointer;
+}
+
+.hvac-loop-endpoint circle {
+  fill: var(--surface-3);
+  stroke: var(--ink-strong);
+  stroke-width: 2.2;
+}
+
+.hvac-loop-endpoint .port-ring {
+  fill: var(--ink-strong);
+  stroke: var(--surface);
+  stroke-width: 1.5;
+}
+
+.hvac-loop-endpoint text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-loop-equipment {
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.hvac-loop-equipment.supply {
+  color: var(--teal-dark);
+}
+
+.hvac-loop-equipment.demand,
+.hvac-loop-equipment.terminal {
+  color: var(--amber);
+}
+
+.hvac-loop-equipment.pipe,
+.hvac-loop-equipment.heat_exchanger {
+  color: var(--muted);
+}
+
+.hvac-loop-equipment.tower,
+.hvac-loop-equipment.heat_pump,
+.hvac-loop-equipment.district {
+  color: var(--green);
+}
+
+.hvac-loop-equipment.control {
+  color: var(--focus);
+}
+
+.hvac-loop-equipment.zone {
+  color: var(--focus);
+}
+
+.hvac-loop-equipment-hit {
+  fill: transparent;
+  stroke: none;
+  pointer-events: all;
+}
+
+.hvac-loop-equipment .pipe-port {
+  fill: var(--surface-3);
+  stroke: var(--ink-strong);
+  stroke-width: 2;
+}
+
+.hvac-loop-icon {
+  pointer-events: none;
+}
+
+.hvac-loop-icon .icon-case {
+  fill: color-mix(in srgb, var(--surface), currentColor 14%);
+  stroke: color-mix(in srgb, currentColor, var(--ink-strong) 24%);
+  stroke-width: 1.6;
+  filter: drop-shadow(0 1px 1px color-mix(in srgb, var(--ink), transparent 72%));
+}
+
+.hvac-loop-icon .fan-blade,
+.hvac-loop-icon .icon-core,
+.hvac-loop-icon .flame,
+.hvac-loop-icon .component-mark {
+  fill: currentColor;
+}
+
+.hvac-loop-icon .coil-fin,
+.hvac-loop-icon .coil-line,
+.hvac-loop-icon .pump-arrow,
+.hvac-loop-icon .pipe-body,
+.hvac-loop-icon .snow,
+.hvac-loop-icon .terminal-damper,
+.hvac-loop-icon .room-line,
+.hvac-loop-icon .tower-fill,
+.hvac-loop-icon .heat-pump-arrows,
+.hvac-loop-icon .heat-exchanger-lines,
+.hvac-loop-icon .district-grid,
+.hvac-loop-icon .control-line,
+.hvac-loop-icon .component-mark {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.hvac-loop-icon.coil.cooling .coil-line,
+.hvac-loop-icon.chiller .snow {
+  stroke: #2878d7;
+}
+
+.hvac-loop-icon.coil.heating .coil-line,
+.hvac-loop-icon.boiler .flame {
+  stroke: #c53b32;
+}
+
+.hvac-loop-icon.coil.mixed .coil-line {
+  stroke: #8a6a22;
+}
+
+.hvac-loop-icon .pump-volute,
+.hvac-loop-icon .duct,
+.hvac-loop-icon .icon-vent,
+.hvac-loop-icon .tower-fan,
+.hvac-loop-icon .control-dot {
+  fill: color-mix(in srgb, var(--surface), currentColor 26%);
+  stroke: currentColor;
+  stroke-width: 1.3;
+}
+
+.hvac-loop-icon .flame {
+  fill: #d94a38;
+  stroke: #9f241d;
+}
+
+.hvac-loop-icon .flame-core {
+  fill: #ffd166;
+}
+
+.hvac-loop-equipment .mini-label {
+  fill: var(--muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.hvac-loop-cross-indicator {
+  pointer-events: none;
+}
+
+.hvac-loop-cross-indicator circle {
+  fill: var(--selected-soft);
+  stroke: var(--focus);
+  stroke-width: 1.8;
+}
+
+.hvac-loop-cross-indicator text {
+  fill: var(--focus);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.hvac-loop-equipment:hover .icon-case,
+.hvac-loop-equipment.selected .icon-case,
+.hvac-loop-endpoint:hover circle,
+.hvac-loop-endpoint.selected circle,
+.hvac-branch-badge:hover circle,
+.hvac-branch-badge.selected circle {
+  stroke: var(--focus);
+  stroke-width: 2.8;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--focus), transparent 55%));
+}
+
+.hvac-loop-equipment.related .icon-case,
+.hvac-loop-endpoint.related circle,
+.hvac-branch-badge.related circle {
+  stroke: var(--teal-dark);
+  stroke-width: 2.6;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--teal), transparent 60%));
+}
+
+.hvac-loop-equipment.missing .icon-case {
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+}
+
+.hvac-loop-equipment.dimmed,
+.hvac-loop-endpoint.dimmed,
+.hvac-branch-badge.dimmed {
+  opacity: 0.18;
+}
+
+.hvac-graph-node {
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.hvac-graph-node rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.hvac-graph-node.supply rect,
+.hvac-graph-node.air rect {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+}
+
+.hvac-graph-node.supply,
+.hvac-graph-node.air {
+  color: var(--teal-dark);
+}
+
+.hvac-graph-node.air_loop rect,
+.hvac-graph-node.unit_ventilator rect,
+.hvac-graph-node.erv rect {
+  fill: var(--teal-soft);
+  stroke: var(--teal);
+}
+
+.hvac-graph-node.air_loop,
+.hvac-graph-node.unit_ventilator,
+.hvac-graph-node.erv {
+  color: var(--teal-dark);
+}
+
+.hvac-graph-node.demand rect,
+.hvac-graph-node.terminal rect {
+  fill: var(--warn-bg);
+  stroke: var(--amber);
+}
+
+.hvac-graph-node.demand,
+.hvac-graph-node.terminal {
+  color: var(--amber);
+}
+
+.hvac-graph-node.air_terminal rect,
+.hvac-graph-node.vav_reheat_terminal rect,
+.hvac-graph-node.constant_volume_terminal rect,
+.hvac-graph-node.fan_powered_terminal rect,
+.hvac-graph-node.adu rect {
+  fill: color-mix(in srgb, var(--amber) 18%, var(--surface));
+  stroke: var(--amber);
+}
+
+.hvac-graph-node.air_terminal,
+.hvac-graph-node.vav_reheat_terminal,
+.hvac-graph-node.constant_volume_terminal,
+.hvac-graph-node.fan_powered_terminal,
+.hvac-graph-node.adu {
+  color: #a16207;
+}
+
+.hvac-graph-node.plant rect,
+.hvac-graph-node.source rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-graph-node.plant,
+.hvac-graph-node.source {
+  color: var(--green);
+}
+
+.hvac-graph-node.plant_loop rect,
+.hvac-graph-node.thermal_storage rect,
+.hvac-graph-node.heat_recovery rect,
+.hvac-graph-node.water_system rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-graph-node.plant_loop,
+.hvac-graph-node.thermal_storage,
+.hvac-graph-node.heat_recovery,
+.hvac-graph-node.water_system {
+  color: var(--green);
+}
+
+.hvac-graph-node.refrigerant_system rect,
+.hvac-graph-node.vrf_indoor rect,
+.hvac-graph-node.direct_expansion rect {
+  fill: color-mix(in srgb, #38bdf8 18%, var(--surface));
+  stroke: #0284c7;
+}
+
+.hvac-graph-node.refrigerant_system,
+.hvac-graph-node.vrf_indoor,
+.hvac-graph-node.direct_expansion {
+  color: #0369a1;
+}
+
+.hvac-graph-node.fan_coil rect,
+.hvac-graph-node.ptac rect,
+.hvac-graph-node.pthp rect,
+.hvac-graph-node.direct_zone_unit rect,
+.hvac-graph-node.zone_hvac rect {
+  fill: color-mix(in srgb, var(--focus) 14%, var(--surface));
+  stroke: var(--focus);
+}
+
+.hvac-graph-node.fan_coil,
+.hvac-graph-node.ptac,
+.hvac-graph-node.pthp,
+.hvac-graph-node.direct_zone_unit,
+.hvac-graph-node.zone_hvac {
+  color: var(--focus);
+}
+
+.hvac-graph-node.radiant_floor rect,
+.hvac-graph-node.radiant_panel rect,
+.hvac-graph-node.baseboard rect {
+  fill: color-mix(in srgb, #ef4444 13%, var(--surface));
+  stroke: #dc2626;
+}
+
+.hvac-graph-node.radiant_floor,
+.hvac-graph-node.radiant_panel,
+.hvac-graph-node.baseboard {
+  color: #b91c1c;
+}
+
+.hvac-graph-node.ideal_loads rect,
+.hvac-graph-node.support_chip rect {
+  fill: var(--surface-3);
+  stroke: var(--muted);
+}
+
+.hvac-graph-node.ideal_loads,
+.hvac-graph-node.support_chip {
+  color: var(--muted);
+}
+
+.hvac-graph-node.renewable_power rect,
+.hvac-graph-node.energy_storage rect,
+.hvac-graph-node.electric_distribution rect {
+  fill: color-mix(in srgb, #facc15 18%, var(--surface));
+  stroke: #ca8a04;
+}
+
+.hvac-graph-node.renewable_power,
+.hvac-graph-node.energy_storage,
+.hvac-graph-node.electric_distribution {
+  color: #854d0e;
+}
+
+.hvac-graph-node.fault_overlay rect {
+  fill: color-mix(in srgb, var(--red) 10%, var(--surface));
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+}
+
+.hvac-graph-node.fault_overlay {
+  color: var(--red);
+}
+
+.hvac-graph-node.zone rect {
+  fill: var(--selected-soft);
+  stroke: var(--focus);
+}
+
+.hvac-graph-node.zone {
+  color: var(--focus);
+}
+
+.hvac-graph-node.missing rect {
+  stroke: var(--red);
+  stroke-dasharray: 5 4;
+}
+
+.hvac-graph-node .label {
+  fill: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.hvac-graph-node .meta {
+  fill: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.hvac-node-icon {
+  pointer-events: none;
+}
+
+.hvac-node-icon .icon-bg {
+  fill: color-mix(in srgb, currentColor, var(--surface) 84%);
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+
+.hvac-node-icon .icon-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.hvac-node-icon .icon-fill,
+.hvac-node-icon .icon-dot {
+  fill: currentColor;
+}
+
+.hvac-graph-node:hover rect,
+.hvac-graph-node.selected rect {
+  stroke: var(--focus);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--focus), transparent 55%));
+}
+
+.hvac-graph-node.related rect {
+  stroke: var(--teal-dark);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--teal), transparent 60%));
+}
+
+.hvac-graph-node.dimmed {
+  opacity: 0.2;
+}
+
+.hvac-branch-badge {
+  cursor: pointer;
+}
+
+.hvac-branch-badge circle {
+  fill: var(--surface-3);
+  stroke: var(--ink-strong);
+  stroke-width: 1.8;
+}
+
+.hvac-branch-badge text {
+  fill: var(--ink-strong);
+  font-size: 9px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.hvac-graph-link {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 2.5;
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    stroke-width 120ms ease;
+}
+
+.hvac-graph-link.plant-air,
+.hvac-graph-link.plant-terminal {
+  stroke: var(--green);
+}
+
+.hvac-graph-link.air-terminal {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.terminal-zone {
+  stroke: var(--focus);
+}
+
+.hvac-graph-link.service {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.service.bundled {
+  stroke-width: 3.6;
+}
+
+.hvac-graph-link.service.support {
+  stroke-dasharray: 6 5;
+}
+
+.hvac-graph-link.medium-air {
+  stroke: var(--teal);
+}
+
+.hvac-graph-link.medium-chilled-water {
+  stroke: #2563eb;
+}
+
+.hvac-graph-link.medium-hot-water,
+.hvac-graph-link.medium-fuel {
+  stroke: #dc2626;
+}
+
+.hvac-graph-link.medium-condenser-water,
+.hvac-graph-link.medium-service-water {
+  stroke: #0891b2;
+}
+
+.hvac-graph-link.medium-refrigerant {
+  stroke: #0284c7;
+}
+
+.hvac-graph-link.medium-electricity {
+  stroke: #ca8a04;
+}
+
+.hvac-graph-link.medium-control {
+  stroke: var(--focus);
+}
+
+.hvac-graph-link.medium-fault {
+  stroke: var(--red);
+}
+
+.hvac-graph-link:hover,
+.hvac-graph-link.selected {
+  stroke-width: 5;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor, transparent 62%));
+}
+
+.hvac-graph-link.related {
+  stroke-width: 4.8;
+  opacity: 0.95;
+}
+
+.hvac-graph-link.dimmed {
+  opacity: 0.1;
+}
+
+.hvac-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.hvac-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid var(--line);
+}
+
+.hvac-legend-supply,
+.hvac-legend-air {
+  background: var(--teal-soft);
+  border-color: var(--teal);
+}
+
+.hvac-legend-demand,
+.hvac-legend-terminal {
+  background: var(--warn-bg);
+  border-color: var(--amber);
+}
+
+.hvac-legend-source {
+  background: var(--ok-bg);
+  border-color: var(--green);
+}
+
+.hvac-legend-zone {
+  background: var(--selected-soft);
+  border-color: var(--focus);
+}
+
+.hvac-legend-chilled-water {
+  background: color-mix(in srgb, #2563eb 16%, var(--surface));
+  border-color: #2563eb;
+}
+
+.hvac-legend-hot-water {
+  background: color-mix(in srgb, #dc2626 14%, var(--surface));
+  border-color: #dc2626;
+}
+
+.hvac-legend-refrigerant {
+  background: color-mix(in srgb, #0284c7 15%, var(--surface));
+  border-color: #0284c7;
+}
+
+.hvac-legend-electricity {
+  background: color-mix(in srgb, #ca8a04 18%, var(--surface));
+  border-color: #ca8a04;
+}
+
+.hvac-legend-control {
+  background: var(--selected-soft);
+  border-color: var(--focus);
+}
+
+.hvac-edge-label {
+  opacity: 0;
+  pointer-events: none;
+  fill: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 3px;
+  transition: opacity 120ms ease;
+}
+
+.hvac-service-link-group:hover .hvac-edge-label,
+.hvac-service-link-group.selected .hvac-edge-label,
+.hvac-service-link-group.related .hvac-edge-label {
+  opacity: 1;
+}
+
+.hvac-edge-bundle-badge {
+  cursor: pointer;
+}
+
+.hvac-edge-bundle-badge rect {
+  fill: var(--surface);
+  stroke: currentColor;
+  stroke-width: 1.6;
+  filter: drop-shadow(0 1px 2px color-mix(in srgb, var(--ink), transparent 72%));
+}
+
+.hvac-edge-bundle-badge text {
+  fill: var(--ink-strong);
+  font-size: 10px;
+  font-weight: 900;
+  pointer-events: none;
+}
+
+.hvac-service-link-group.dimmed .hvac-edge-bundle-badge {
+  opacity: 0.28;
+}
+
+.hvac-graph-detail {
+  margin: 0 12px 12px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 10px;
+}
+
+.hvac-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hvac-detail-grid div,
+.hvac-detail-list div {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  background: var(--surface-3);
+}
+
+.hvac-detail-grid span,
+.hvac-detail-list span,
+.hvac-detail-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-detail-grid strong,
+.hvac-detail-list strong {
+  display: block;
+  margin-top: 3px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.hvac-detail-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.hvac-loop-title,
+.hvac-section-head,
+.hvac-branch-head {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hvac-loop-title {
+  padding: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-loop-heading {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-loop-title h3,
+.hvac-section-head h3 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.hvac-section-head.compact {
+  align-items: flex-start;
+}
+
+.hvac-loop-title span,
+.hvac-section-head span,
+.hvac-side-meta span,
+.hvac-component span,
+.hvac-component small,
+.hvac-warning span,
+.hvac-inspector-title span,
+.hvac-node-usage span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-loop-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.hvac-related-system-chips,
+.hvac-connected-system-list {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.hvac-related-system-chips button,
+.hvac-connected-system-list button,
+.hvac-connected-system-list span {
+  max-width: 220px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.hvac-related-system-chips .plant,
+.hvac-connected-system-list .plant {
+  border-color: rgba(79, 70, 229, 0.3);
+  background: rgba(79, 70, 229, 0.12);
+  color: var(--accent-strong);
+}
+
+.hvac-related-system-chips .air,
+.hvac-connected-system-list .air {
+  border-color: rgba(14, 165, 233, 0.3);
+  background: rgba(14, 165, 233, 0.12);
+  color: var(--teal-dark);
+}
+
+.hvac-related-system-chips .condenser,
+.hvac-connected-system-list .condenser {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.14);
+  color: #a16207;
+}
+
+.hvac-graph-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
+.hvac-graph-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 2px;
+}
+
+.hvac-graph-scale button {
+  min-height: 26px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 3px 8px;
+}
+
+.hvac-graph-scale button:hover,
+.hvac-graph-scale button.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.hvac-inspector-toggle.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.hvac-loop-meta span,
+.hvac-side-meta span,
+.hvac-tag-list span,
+.hvac-connector div span {
+  border-radius: 999px;
+  background: var(--surface-2);
+  padding: 3px 7px;
+}
+
+.hvac-loop-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+}
+
+.hvac-loop-side {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--surface-3);
+}
+
+.hvac-node-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.hvac-node-line.compact {
+  margin-top: 4px;
+}
+
+.hvac-node-line.water {
+  color: var(--teal-dark);
+}
+
+.hvac-node {
+  min-height: 28px;
+  max-width: 100%;
+  border-color: var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--control);
+  color: var(--ink);
+  font-size: 12px;
+  padding: 3px 7px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.hvac-node small {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.hvac-node > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-node.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+  font-weight: 700;
+}
+
+.hvac-node.empty-node {
+  opacity: 0.7;
+}
+
+.hvac-arrow {
+  color: var(--muted);
+}
+
+.hvac-side-meta,
+.hvac-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.hvac-branch-list,
+.hvac-component-list,
+.hvac-connector-list,
+.hvac-relation-list,
+.hvac-warning-list,
+.hvac-diagnostic-list,
+.hvac-inspector {
+  display: grid;
+  gap: 8px;
+}
+
+.hvac-branch-list,
+.hvac-connector-list {
+  margin-top: 10px;
+}
+
+.hvac-branch,
+.hvac-connector,
+.hvac-component,
+.hvac-relation-row,
+.hvac-warning,
+.hvac-node-usage,
+.hvac-node-monitor,
+.hvac-node-output-row {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 9px;
+}
+
+.hvac-node-monitor {
+  display: grid;
+  gap: 9px;
+  background: var(--surface-3);
+}
+
+.hvac-node-monitor p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.hvac-node-monitor-existing {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-node-output-list {
+  display: grid;
+  gap: 7px;
+  max-height: 330px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
+}
+
+.hvac-node-output-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface);
+}
+
+.hvac-node-output-row.requested {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.hvac-node-output-row strong,
+.hvac-inspector-title strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hvac-node-output-row span {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hvac-output-badges,
+.hvac-rule-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.hvac-output-badges small,
+.hvac-rule-badges small {
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.hvac-rule-badges small {
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.hvac-rule-trace-list span {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.hvac-component {
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-cross-loop-buttons {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.hvac-cross-loop-buttons button {
+  max-width: 180px;
+  min-height: 24px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.hvac-edit-field-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.hvac-edit-button {
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  padding: 3px 7px;
+  gap: 5px;
+  font-size: 11px;
+}
+
+.hvac-edit-button span,
+.hvac-edit-button small {
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-component.missing {
+  border-left: 4px solid var(--amber);
+}
+
+.hvac-component-source-ref {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-component-main,
+.hvac-warning,
+.hvac-node-usage {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.hvac-component-select {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.hvac-component-select:hover strong {
+  color: var(--teal-dark);
+}
+
+.hvac-component-source {
+  justify-self: end;
+}
+
+.hvac-component-select strong,
+.hvac-component-select span {
+  display: block;
+}
+
+.hvac-component-main strong,
+.hvac-component-main span,
+.hvac-branch-head strong,
+.hvac-warning strong,
+.hvac-warning span,
+.hvac-warning small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-warning small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.hvac-inline-warning {
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-bg);
+  color: var(--amber);
+  padding: 7px;
+  font-size: 12px;
+}
+
+.hvac-cross-loop {
+  padding: 0 12px 12px;
+}
+
+.hvac-relation-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(160px, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.hvac-cross-loop-row {
+  width: 100%;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.hvac-cross-loop-row:hover {
+  border-color: var(--focus);
+  background: var(--selected-soft);
+}
+
+.hvac-cross-loop-map {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  padding: 9px;
+}
+
+.hvac-cross-loop-svg {
+  width: 100%;
+  min-height: 126px;
+  display: block;
+}
+
+.hvac-cross-loop-component rect,
+.hvac-cross-loop-target rect {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.hvac-cross-loop-component rect {
+  fill: var(--warn-bg);
+  stroke: var(--amber);
+}
+
+.hvac-cross-loop-target {
+  cursor: pointer;
+  color: var(--green);
+}
+
+.hvac-cross-loop-target rect {
+  fill: var(--ok-bg);
+  stroke: var(--green);
+}
+
+.hvac-cross-loop-target:hover rect {
+  stroke: var(--focus);
+  stroke-width: 2.8;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--focus), transparent 58%));
+}
+
+.hvac-cross-loop-target.missing {
+  opacity: 0.55;
+}
+
+.hvac-cross-loop-edge {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 2.4;
+  stroke-dasharray: 7 5;
+}
+
+.hvac-cross-loop-svg .label {
+  fill: var(--ink-strong);
+  font-size: 12px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.hvac-cross-loop-svg .meta {
+  fill: var(--muted);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.hvac-cross-loop-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hvac-relation-table-shell {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.hvac-relation-table {
+  display: grid;
+  min-width: 1040px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.hvac-relation-table-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.05fr) minmax(170px, 1.15fr) minmax(140px, 0.9fr) minmax(160px, 1fr) minmax(130px, 0.8fr) minmax(220px, 1.35fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  border: 0;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--surface-2);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.hvac-relation-table-row:hover,
+.hvac-relation-table-row.selected {
+  background: var(--teal-soft);
+}
+
+.hvac-relation-table-row.related {
+  background: color-mix(in srgb, var(--teal-soft), transparent 42%);
+}
+
+.hvac-relation-table-row.dimmed {
+  opacity: 0.48;
+}
+
+.hvac-relation-table-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.hvac-relation-table-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-head);
+  color: var(--muted);
+  cursor: default;
+  font-weight: 700;
+}
+
+.hvac-service-table-shell {
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-service-table {
+  display: grid;
+  min-width: 1120px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.hvac-service-table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(90px, 0.58fr)
+    minmax(170px, 1.14fr)
+    minmax(130px, 0.8fr)
+    minmax(130px, 0.8fr)
+    minmax(180px, 1.1fr)
+    minmax(140px, 0.85fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+  border: 0;
+  border-bottom: 1px solid var(--surface-2);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 8px 10px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.hvac-service-table-row:hover,
+.hvac-service-table-row.selected {
+  background: var(--teal-soft);
+}
+
+.hvac-service-table-row.related {
+  background: color-mix(in srgb, var(--teal-soft), transparent 42%);
+}
+
+.hvac-service-table-row.dimmed {
+  opacity: 0.48;
+}
+
+.hvac-service-table-row.head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--table-head);
+  color: var(--muted);
+  cursor: default;
+  font-weight: 700;
+}
+
+.hvac-service-table-row span,
+.hvac-service-table-row strong,
+.hvac-service-table-row small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.hvac-service-table-row strong,
+.hvac-service-table-row small {
+  display: block;
+}
+
+.hvac-service-table-row small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.hvac-service-shell {
+  border-bottom: 1px solid var(--line);
+}
+
+.hvac-service-svg {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--surface-2), transparent 74%) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--surface-2), transparent 74%) 1px, transparent 1px),
+    color-mix(in srgb, var(--surface-3), var(--surface) 48%);
+  background-size: 46px 46px;
+}
+
+.hvac-service-lane {
+  pointer-events: none;
+}
+
+.hvac-service-lane rect {
+  fill: color-mix(in srgb, var(--surface), transparent 8%);
+  stroke: color-mix(in srgb, var(--line), transparent 8%);
+  stroke-width: 1;
+}
+
+.hvac-service-lane text {
+  fill: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.hvac-coupling-overview {
+  display: grid;
+  gap: 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  padding: 10px;
+}
+
+.hvac-coupling-grid,
+.hvac-network-list,
+.hvac-support-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.hvac-coupling-card,
+.hvac-network-card,
+.hvac-support-card {
+  min-width: 0;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+  color: var(--ink);
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  text-align: left;
+}
+
+.hvac-coupling-card,
+.hvac-support-card {
+  cursor: pointer;
+}
+
+.hvac-coupling-card:hover,
+.hvac-coupling-card.selected,
+.hvac-coupling-card:focus-visible,
+.hvac-support-card:hover,
+.hvac-support-card.selected,
+.hvac-support-card:focus-visible {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  outline: none;
+}
+
+.hvac-coupling-card strong,
+.hvac-coupling-card span,
+.hvac-coupling-card small,
+.hvac-network-card strong,
+.hvac-network-card span,
+.hvac-network-card small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-coupling-card span,
+.hvac-network-card span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-coupling-card small,
+.hvac-network-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-supporting-assets {
+  background: var(--surface);
+}
+
+.hvac-support-card-main {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.hvac-support-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--ink-soft);
+}
+
+.hvac-support-card.thermal_storage .hvac-support-icon,
+.hvac-support-card.heat_recovery .hvac-support-icon,
+.hvac-support-card.heat_rejection .hvac-support-icon,
+.hvac-support-card.source_sink .hvac-support-icon {
+  color: var(--green);
+}
+
+.hvac-support-card.generator .hvac-support-icon,
+.hvac-support-card.electric_storage .hvac-support-icon {
+  color: #854d0e;
+}
+
+.hvac-support-card.control_overlay .hvac-support-icon,
+.hvac-support-card.operation_scheme .hvac-support-icon {
+  color: var(--focus);
+}
+
+.hvac-support-card.fault_overlay .hvac-support-icon {
+  color: var(--red);
+}
+
+.hvac-support-card strong,
+.hvac-support-card small {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hvac-support-card small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.hvac-support-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.hvac-support-badges span {
+  max-width: 180px;
+  min-height: 20px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--muted);
+  padding: 2px 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.hvac-trace-drawer {
+  margin-top: 10px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.hvac-trace-drawer summary {
+  min-height: 32px;
+  cursor: pointer;
+  padding: 7px 9px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hvac-trace-drawer .hvac-detail-list {
+  margin: 0;
+  padding: 0 9px 9px;
+}
+
+.hvac-inspector-section {
+  padding: 10px;
+}
+
+.hvac-inspector {
+  margin-top: 10px;
+}
+
+.hvac-inspector-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-connected-systems {
+  display: grid;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-connected-systems > strong {
+  font-size: 12px;
+}
+
+.hvac-connected-system-list span {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--surface-2);
+}
+
+.hvac-inspector-kv {
+  display: grid;
+  grid-template-columns: minmax(100px, 0.55fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--surface-2);
+}
+
+.hvac-inspector-kv strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+.hvac-inspector-kv span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.hvac-warning {
+  border-left: 4px solid var(--amber);
+}
+
+.hvac-warning.error {
+  border-left-color: var(--red);
+}
+
