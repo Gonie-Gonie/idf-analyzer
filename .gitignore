@@ -24,6 +24,7 @@ node_modules/
 .env.*
 .tools/
 .runtime/
+/internal/idf/testdata/hvac_external/
 
 # Editors and OS files
 .idea/

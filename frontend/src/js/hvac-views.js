@@ -1448,6 +1448,7 @@ function iconKindForDelivery(deliveryType = "") {
       return "ideal_loads";
     case "unit_heater":
       return "boiler";
+    case "evaporative_cooler":
     case "unit_ventilator":
     case "erv":
       return "air";

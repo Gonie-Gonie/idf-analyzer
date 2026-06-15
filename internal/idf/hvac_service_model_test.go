@@ -289,6 +289,74 @@ func TestHVACServiceModelClassifiesPackagedLocalEquipment(t *testing.T) {
 	}
 }
 
+func TestHVACServiceModelClassifiesWindowAndEvaporativeCoolerAsLocalEquipment(t *testing.T) {
+	doc := Document{Objects: []Object{
+		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},
+		{Index: 1, Type: "ZoneHVAC:EquipmentConnections", Fields: []Field{
+			{Value: "Office"},
+			{Value: "Office Equipment"},
+			{Value: "Office Supply Inlet"},
+			{Value: ""},
+			{Value: "Office Zone Air Node"},
+			{Value: ""},
+		}},
+		{Index: 2, Type: "ZoneHVAC:EquipmentList", Fields: []Field{
+			{Value: "Office Equipment"},
+			{Value: "SequentialLoad"},
+			{Value: "ZoneHVAC:WindowAirConditioner"},
+			{Value: "Office Window AC"},
+			{Value: "1"},
+			{Value: "1"},
+			{Value: "ZoneHVAC:EvaporativeCoolerUnit"},
+			{Value: "Office Evap Cooler"},
+			{Value: "2"},
+			{Value: "2"},
+		}},
+		{Index: 3, Type: "ZoneHVAC:WindowAirConditioner", Fields: []Field{
+			{Value: "Office Window AC"},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Office Supply Inlet"},
+			{Value: "Office Zone Air Node"},
+		}},
+		{Index: 4, Type: "ZoneHVAC:EvaporativeCoolerUnit", Fields: []Field{
+			{Value: "Office Evap Cooler"},
+			{Value: ""},
+			{Value: "Autosize"},
+			{Value: "Office Supply Inlet"},
+			{Value: "Office Zone Air Node"},
+		}},
+	}}
+
+	report := AnalyzeHVAC(doc)
+	office := findHVACTestingZoneService(report.ServiceModel, "Office")
+	if office == nil {
+		t.Fatalf("Office zone service not found: %#v", report.ServiceModel.ZoneServices)
+	}
+	for _, expected := range []struct {
+		name         string
+		deliveryType string
+		source       string
+	}{
+		{"Office Window AC", "window_ac", "Local DX"},
+		{"Office Evap Cooler", "evaporative_cooler", "Local evaporative cooling"},
+	} {
+		path := findZoneServicePath(office.Paths, "cooling", "direct_zone_air", "", "", expected.name)
+		if path == nil {
+			t.Fatalf("Office paths = %#v, want cooling path for %s", office.Paths, expected.name)
+		}
+		if path.AirLoop != nil || path.PlantLoop != nil {
+			t.Fatalf("%s path gained loop context: %#v", expected.name, path)
+		}
+		if path.DeliveryEquipment.DeliveryType != expected.deliveryType || path.DeliveryEquipment.RequiresAirLoop {
+			t.Fatalf("%s delivery classification = %#v", expected.name, path.DeliveryEquipment)
+		}
+		if path.SourceSystem == nil || path.SourceSystem.Name != expected.source {
+			t.Fatalf("%s source system = %#v, want %q", expected.name, path.SourceSystem, expected.source)
+		}
+	}
+}
+
 func TestHVACServiceModelPackagedLocalPathGoldenJSON(t *testing.T) {
 	doc := Document{Objects: []Object{
 		{Index: 0, Type: "Zone", Fields: []Field{{Value: "Office"}}},

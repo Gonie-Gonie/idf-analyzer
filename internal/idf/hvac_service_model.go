@@ -615,6 +615,8 @@ func hvacDeliveryTypeForObject(objectType string) string {
 		return "unit_heater"
 	case lower == "zonehvac:windowairconditioner":
 		return "window_ac"
+	case lower == "zonehvac:evaporativecoolerunit":
+		return "evaporative_cooler"
 	case lower == "zonehvac:terminalunit:variablerefrigerantflow":
 		return "vrf_indoor"
 	case lower == "zonehvac:watertoairheatpump":
@@ -666,6 +668,8 @@ func displayFamilyForDeliveryType(deliveryType string, objectType string) string
 		return "Unit Heater"
 	case "window_ac":
 		return "Window AC"
+	case "evaporative_cooler":
+		return "Evaporative Cooler"
 	case "vrf_indoor":
 		return "VRF Indoor Unit"
 	case "water_to_air_heat_pump":
@@ -716,7 +720,7 @@ func deliveryMediums(deliveryType string, objectType string) []string {
 		return []string{"refrigerant", "air"}
 	case "fan_coil", "unit_ventilator", "unit_heater", "radiant_panel", "radiant_floor", "baseboard", "water_to_air_heat_pump":
 		return []string{"air", "hot_water", "chilled_water"}
-	case "ptac", "pthp", "window_ac", "ideal_loads", "zone_direct_unit":
+	case "ptac", "pthp", "window_ac", "evaporative_cooler", "ideal_loads", "zone_direct_unit":
 		return []string{"air", "electricity", "fuel"}
 	case "erv", "zone_exhaust":
 		return []string{"air"}
@@ -745,7 +749,7 @@ func pathTypeForDelivery(deliveryType string, hasPlantLoop bool, hasAirLoop bool
 		return "central_air"
 	case hasPlantLoop:
 		return "direct_zone_hydronic"
-	case deliveryType == "ptac" || deliveryType == "pthp" || deliveryType == "window_ac" || deliveryType == "unit_ventilator" || deliveryType == "unit_heater" || deliveryType == "fan_coil" || deliveryType == "water_to_air_heat_pump" || deliveryType == "zone_direct_unit":
+	case deliveryType == "ptac" || deliveryType == "pthp" || deliveryType == "window_ac" || deliveryType == "evaporative_cooler" || deliveryType == "unit_ventilator" || deliveryType == "unit_heater" || deliveryType == "fan_coil" || deliveryType == "water_to_air_heat_pump" || deliveryType == "zone_direct_unit":
 		return "direct_zone_air"
 	default:
 		return "local"
@@ -789,7 +793,7 @@ func serviceKindsForDelivery(ctx *hvacContext, component HVACComponent, delivery
 		add("ventilation")
 	case deliveryType == "zone_exhaust":
 		add("exhaust")
-	case deliveryType == "window_ac" || deliveryType == "ptac":
+	case deliveryType == "window_ac" || deliveryType == "evaporative_cooler" || deliveryType == "ptac":
 		add("cooling")
 	case deliveryType == "pthp" || deliveryType == "fan_coil" || deliveryType == "water_to_air_heat_pump":
 		add("cooling")
@@ -1035,6 +1039,8 @@ func localSourceSystemForDelivery(deliveryType string, serviceKind string) *Syst
 			return systemRefFromLabel("local", "Local electric/gas/heat pump", []string{"electricity", "fuel"})
 		}
 		return systemRefFromLabel("local_dx", "Local DX", []string{"refrigerant", "electricity"})
+	case "evaporative_cooler":
+		return systemRefFromLabel("local_evaporative", "Local evaporative cooling", []string{"air", "service_water", "electricity"})
 	case "ideal_loads":
 		return systemRefFromLabel("ideal_loads", "Ideal Loads", []string{"air"})
 	default:

@@ -26,6 +26,7 @@ func TestFrontendHVACDefaultUICopyAvoidsDebugAndLegacyTerms(t *testing.T) {
 		`data-hvac-open-view="relation"`,
 		"relation-link:",
 		"Zone relations",
+		"Other loops",
 		"hvac.inferred",
 		"Inferred",
 		"Cross-loop",
@@ -67,6 +68,7 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 		"hvac-service-svg",
 		"hvac-edge-bundle-badge",
 		"hvac-trace-drawer",
+		"evaporative_cooler",
 		"renderHVACViewTab(\"services\"",
 		"renderHVACViewTab(\"couplings\"",
 	} {
