@@ -47,7 +47,11 @@ export function renderOutput(output = state.report?.output) {
     renderOutputEmpty();
     return;
   }
-  const query = (elements.outputFilter?.value || "").trim().toLowerCase();
+  if (state.outputPendingFocusQuery && elements.outputFilter) {
+    elements.outputFilter.value = state.outputPendingFocusQuery;
+    state.outputPendingFocusQuery = "";
+  }
+  const query = (elements.outputFilter?.value || state.outputPendingFocusQuery || "").trim().toLowerCase();
   const purposeFilter = elements.outputPurposeFilter?.value || state.outputPurposeFilter || "all";
   state.outputPurposeFilter = purposeFilter;
   syncOutputPurposeFilter(output, purposeFilter);

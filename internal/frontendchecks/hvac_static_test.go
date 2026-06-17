@@ -63,6 +63,7 @@ func TestFrontendHVACStartsOnZoneServices(t *testing.T) {
 		`hvacServiceKindFilter: "all"`,
 		`hvacPathTypeFilter: "all"`,
 		`hvacMediumFilter: "all"`,
+		"outputPendingFocusQuery",
 	} {
 		if !strings.Contains(string(content), required) {
 			t.Fatalf("state.js should include HVAC navigation state %q", required)
@@ -101,6 +102,13 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 		"function renderHVACQuickFilters",
 		"function servicePathMatchesQuickFilters",
 		"function orthogonalPath",
+		"function openHVACResultTab",
+		"function prepareHVACCrossTabContext",
+		"function exportHVACDebugGraph",
+		"function buildHVACDebugGraphExportPayload",
+		"HVAC_GRAPH_EXPORT_SCHEMA",
+		`data-hvac-debug-export="rule"`,
+		`data-result-tab="simulation"`,
 		`event.key === "Escape"`,
 		`state.activeHVACGraphKey = ""`,
 		`state.activeHVACNodeName = ""`,

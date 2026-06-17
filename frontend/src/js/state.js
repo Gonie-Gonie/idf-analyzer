@@ -47,6 +47,7 @@ export const state = {
   outputApplyRequestBuilder: null,
   outputApplyPreview: null,
   outputPurposeFilter: "all",
+  outputPendingFocusQuery: "",
   diagnosticSeverityFilter: "all",
   diagnosticSourceFilter: "all",
   hiddenDiagnosticCodes: new Set(),

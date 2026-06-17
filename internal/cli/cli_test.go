@@ -60,6 +60,36 @@ Lights,
   12;                       !- Watts per Zone Floor Area
 `
 
+const cliHVACFixtureIDF = `
+Version,
+  24.1;
+
+Zone,
+  Office;
+
+ZoneHVAC:EquipmentConnections,
+  Office,
+  Office Equipment,
+  Office Supply Inlet,
+  ,
+  Office Zone Air Node,
+  ;
+
+ZoneHVAC:EquipmentList,
+  Office Equipment,
+  ZoneHVAC:PackagedTerminalHeatPump,
+  Office PTHP,
+  1,
+  1;
+
+ZoneHVAC:PackagedTerminalHeatPump,
+  Office PTHP,
+  ,
+  Autosize,
+  Office Supply Inlet,
+  Office Zone Air Node;
+`
+
 func TestCLISummaryWritesText(t *testing.T) {
 	input := writeCLITestInput(t, cliFixtureIDF)
 	var stdout bytes.Buffer
@@ -138,6 +168,48 @@ func TestCLIProfileExports(t *testing.T) {
 	}
 	if !strings.Contains(schedulesOut.String(), "AlwaysOn") || !strings.Contains(schedulesOut.String(), "operating_hours") {
 		t.Fatalf("profile-schedules csv missing schedule:\n%s", schedulesOut.String())
+	}
+}
+
+func TestCLIHVACGraphExports(t *testing.T) {
+	input := writeCLITestInput(t, cliHVACFixtureIDF)
+
+	var serviceOut bytes.Buffer
+	var serviceErr bytes.Buffer
+	code := runCLI([]string{"hvac-graph", "--graph", "service", "-format", "json", input}, strings.NewReader(""), &serviceOut, &serviceErr, "0.4.1")
+	if code != 0 {
+		t.Fatalf("runCLI hvac-graph service exit = %d, stderr = %s", code, serviceErr.String())
+	}
+	for _, want := range []string{
+		`"schema": "idf-analyzer.hvac.graph.v1"`,
+		`"graph": "service"`,
+		`"serviceModel"`,
+		`"navigation"`,
+		`"zoneServices"`,
+	} {
+		if !strings.Contains(serviceOut.String(), want) {
+			t.Fatalf("hvac-graph service JSON missing %q:\n%s", want, serviceOut.String())
+		}
+	}
+
+	var ruleOut bytes.Buffer
+	var ruleErr bytes.Buffer
+	code = runCLI([]string{"hvac-graph", "--graph", "rule", "-format", "json", input}, strings.NewReader(""), &ruleOut, &ruleErr, "0.4.1")
+	if code != 0 {
+		t.Fatalf("runCLI hvac-graph rule exit = %d, stderr = %s", code, ruleErr.String())
+	}
+	if !strings.Contains(ruleOut.String(), `"graph": "rule"`) || !strings.Contains(ruleOut.String(), `"ruleGraph"`) {
+		t.Fatalf("hvac-graph rule JSON missing graph payload:\n%s", ruleOut.String())
+	}
+
+	var couplingOut bytes.Buffer
+	var couplingErr bytes.Buffer
+	code = runCLI([]string{"hvac-graph", "--graph", "coupling", "-format", "text", input}, strings.NewReader(""), &couplingOut, &couplingErr, "0.4.1")
+	if code != 0 {
+		t.Fatalf("runCLI hvac-graph coupling exit = %d, stderr = %s", code, couplingErr.String())
+	}
+	if !strings.Contains(couplingOut.String(), "HVAC graph: coupling") || !strings.Contains(couplingOut.String(), "Navigation entities:") {
+		t.Fatalf("hvac-graph coupling text missing summary:\n%s", couplingOut.String())
 	}
 }
 

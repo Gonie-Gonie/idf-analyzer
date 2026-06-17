@@ -1,5 +1,7 @@
-import { backend, elements, escapeHTML, state } from "../state.js";
+import { backend, elements, escapeHTML, setStatus, state } from "../state.js";
 import { t } from "../i18n.js";
+
+const HVAC_GRAPH_EXPORT_SCHEMA = "idf-analyzer.hvac.graph.v1";
 
 export function initializeHVACControls() {
   state.hvacInspectorCollapsed = readHVACInspectorCollapsed();
@@ -16,6 +18,16 @@ export function initializeHVACControls() {
   document.addEventListener("keydown", handleHVACEscapeKey);
   elements.hvacGraph?.addEventListener("click", (event) => {
     if (event.target.closest("[data-jump-object-index]")) {
+      return;
+    }
+    const resultTab = event.target.closest("[data-result-tab]");
+    if (resultTab) {
+      openHVACResultTab(resultTab.dataset.resultTab || state.activeResultTab);
+      return;
+    }
+    const debugExport = event.target.closest("[data-hvac-debug-export]");
+    if (debugExport) {
+      exportHVACDebugGraph(debugExport.dataset.hvacDebugExport || "rule");
       return;
     }
     const scaleButton = event.target.closest("[data-hvac-graph-scale]");
@@ -110,11 +122,7 @@ export function initializeHVACControls() {
   elements.hvacInspector?.addEventListener("click", (event) => {
     const resultTab = event.target.closest("[data-result-tab]");
     if (resultTab) {
-      const tab = resultTab.dataset.resultTab || state.activeResultTab;
-      if (tab === "profile" && state.activeHVACEntity?.kind === "zone") {
-        state.activeProfileZoneName = state.activeHVACEntity.label || state.activeHVACEntity.id.replace(/^zone:/, "");
-      }
-      [...(elements.resultTabButtons || [])].find((button) => button.dataset.resultTab === tab)?.click();
+      openHVACResultTab(resultTab.dataset.resultTab || state.activeResultTab);
       return;
     }
     const loopJump = event.target.closest("[data-hvac-jump-loop-name]");
@@ -270,6 +278,126 @@ function handleHVACNavigationAction(action) {
   } else if (action === "clear") {
     clearHVACFocus();
   }
+}
+
+function openHVACResultTab(tab) {
+  const targetTab = tab || state.activeResultTab || "hvac";
+  prepareHVACCrossTabContext(targetTab);
+  [...(elements.resultTabButtons || [])].find((button) => button.dataset.resultTab === targetTab)?.click();
+}
+
+function prepareHVACCrossTabContext(tab) {
+  const zoneName = currentHVACZoneName();
+  if (tab === "profile" && zoneName) {
+    state.activeProfileZoneName = zoneName;
+    return;
+  }
+  if (tab === "geometry" && zoneName) {
+    focusGeometryZoneFromHVAC(zoneName);
+    return;
+  }
+  if (tab === "output") {
+    prepareHVACOutputContext(zoneName);
+    return;
+  }
+  if (tab === "simulation") {
+    prepareHVACSimulationContext(zoneName);
+  }
+}
+
+function currentHVACZoneName(hvac = state.report?.hvac) {
+  const entity = findHVACNavigationEntity(state.activeHVACEntity?.id || "") || state.activeHVACEntity || {};
+  if (entity.zoneName) {
+    return entity.zoneName;
+  }
+  if (entity.kind === "zone") {
+    return entity.label || entity.id.replace(/^zone:/, "");
+  }
+  const path = selectedHVACPath(hvac) || pathsForActiveHVACEntity(hvac)[0];
+  return path?.zoneName || "";
+}
+
+function focusGeometryZoneFromHVAC(zoneName) {
+  const zone = (state.report?.geometry?.zones || []).find((item) => normalizeGraphName(item.name) === normalizeGraphName(zoneName));
+  if (!zone) {
+    return;
+  }
+  state.selectedGeometryKind = "zone";
+  state.selectedGeometryId = zone.id || "";
+  if (zone.storyIndex !== undefined && zone.storyIndex !== null) {
+    state.selectedGeometryStory = zone.storyIndex;
+  }
+}
+
+function prepareHVACOutputContext(zoneName) {
+  const query = hvacOutputFocusQuery(zoneName);
+  if (query) {
+    state.outputPendingFocusQuery = query;
+  }
+  const purpose = hvacOutputPurposeForActiveEntity();
+  state.outputPurposeFilter = purpose;
+  if (elements.outputPurposeFilter) {
+    elements.outputPurposeFilter.value = purpose;
+  }
+}
+
+function prepareHVACSimulationContext(zoneName) {
+  const entityKind = state.activeHVACEntity?.kind || "";
+  if (entityKind === "loop" || entityKind === "component" || state.activeHVACLoopId) {
+    ensureHVACSimulationPurpose("hvac_loop_check");
+    state.simulationActiveResultView = "hvac_loops";
+  }
+  if (zoneName && (entityKind === "zone" || entityKind === "space" || entityKind === "service_path")) {
+    ensureHVACSimulationPurpose("zone_heat_flow");
+    state.activeProfileZoneName = zoneName;
+    state.simulationHeatFlowSelectedZone = zoneName;
+    state.simulationActiveResultView = "zone_heat_flow";
+    if (elements.simulationPurposeZoneMode) {
+      elements.simulationPurposeZoneMode.value = "selected";
+    }
+    if (elements.simulationPurposeZoneNames) {
+      elements.simulationPurposeZoneNames.value = zoneName;
+    }
+  }
+}
+
+function ensureHVACSimulationPurpose(purpose) {
+  const values = new Set(state.simulationSelectedPurposes || []);
+  values.add(purpose);
+  state.simulationSelectedPurposes = [...values];
+  elements.simulationPurposeInputs?.forEach((input) => {
+    const selected = values.has(input.dataset.simulationPurpose);
+    input.checked = selected;
+    input.closest(".simulation-purpose-card")?.classList.toggle("selected", selected);
+  });
+}
+
+function hvacOutputPurposeForActiveEntity() {
+  if (state.activeHVACEntity?.kind === "loop" || state.activeHVACEntity?.kind === "component" || state.activeHVACNodeName) {
+    return "hvac_loop_check";
+  }
+  if (state.activeHVACEntity?.kind === "zone" || state.activeHVACContext?.zoneId) {
+    return "zone_heat_flow";
+  }
+  return "all";
+}
+
+function hvacOutputFocusQuery(zoneName = "") {
+  const entity = findHVACNavigationEntity(state.activeHVACEntity?.id || "") || state.activeHVACEntity || {};
+  if (state.activeHVACNodeName) {
+    return state.activeHVACNodeName;
+  }
+  if (entity.objectName) {
+    return entity.objectName;
+  }
+  if (entity.loopName) {
+    return entity.loopName;
+  }
+  if (entity.kind === "zone" || entity.kind === "space") {
+    return zoneName || entity.zoneName || entity.label || "";
+  }
+  const path = selectedHVACPath() || pathsForActiveHVACEntity()[0];
+  return path?.delivery?.objectName || path?.delivery?.displayName || path?.plantLoop?.name || path?.airLoop?.name || zoneName || "";
 }
 
 function hvacNavigationSnapshot() {
@@ -1163,6 +1291,8 @@ function renderHVACLoopServiceOverview(loop, relatedPaths, loopCouplings) {
       </div>
       <div class="hvac-loop-actions">
         <button type="button" data-hvac-open-view="services">${escapeHTML(t("hvac.showServicePaths", {}, "Show service paths"))}</button>
+        <button type="button" data-result-tab="output">${escapeHTML(t("tab.output", {}, "Output"))}</button>
+        <button type="button" data-result-tab="simulation">${escapeHTML(t("tab.simulation", {}, "Simulation"))}</button>
         <button type="button" data-hvac-nav-action="clear">${escapeHTML(t("hvac.clearFocus", {}, "Clear focus"))}</button>
         ${renderObjectLink(loop.objectIndex, loop.type)}
       </div>
@@ -3476,8 +3606,67 @@ function renderHVACDebug(hvac, query) {
         <h3>${escapeHTML(t("hvac.debug", {}, "Debug"))}</h3>
         <span>${escapeHTML(edges.length)}</span>
       </div>
+      <div class="hvac-debug-actions">
+        <button type="button" data-hvac-debug-export="rule">${escapeHTML(t("hvac.exportRuleGraph", {}, "Export rule JSON"))}</button>
+        <button type="button" data-hvac-debug-export="service">${escapeHTML(t("hvac.exportServiceGraph", {}, "Export service JSON"))}</button>
+        <button type="button" data-hvac-debug-export="coupling">${escapeHTML(t("hvac.exportCouplingGraph", {}, "Export coupling JSON"))}</button>
+      </div>
       ${renderHVACRuleTraceList(edges)}
     </section>`;
+}
+
+function exportHVACDebugGraph(graph) {
+  if (!hvacDebugEnabled()) {
+    return;
+  }
+  const payload = buildHVACDebugGraphExportPayload(graph);
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `idf-analyzer-hvac-${payload.graph}-graph.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  setStatus(t("status.hvacGraphExported", {}, "HVAC graph JSON exported"), "ok");
+}
+
+function buildHVACDebugGraphExportPayload(graph, hvac = state.report?.hvac) {
+  const serviceModel = hvacServiceModel(hvac);
+  const graphKind = hvacDebugGraphKind(graph);
+  const payload = {
+    schema: HVAC_GRAPH_EXPORT_SCHEMA,
+    graph: graphKind,
+    counts: {
+      ruleNodes: (hvac?.ruleGraph?.nodes || []).length,
+      ruleEdges: (hvac?.ruleGraph?.edges || []).length,
+      zoneServices: (serviceModel.zoneServices || []).length,
+      servicePaths: servicePathsForHVAC(hvac).length,
+      systems: (serviceModel.systems || []).length,
+      components: (serviceModel.components || []).length,
+      couplings: (serviceModel.couplings || []).length,
+      networks: (serviceModel.networks || []).length,
+      navigationEntities: (serviceModel.navigation?.entities || []).length,
+      navigationLinks: (serviceModel.navigation?.links || []).length,
+    },
+    data: {},
+  };
+  if (graphKind === "rule") {
+    payload.data.ruleGraph = hvac?.ruleGraph || { nodes: [], edges: [] };
+  } else if (graphKind === "service") {
+    payload.data.serviceModel = serviceModel;
+  } else {
+    payload.data.couplings = serviceModel.couplings || [];
+    payload.data.networks = serviceModel.networks || [];
+    payload.data.navigation = serviceModel.navigation || { entities: [], links: [] };
+  }
+  return payload;
+}
+
+function hvacDebugGraphKind(value) {
+  const graph = String(value || "").toLowerCase();
+  return ["rule", "service", "coupling"].includes(graph) ? graph : "rule";
 }
 
 function renderHVACDiagnostics(hvac, query) {
@@ -3734,12 +3923,16 @@ function renderZoneServiceDashboard(paths = []) {
 
 function renderComponentOutputActions(component = {}) {
   const outputVariables = outputVariablesForComponent(component).slice(0, 4);
-  if (!outputVariables.length) {
+  const keyValue = component.outletNode || component.objectName || component.displayName || "";
+  if (!outputVariables.length && !keyValue) {
     return "";
   }
-  const keyValue = component.outletNode || component.objectName || component.displayName || "";
   return `
     <section class="hvac-node-output-list">
+      <div class="hvac-loop-actions">
+        <button type="button" data-result-tab="output">${escapeHTML(t("tab.output", {}, "Output"))}</button>
+        <button type="button" data-result-tab="simulation">${escapeHTML(t("tab.simulation", {}, "Simulation"))}</button>
+      </div>
       ${outputVariables
         .map((variable) => `<article class="hvac-node-output-row"><div><strong>${escapeHTML(variable)}</strong><span>${escapeHTML(keyValue || component.objectType || "")}</span></div><button class="hvac-edit-button" type="button" data-hvac-output-key="${escapeHTML(keyValue)}" data-hvac-output-variable="${escapeHTML(variable)}"><span>${escapeHTML(t("hvac.addMonitor", {}, "Add monitor"))}</span></button></article>`)
         .join("")}

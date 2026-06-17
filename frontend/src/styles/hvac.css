@@ -1386,6 +1386,20 @@
   font-size: 12px;
 }
 
+.hvac-debug-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+
+.hvac-debug-actions button {
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  font-size: 12px;
+}
+
 .hvac-service-path-table {
   display: grid;
   gap: 4px;

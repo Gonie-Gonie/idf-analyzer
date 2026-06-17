@@ -38,7 +38,7 @@ func MaybeRun(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer
 
 func isCLICommand(value string) bool {
 	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "summary", "multi-summary", "diagnostics", "diagnose", "analyze", "profile-graph", "profile-qa", "profile-schedules", "clean", "convert":
+	case "summary", "multi-summary", "diagnostics", "diagnose", "analyze", "hvac-graph", "profile-graph", "profile-qa", "profile-schedules", "clean", "convert":
 		return true
 	default:
 		return false
@@ -68,6 +68,8 @@ func runCLI(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer, 
 		err = cliDiagnostics(args[1:], stdin, stdout, stderr)
 	case "analyze":
 		err = cliAnalyze(args[1:], stdin, stdout, stderr)
+	case "hvac-graph":
+		err = cliHVACGraph(args[1:], stdin, stdout, stderr)
 	case "profile-graph":
 		err = cliProfileGraph(args[1:], stdin, stdout, stderr)
 	case "profile-qa":
@@ -103,6 +105,7 @@ Commands:
   multi-summary  Compare Summary metrics across multiple input files.
   diagnostics    Export Diagnose issues as text, JSON, or CSV.
   analyze        Export the full analysis report as JSON or compact text.
+  hvac-graph     Export HVAC rule, service, or coupling navigation graph JSON.
   profile-graph  Export Profile Graph Deck series as JSON or text.
   profile-qa     Export Profile QA outliers and candidates as text, JSON, or CSV.
   profile-schedules Export resolved Profile schedules and similarity clusters.
