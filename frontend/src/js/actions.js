@@ -80,11 +80,12 @@ async function runQueuedStageAnalysis(api, text, analysisKey, runID, options) {
     return null;
   }
   applyOverviewResult(quick, text, { analysisKey, stage: "quick" });
-  setStatus(t("status.summaryReadyDiagnostics"), "loading");
+  setStatus(t("status.summaryReadyStages", {}, "Summary ready; preparing analysis stages"), "loading");
   await nextPaint();
 
   const stages = orderedAnalysisStages(state.activeResultTab);
   const results = await runStageQueue(stages, async (stage) => {
+    setStatus(stageStatusMessage(stage), "loading");
     const result = await api.AnalyzeInputStageText(text, stage);
     if (!isCurrentAnalysis(runID, text, analysisKey)) {
       return null;
@@ -285,6 +286,23 @@ function resultTabStage(tab) {
     geometry: "geometry",
   };
   return stagesByTab[tab] || "";
+}
+
+function stageStatusMessage(stage) {
+  switch (stage) {
+    case "profile":
+      return t("status.buildingProfile", {}, "Building profile graphs");
+    case "hvac":
+      return t("status.resolvingHVAC", {}, "Resolving HVAC service paths");
+    case "output":
+      return t("status.checkingOutput", {}, "Checking output requests");
+    case "diagnostics":
+      return t("status.checkingDiagnostics", {}, "Checking diagnostics");
+    case "geometry":
+      return t("status.preparingGeometry", {}, "Preparing geometry");
+    default:
+      return t("status.analyzingInput");
+  }
 }
 
 async function readBackendCachedAnalysis(api, text, analysisKey, runID, options) {

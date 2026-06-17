@@ -15,6 +15,8 @@ func TestFrontendPerformanceStageQueueContracts(t *testing.T) {
 		"export function prioritizeAnalysisStageForTab",
 		"activeStageQueue.prioritize(stage)",
 		"maxFrontendStageConcurrency = 2",
+		"function stageStatusMessage",
+		"Resolving HVAC service paths",
 	} {
 		if !strings.Contains(content, term) {
 			t.Fatalf("stage queue priority contract missing %q", term)
@@ -43,6 +45,9 @@ func TestFrontendPerformanceTimingContracts(t *testing.T) {
 	views := readTestFile(t, "frontend/src/js/views/analysis-views.js")
 	for _, term := range []string{
 		"recordRenderTiming(tab",
+		"function renderPendingResultTab",
+		"Profile pending",
+		"HVAC pending",
 		"performance.now",
 		"refreshStatusTitle()",
 	} {

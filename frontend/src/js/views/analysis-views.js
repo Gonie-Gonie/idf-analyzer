@@ -50,6 +50,9 @@ export function renderResultTab(tab, report = state.report) {
   if (!report) {
     return;
   }
+  if (renderPendingResultTab(tab)) {
+    return;
+  }
   const startedAt = nowMS();
   try {
     switch (tab) {
@@ -89,6 +92,34 @@ export function renderResultTab(tab, report = state.report) {
     }
   } finally {
     recordRenderTiming(tab, nowMS() - startedAt);
+  }
+}
+
+function renderPendingResultTab(tab) {
+  if (state.analysisReady?.[tab] || state.analysisStage === "complete") {
+    return false;
+  }
+  switch (tab) {
+    case "profile":
+      elements.profileStats.textContent = t("profile.pending", {}, "Profile pending");
+      elements.profileOverview.innerHTML = `<div class="empty status-loading">${t("profile.running", {}, "Building profile graphs")}</div>`;
+      elements.profileDetail.innerHTML = `<div class="empty">${t("profile.readySoon", {}, "Profile details will appear when this stage is ready.")}</div>`;
+      elements.profileMatrixStats.textContent = t("profile.pending", {}, "Profile pending");
+      elements.profileMatrix.innerHTML = `<div class="empty">${t("profile.readySoon", {}, "Profile details will appear when this stage is ready.")}</div>`;
+      elements.profileGraphStats.textContent = t("profile.pending", {}, "Profile pending");
+      elements.profileGraph.innerHTML = `<div class="empty status-loading">${t("profile.running", {}, "Building profile graphs")}</div>`;
+      return true;
+    case "hvac":
+      elements.hvacStats.textContent = t("hvac.pending", {}, "HVAC pending");
+      elements.hvacSummary.innerHTML = `<div class="empty status-loading">${t("hvac.running", {}, "Resolving HVAC service paths")}</div>`;
+      elements.hvacGraph.innerHTML = `<div class="empty">${t("hvac.readySoon", {}, "HVAC graph will appear when this stage is ready.")}</div>`;
+      elements.hvacInspectorStats.textContent = t("hvac.pending", {}, "HVAC pending");
+      elements.hvacInspector.innerHTML = `<div class="empty">${t("hvac.readySoon", {}, "HVAC graph will appear when this stage is ready.")}</div>`;
+      elements.hvacWarningStats.textContent = t("hvac.pending", {}, "HVAC pending");
+      elements.hvacWarnings.innerHTML = `<div class="empty">${t("hvac.readySoon", {}, "HVAC graph will appear when this stage is ready.")}</div>`;
+      return true;
+    default:
+      return false;
   }
 }
 
