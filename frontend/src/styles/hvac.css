@@ -53,7 +53,8 @@
 }
 
 .hvac-nav-card summary,
-.hvac-nav-action {
+.hvac-nav-action,
+.hvac-nav-static {
   width: 100%;
   min-height: 54px;
   padding: 9px 10px;
@@ -79,6 +80,7 @@
 
 .hvac-nav-card summary span,
 .hvac-nav-action span,
+.hvac-nav-static span,
 .hvac-nav-choice span,
 .hvac-nav-choice small {
   min-width: 0;
@@ -86,6 +88,7 @@
 
 .hvac-nav-card summary strong,
 .hvac-nav-action strong,
+.hvac-nav-static strong,
 .hvac-nav-choice span {
   display: block;
   overflow: hidden;
@@ -96,6 +99,7 @@
 
 .hvac-nav-card summary em,
 .hvac-nav-action em,
+.hvac-nav-static em,
 .hvac-nav-choice small {
   display: block;
   margin-top: 3px;
@@ -117,6 +121,13 @@
   display: grid;
   place-items: center;
   font-size: 13px;
+}
+
+.hvac-nav-static button {
+  min-height: 28px;
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: 12px;
 }
 
 .hvac-nav-card.active summary b,
@@ -159,6 +170,18 @@
   border-color: var(--teal);
   background: var(--surface);
   color: var(--teal-dark);
+}
+
+.hvac-search-group {
+  display: grid;
+  gap: 4px;
+}
+
+.hvac-search-group > strong {
+  padding: 5px 7px 2px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
 }
 
 .hvac-view-tabs {
@@ -1286,8 +1309,26 @@
   padding: 2px;
 }
 
+.hvac-quick-filters {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hvac-filter-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--surface-2);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 2px;
+}
+
 .hvac-graph-scale button,
-.hvac-graph-scope button {
+.hvac-graph-scope button,
+.hvac-filter-group button {
   min-height: 26px;
   border: 0;
   border-radius: calc(var(--radius-sm) - 2px);
@@ -1300,7 +1341,9 @@
 .hvac-graph-scale button:hover,
 .hvac-graph-scale button.active,
 .hvac-graph-scope button:hover,
-.hvac-graph-scope button.active {
+.hvac-graph-scope button.active,
+.hvac-filter-group button:hover,
+.hvac-filter-group button.active {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }

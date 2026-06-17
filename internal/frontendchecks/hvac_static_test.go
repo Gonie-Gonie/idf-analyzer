@@ -60,6 +60,9 @@ func TestFrontendHVACStartsOnZoneServices(t *testing.T) {
 		"hvacNavigationStack",
 		"hvacForwardStack",
 		`activeHVACGraphScope: "focused"`,
+		`hvacServiceKindFilter: "all"`,
+		`hvacPathTypeFilter: "all"`,
+		`hvacMediumFilter: "all"`,
 	} {
 		if !strings.Contains(string(content), required) {
 			t.Fatalf("state.js should include HVAC navigation state %q", required)
@@ -92,6 +95,11 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 		"function pathsForActiveHVACEntity",
 		"function renderHVACGraphScopeControls",
 		"function renderHVACBreadcrumbBar",
+		"function renderHVACEntitySearchResults",
+		"function renderHVACComponentPicker",
+		"function renderHVACCouplingPicker",
+		"function renderHVACQuickFilters",
+		"function servicePathMatchesQuickFilters",
 		"function orthogonalPath",
 		`event.key === "Escape"`,
 		`state.activeHVACGraphKey = ""`,
