@@ -356,6 +356,7 @@ func (a *App) analyzeInputText(text string, mode string, includeEPJSON bool) (*I
 		default:
 			report = idf.AnalyzeTimed(doc, stageTimer)
 		}
+		slimReportForMode(&report, mode)
 		analyzeMS := analysisDurationMS(time.Since(analyzeStart))
 
 		epjsonStart := time.Now()
@@ -436,6 +437,8 @@ func (a *App) analyzeInputStageText(text string, mode string) (*InputAnalysisRes
 			report.Profile = idf.AnalyzeProfileFromIndex(index)
 		case "hvac":
 			report.HVAC = idf.AnalyzeHVACFromIndex(index)
+		case "hvac-debug":
+			report.HVAC = idf.AnalyzeHVACFromIndex(index)
 		case "output":
 			report.Output = idf.AnalyzeOutputFromIndex(index)
 		case "diagnostics":
@@ -446,6 +449,7 @@ func (a *App) analyzeInputStageText(text string, mode string) (*InputAnalysisRes
 		default:
 			return nil, fmt.Errorf("unsupported analysis stage %q", mode)
 		}
+		slimReportForMode(&report, mode)
 		stageMS := analysisDurationMS(time.Since(stageStart))
 
 		return &InputAnalysisResult{
@@ -521,6 +525,8 @@ func normalizeAnalysisStage(stage string) string {
 		return "profile"
 	case "hvac":
 		return "hvac"
+	case "hvac-debug", "debug-hvac", "rule-graph":
+		return "hvac-debug"
 	case "output", "output-detail", "outputs":
 		return "output"
 	case "diagnose", "diagnostic", "diagnostics":
@@ -530,6 +536,13 @@ func normalizeAnalysisStage(stage string) string {
 	default:
 		return ""
 	}
+}
+
+func slimReportForMode(report *idf.Report, mode string) {
+	if report == nil || mode == "hvac-debug" {
+		return
+	}
+	report.HVAC.RuleGraph = idf.HVACRuleGraph{}
 }
 
 func cachedAnalysisResult(result *InputAnalysisResult, requestStart time.Time, mode string) *InputAnalysisResult {

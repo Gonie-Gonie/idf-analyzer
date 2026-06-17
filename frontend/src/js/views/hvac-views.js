@@ -3,6 +3,8 @@ import { t } from "../i18n.js";
 
 const HVAC_GRAPH_EXPORT_SCHEMA = "idf-analyzer.hvac.graph.v1";
 let hvacComponentBaseCountCache = { serviceModel: null, counts: new Map() };
+let hvacDebugRuleGraphRequestKey = "";
+let hvacDebugRuleGraphEmptyKey = "";
 
 export function initializeHVACControls() {
   state.hvacInspectorCollapsed = readHVACInspectorCollapsed();
@@ -3798,6 +3800,10 @@ function renderHVACDebug(hvac, query) {
     elements.hvacGraph.innerHTML = `<div class="empty">${escapeHTML(t("hvac.debugHidden", {}, "Debug details are hidden in the default HVAC view."))}</div>`;
     return;
   }
+  if (!hasHVACRuleGraph(hvac) && requestHVACDebugRuleGraph()) {
+    elements.hvacGraph.innerHTML = `<div class="empty status-loading">${escapeHTML(t("hvac.debugLoading", {}, "Loading debug rule graph"))}</div>`;
+    return;
+  }
   const edges = (hvac.ruleGraph?.edges || []).filter((edge) => ruleEdgeSearchFields(edge).join(" ").toLowerCase().includes(query || ""));
   elements.hvacGraph.innerHTML = `
     <section class="hvac-graph-detail">
@@ -3812,6 +3818,48 @@ function renderHVACDebug(hvac, query) {
       </div>
       ${renderHVACRuleTraceList(edges)}
     </section>`;
+}
+
+function hasHVACRuleGraph(hvac) {
+  return Boolean((hvac?.ruleGraph?.nodes || []).length || (hvac?.ruleGraph?.edges || []).length);
+}
+
+function requestHVACDebugRuleGraph() {
+  const api = backend();
+  const key = state.analysisKey || state.lastAnalyzedKey || "";
+  if (
+    !api ||
+    typeof api.AnalyzeInputStageText !== "function" ||
+    !key ||
+    hvacDebugRuleGraphRequestKey === key ||
+    hvacDebugRuleGraphEmptyKey === key
+  ) {
+    return false;
+  }
+  hvacDebugRuleGraphRequestKey = key;
+  api
+    .AnalyzeInputStageText(elements.idfInput.value || "", "hvac-debug")
+    .then((result) => {
+      if ((state.analysisKey || state.lastAnalyzedKey || "") !== key) {
+        return;
+      }
+      const ruleGraph = result?.report?.hvac?.ruleGraph;
+      if (!hasHVACRuleGraph({ ruleGraph })) {
+        hvacDebugRuleGraphEmptyKey = key;
+        return;
+      }
+      state.report = state.report || {};
+      state.report.hvac = state.report.hvac || {};
+      state.report.hvac.ruleGraph = ruleGraph;
+      renderHVAC(state.report.hvac);
+    })
+    .catch((error) => setStatus(error.message || String(error), "error"))
+    .finally(() => {
+      if (hvacDebugRuleGraphRequestKey === key) {
+        hvacDebugRuleGraphRequestKey = "";
+      }
+    });
+  return true;
 }
 
 function exportHVACDebugGraph(graph) {

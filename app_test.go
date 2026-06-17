@@ -200,6 +200,34 @@ func TestThrottleMultiSummaryProgressKeepsFinalEvent(t *testing.T) {
 	}
 }
 
+func TestSlimReportForModeDefersHVACRuleGraphExceptDebug(t *testing.T) {
+	report := &idf.Report{
+		HVAC: idf.HVACReport{
+			RuleGraph: idf.HVACRuleGraph{
+				Nodes: []idf.HVACRuleNode{{ID: "node", Label: "Node"}},
+				Edges: []idf.HVACRuleEdge{{ID: "edge", RuleID: "rule", FromID: "node", ToID: "other", EdgeKind: "test"}},
+			},
+		},
+	}
+	slimReportForMode(report, "hvac")
+	if len(report.HVAC.RuleGraph.Nodes) != 0 || len(report.HVAC.RuleGraph.Edges) != 0 {
+		t.Fatalf("default slim report kept rule graph: %+v", report.HVAC.RuleGraph)
+	}
+
+	debugReport := &idf.Report{
+		HVAC: idf.HVACReport{
+			RuleGraph: idf.HVACRuleGraph{
+				Nodes: []idf.HVACRuleNode{{ID: "node", Label: "Node"}},
+				Edges: []idf.HVACRuleEdge{{ID: "edge", RuleID: "rule", FromID: "node", ToID: "other", EdgeKind: "test"}},
+			},
+		},
+	}
+	slimReportForMode(debugReport, "hvac-debug")
+	if len(debugReport.HVAC.RuleGraph.Nodes) != 1 || len(debugReport.HVAC.RuleGraph.Edges) != 1 {
+		t.Fatalf("debug slim report removed rule graph: %+v", debugReport.HVAC.RuleGraph)
+	}
+}
+
 func TestAnalyzeBatchDiagnosePathsKeepsParseFailuresInResult(t *testing.T) {
 	dir := t.TempDir()
 	okPath := filepath.Join(dir, "ok.idf")

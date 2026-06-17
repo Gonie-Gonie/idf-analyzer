@@ -112,6 +112,24 @@ func TestFrontendNavigationCacheRestoreContract(t *testing.T) {
 	}
 }
 
+func TestFrontendHVACDebugRuleGraphLoadsExplicitly(t *testing.T) {
+	app := readTestFile(t, "app.go")
+	if !strings.Contains(app, `"hvac-debug"`) || !strings.Contains(app, "slimReportForMode") {
+		t.Fatalf("stage normalization should expose explicit hvac-debug mode")
+	}
+	hvac := readTestFile(t, "frontend/src/js/views/hvac-views.js")
+	for _, term := range []string{
+		"function requestHVACDebugRuleGraph",
+		`AnalyzeInputStageText(elements.idfInput.value || "", "hvac-debug")`,
+		"Loading debug rule graph",
+		"hvacDebugRuleGraphEmptyKey",
+	} {
+		if !strings.Contains(hvac, term) {
+			t.Fatalf("HVAC debug lazy-load contract missing %q", term)
+		}
+	}
+}
+
 func sliceBetween(text, start, end string) string {
 	startIndex := strings.Index(text, start)
 	if startIndex < 0 {
