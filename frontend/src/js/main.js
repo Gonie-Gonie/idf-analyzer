@@ -3,6 +3,7 @@ import { loadAndApplyAppSettings } from "./settings-client.js";
 import { elements, setStatus, state, updateTextStats } from "./state.js";
 import {
   analyze,
+  applyRestoredAnalysisSnapshot,
   exportSummary,
   loadBrowserFile,
   markDocumentChanged,
@@ -164,6 +165,8 @@ window.addEventListener("idfAnalyzer:profileApplied", (event) => {
   state.epjsonText = result.epjson || "";
   state.semanticProjection = result.semantic || null;
   state.lastAnalyzedText = result.text;
+  state.analysisKey = result.analysisKey || "";
+  state.lastAnalyzedKey = state.analysisKey;
   state.analysisStage = "complete";
   state.diagnosticsReady = true;
   state.geometryReady = true;
@@ -184,6 +187,8 @@ window.addEventListener("idfAnalyzer:hvacApplied", (event) => {
   state.epjsonText = result.epjson || "";
   state.semanticProjection = result.semantic || null;
   state.lastAnalyzedText = result.text;
+  state.analysisKey = result.analysisKey || "";
+  state.lastAnalyzedKey = state.analysisKey;
   state.analysisStage = "complete";
   state.diagnosticsReady = true;
   state.geometryReady = true;
@@ -204,6 +209,8 @@ window.addEventListener("idfAnalyzer:outputApplied", (event) => {
   state.epjsonText = result.epjson || "";
   state.semanticProjection = result.semantic || null;
   state.lastAnalyzedText = result.text;
+  state.analysisKey = result.analysisKey || "";
+  state.lastAnalyzedKey = state.analysisKey;
   state.analysisStage = "complete";
   state.diagnosticsReady = true;
   state.geometryReady = true;
@@ -272,12 +279,27 @@ if (restoredDocument) {
     path: restoredDocument.path || "",
     filename: restoredDocument.filename || "",
   });
-  scheduleAnalyzeAfterPaint({
-    loadingMessage: t("status.analyzingNamed", { name: restoredDocument.filename || "current input" }),
-    queuedMessage: t("status.loadedQueued", { name: restoredDocument.filename || "current input" }),
-    statusMessage: t("status.loadedNamed", { name: restoredDocument.filename || "current input" }),
-    textSnapshot: elements.idfInput.value,
-  });
+  state.loadedText = typeof restoredDocument.loadedText === "string" ? restoredDocument.loadedText : state.loadedText;
+  state.savedText = typeof restoredDocument.savedText === "string" ? restoredDocument.savedText : state.savedText;
+  if (restoredDocument.activeInputView) {
+    switchInputView(restoredDocument.activeInputView, { recordHistory: false });
+  }
+  const restoredAnalysis = applyRestoredAnalysisSnapshot(restoredDocument);
+  if (restoredDocument.activeResultTab) {
+    switchResultTab(restoredDocument.activeResultTab, { recordHistory: false });
+  }
+  if (restoredAnalysis) {
+    setStatus(t("status.loadedNamed", { name: restoredDocument.filename || "current input" }), "ok");
+  } else {
+    scheduleAnalyzeAfterPaint({
+      loadingMessage: t("status.analyzingNamed", { name: restoredDocument.filename || "current input" }),
+      queuedMessage: t("status.loadedQueued", { name: restoredDocument.filename || "current input" }),
+      statusMessage: t("status.loadedNamed", { name: restoredDocument.filename || "current input" }),
+      textSnapshot: elements.idfInput.value,
+      analysisKey: restoredDocument.analysisKey || "",
+      preferCache: Boolean(restoredDocument.analysisKey),
+    });
+  }
 } else {
   setStatus(t("status.analysisWillStart"), "loading");
   loadDefaultSampleIDF().then(async (sampleText) => {

@@ -1121,6 +1121,8 @@ async function commitJSONValueEdit(editor, nextRaw, restore) {
     state.epjsonText = result.epjson || "";
     state.semanticProjection = result.semantic || null;
     state.lastAnalyzedText = result.text;
+    state.analysisKey = result.analysisKey || "";
+    state.lastAnalyzedKey = state.analysisKey;
     state.analysisStage = "complete";
     state.diagnosticsReady = true;
     state.geometryReady = true;

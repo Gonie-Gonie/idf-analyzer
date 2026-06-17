@@ -7,25 +7,66 @@ import { renderProfile } from "./profile-views.js";
 import { renderSimulation } from "./simulation-views.js";
 import { t } from "../i18n.js";
 
-export function renderReport() {
+export function renderReport(options = {}) {
   const report = state.report;
   if (!report) {
     renderEmpty();
     return;
   }
 
-  renderSummary(report.summary);
-  renderProfile(report.profile);
-  renderHVAC(report.hvac);
-  renderOutput(report.output);
-  renderSimulation();
-  renderDiagnostics(report.diagnostics);
-  if (state.activeResultTab === "geometry") {
-    renderGeometry(report.geometry);
-  } else {
-    renderDeferredGeometry(report.geometry);
+  if (options.scope === "all") {
+    renderSummary(report.summary);
+    renderProfile(report.profile);
+    renderHVAC(report.hvac);
+    renderOutput(report.output);
+    renderSimulation();
+    renderDiagnostics(report.diagnostics);
+    if (state.activeResultTab === "geometry") {
+      renderGeometry(report.geometry);
+    } else {
+      renderDeferredGeometry(report.geometry);
+    }
+    renderInputViews();
+    return;
   }
+
+  renderSummary(report.summary);
+  renderActiveResultTab(report);
   renderInputViews();
+}
+
+export function renderActiveResultTab(report = state.report) {
+  if (!report) {
+    return;
+  }
+  switch (state.activeResultTab) {
+    case "profile":
+      renderProfile(report.profile);
+      break;
+    case "hvac":
+      renderHVAC(report.hvac);
+      break;
+    case "output":
+      renderOutput(report.output);
+      break;
+    case "simulation":
+      renderSimulation();
+      break;
+    case "diagnose":
+      renderDiagnostics(report.diagnostics);
+      break;
+    case "geometry":
+      if (state.geometryReady) {
+        renderGeometry(report.geometry);
+      } else {
+        renderDeferredGeometry(report.geometry);
+      }
+      break;
+    case "summary":
+    default:
+      renderSummary(report.summary);
+      break;
+  }
 }
 
 export function renderEmpty() {

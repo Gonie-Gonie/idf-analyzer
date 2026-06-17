@@ -1,9 +1,11 @@
 import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
-import { renderDeferredGeometry, renderDiagnostics, renderEmpty, renderReport } from "./views/analysis-views.js";
+import { renderDiagnostics, renderEmpty, renderReport } from "./views/analysis-views.js";
 import { preloadGeometryRenderer, renderGeometry } from "./geometry-loader.js";
 import { t } from "./i18n.js";
 
 export const currentDocumentStorageKey = "idfAnalyzer.currentDocument";
+
+const workspaceSnapshotVersion = 2;
 
 let autoAnalyzeTimer = 0;
 let afterPaintAnalyzeTimer = 0;
@@ -25,20 +27,26 @@ export async function analyze(options = {}) {
   if (activeAnalysisPromise && activeAnalysisText === text) {
     return activeAnalysisPromise;
   }
+  const analysisKey = options.analysisKey || (await computeAnalysisKey(text));
+  state.analysisKey = analysisKey;
 
   clearScheduledAnalyze();
   const runID = ++analysisRunID;
   activeAnalysisText = text;
   setStatus(options.loadingMessage || t("status.analyzingInput"), "loading");
-  activeAnalysisPromise = runAnalysis(api, text, runID, options);
+  activeAnalysisPromise = runAnalysis(api, text, analysisKey, runID, options);
   return activeAnalysisPromise;
 }
 
-async function runAnalysis(api, text, runID, options) {
+async function runAnalysis(api, text, analysisKey, runID, options) {
   try {
+    const cached = options.preferCache ? await readBackendCachedAnalysis(api, text, analysisKey, runID, options) : null;
+    if (cached) {
+      return cached;
+    }
     const result = hasStagedAnalysisAPI(api)
-      ? await runStagedAnalysis(api, text, runID, options)
-      : await runFullAnalysis(api, text, runID, options);
+      ? await runStagedAnalysis(api, text, analysisKey, runID, options)
+      : await runFullAnalysis(api, text, analysisKey, runID, options);
     return result;
   } catch (error) {
     if (isCurrentAnalysis(runID, text)) {
@@ -53,7 +61,7 @@ async function runAnalysis(api, text, runID, options) {
   }
 }
 
-async function runFullAnalysis(api, text, runID, options) {
+async function runFullAnalysis(api, text, analysisKey, runID, options) {
   const result =
     typeof api.AnalyzeInputText === "function"
       ? await api.AnalyzeInputText(text)
@@ -61,18 +69,18 @@ async function runFullAnalysis(api, text, runID, options) {
   if (!isCurrentAnalysis(runID, text)) {
     return null;
   }
-  applyOverviewResult(result, text, { complete: true });
+  applyOverviewResult(result, text, { complete: true, analysisKey });
   window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return result;
 }
 
-async function runStagedAnalysis(api, text, runID, options) {
+async function runStagedAnalysis(api, text, analysisKey, runID, options) {
   const overview = await api.AnalyzeInputOverviewText(text);
   if (!isCurrentAnalysis(runID, text)) {
     return null;
   }
-  applyOverviewResult(overview, text);
+  applyOverviewResult(overview, text, { analysisKey });
   setStatus(t("status.summaryReadyDiagnostics"), "loading");
   await nextPaint();
 
@@ -84,7 +92,9 @@ async function runStagedAnalysis(api, text, runID, options) {
   state.report.diagnostics = diagnostics || [];
   state.diagnosticsReady = true;
   state.analysisStage = "diagnostics";
-  renderDiagnostics();
+  if (state.activeResultTab === "diagnose") {
+    renderDiagnostics();
+  }
   setStatus(t("status.diagnosticsReadyGeometry"), "loading");
   await nextPaint();
 
@@ -101,24 +111,46 @@ async function runStagedAnalysis(api, text, runID, options) {
   state.analysisStage = "complete";
   if (state.activeResultTab === "geometry") {
     renderGeometry(state.report.geometry);
-  } else {
-    renderDeferredGeometry(state.report.geometry);
   }
   window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return { ...overview, report: state.report };
 }
 
-function applyOverviewResult(result, text, { complete = false } = {}) {
+async function readBackendCachedAnalysis(api, text, analysisKey, runID, options) {
+  if (!analysisKey || typeof api.GetCachedAnalysis !== "function") {
+    return null;
+  }
+  const cached = await api.GetCachedAnalysis(analysisKey);
+  if (!cached || !isCurrentAnalysis(runID, text) || !isCompleteAnalysisResult(cached)) {
+    return null;
+  }
+  applyOverviewResult(cached, text, { complete: true, analysisKey });
+  window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
+  setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
+  return cached;
+}
+
+function isCompleteAnalysisResult(result) {
+  if (result?.timing?.mode === "full") {
+    return true;
+  }
+  const report = result?.report;
+  return Array.isArray(report?.diagnostics) && Boolean(report?.geometry);
+}
+
+function applyOverviewResult(result, text, { complete = false, analysisKey = "" } = {}) {
   state.report = result.report;
   state.model = result.model || null;
   state.epjsonText = result.epjson || "";
   state.semanticProjection = result.semantic || null;
   state.lastAnalyzedText = text;
+  state.analysisKey = result.analysisKey || analysisKey || state.analysisKey;
+  state.lastAnalyzedKey = state.analysisKey;
   state.analysisStage = complete ? "complete" : "overview";
   state.diagnosticsReady = complete;
   state.geometryReady = complete;
-  renderReport();
+  renderReport({ scope: "active" });
   updateDocumentActions();
 }
 
@@ -138,6 +170,7 @@ export function scheduleAnalyzeAfterPaint(options = {}) {
   clearScheduledAnalyze();
   const textSnapshot = normalizeLineEndings(options.textSnapshot ?? elements.idfInput.value);
   state.lastAnalyzedText = "";
+  state.lastAnalyzedKey = "";
   state.analysisStage = "queued";
   state.diagnosticsReady = false;
   state.geometryReady = false;
@@ -156,6 +189,7 @@ export function scheduleAnalyzeAfterPaint(options = {}) {
 export function scheduleAutoAnalyze(delay = state.autoAnalyzeDelayMs) {
   clearScheduledAnalyze();
   state.lastAnalyzedText = "";
+  state.lastAnalyzedKey = "";
   updateDocumentActions();
   setStatus(t("status.editingPending"), "muted");
   autoAnalyzeTimer = window.setTimeout(() => {
@@ -173,6 +207,8 @@ export function registerLoadedDocument(text, { path = "", filename = "" } = {}) 
   state.loadedText = text;
   state.savedText = text;
   state.lastAnalyzedText = "";
+  state.lastAnalyzedKey = "";
+  state.analysisKey = "";
   state.report = null;
   state.model = null;
   state.epjsonText = "";
@@ -187,6 +223,8 @@ export function registerLoadedDocument(text, { path = "", filename = "" } = {}) 
 
 export function markDocumentChanged() {
   state.lastAnalyzedText = "";
+  state.lastAnalyzedKey = "";
+  state.analysisKey = "";
   state.analysisStage = "pending";
   state.diagnosticsReady = false;
   state.geometryReady = false;
@@ -329,16 +367,81 @@ export function openGuide() {
   window.location.assign("./guide.html");
 }
 
-export function openBatch() {
+export async function openBatch() {
+  await saveWorkspaceSnapshot();
   window.location.assign("./batch.html");
 }
 
 export function openTools() {
-  openBatch();
+  return openBatch();
 }
 
-export function openSettings() {
+export async function openSettings() {
+  await saveWorkspaceSnapshot();
   window.location.assign("./settings.html");
+}
+
+export async function saveWorkspaceSnapshot({ includeResult = true } = {}) {
+  const text = elements.idfInput.value || "";
+  if (!text.trim()) {
+    return;
+  }
+  const analysisKey = state.analysisKey || state.lastAnalyzedKey || (await computeAnalysisKey(text));
+  const snapshot = {
+    schemaVersion: workspaceSnapshotVersion,
+    text,
+    path: state.currentFilePath || "",
+    filename: state.currentFilename || "",
+    loadedText: state.loadedText || "",
+    savedText: state.savedText || "",
+    analysisKey,
+    activeResultTab: state.activeResultTab || "summary",
+    activeInputView: state.activeInputView || "semantic",
+    analysisStage: state.analysisStage || "idle",
+    diagnosticsReady: Boolean(state.diagnosticsReady),
+    geometryReady: Boolean(state.geometryReady),
+    capturedAt: new Date().toISOString(),
+  };
+  const analysisResult = includeResult ? currentAnalysisSnapshot(text, analysisKey) : null;
+  if (analysisResult) {
+    snapshot.analysisResult = analysisResult;
+  }
+  try {
+    window.sessionStorage.setItem(currentDocumentStorageKey, JSON.stringify(snapshot));
+  } catch {
+    delete snapshot.analysisResult;
+    try {
+      window.sessionStorage.setItem(currentDocumentStorageKey, JSON.stringify(snapshot));
+    } catch {
+      // Navigation should still proceed if the browser refuses session storage.
+    }
+  }
+}
+
+export function applyRestoredAnalysisSnapshot(snapshot) {
+  const result = snapshot?.analysisResult;
+  if (!result?.report) {
+    return false;
+  }
+  const text = elements.idfInput.value || "";
+  if (result.text && normalizeLineEndings(result.text) !== normalizeLineEndings(text)) {
+    return false;
+  }
+  const analysisKey = snapshot.analysisKey || result.analysisKey || "";
+  state.report = result.report;
+  state.model = result.model || null;
+  state.epjsonText = result.epjson || "";
+  state.semanticProjection = result.semantic || null;
+  state.lastAnalyzedText = text;
+  state.analysisKey = analysisKey;
+  state.lastAnalyzedKey = analysisKey;
+  const complete = snapshot.analysisStage === "complete" && isCompleteAnalysisResult(result);
+  state.analysisStage = complete ? "complete" : snapshot.analysisStage || "overview";
+  state.diagnosticsReady = complete && Boolean(snapshot.diagnosticsReady);
+  state.geometryReady = complete && Boolean(snapshot.geometryReady);
+  renderReport({ scope: "active" });
+  updateDocumentActions();
+  return complete;
 }
 
 function clearScheduledAnalyze() {
@@ -367,6 +470,40 @@ function nextPaint() {
     }
     window.requestAnimationFrame(() => window.setTimeout(finish, 0));
   });
+}
+
+function currentAnalysisSnapshot(text, analysisKey) {
+  if (!state.report || state.lastAnalyzedText !== text) {
+    return null;
+  }
+  return {
+    text,
+    analysisKey: analysisKey || state.lastAnalyzedKey || "",
+    format: state.model?.format || "",
+    version: state.model?.version?.raw || "",
+    model: state.model || null,
+    epjson: state.epjsonText || "",
+    semantic: state.semanticProjection || null,
+    report: state.report,
+    timing: {
+      mode: state.analysisStage === "complete" ? "full" : "overview",
+      cacheHit: true,
+    },
+  };
+}
+
+async function computeAnalysisKey(text) {
+  try {
+    const normalized = normalizeLineEndings(text);
+    if (!window.crypto?.subtle || typeof TextEncoder !== "function") {
+      return "";
+    }
+    const bytes = new TextEncoder().encode(normalized);
+    const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  } catch {
+    return "";
+  }
 }
 
 function normalizeLineEndings(text) {

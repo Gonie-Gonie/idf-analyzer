@@ -130,6 +130,8 @@ export const state = {
   expandedPane: "",
   geometryRenderer: null,
   lastAnalyzedText: "",
+  lastAnalyzedKey: "",
+  analysisKey: "",
   currentFilePath: "",
   currentFilename: "",
   keyboardShortcuts: {},

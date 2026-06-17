@@ -1,6 +1,7 @@
 import { elements, setStatus, state } from "./state.js";
 import { t } from "./i18n.js";
 import { analyze } from "./actions.js";
+import { renderReport } from "./views/analysis-views.js";
 import { renderGeometry, resizeGeometry } from "./geometry-loader.js";
 import {
   clearInputFilter,
@@ -216,9 +217,16 @@ export function switchResultTab(tabName, options = {}) {
   elements.resultPanes.forEach((pane) => {
     pane.classList.toggle("active", pane.id === `${state.activeResultTab}Pane`);
   });
+  if (state.report) {
+    renderReport({ scope: "active" });
+  }
   if (state.activeResultTab === "geometry") {
     window.setTimeout(() => {
-      renderGeometry();
+      if (state.geometryReady) {
+        renderGeometry();
+      } else {
+        renderReport({ scope: "active" });
+      }
       resizeGeometry();
     }, 0);
   }

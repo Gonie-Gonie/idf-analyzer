@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/epinput"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
@@ -17,7 +18,8 @@ import (
 )
 
 type App struct {
-	ctx context.Context
+	ctx           context.Context
+	analysisCache *AnalysisCache
 }
 
 type TextEditResult struct {
@@ -30,13 +32,15 @@ type TextEditResult struct {
 }
 
 type InputAnalysisResult struct {
-	Text     string                      `json:"text,omitempty"`
-	Format   string                      `json:"format"`
-	Version  string                      `json:"version,omitempty"`
-	Model    *epinput.Model              `json:"model"`
-	EPJSON   string                      `json:"epjson,omitempty"`
-	Semantic *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
-	Report   *idf.Report                 `json:"report"`
+	Text        string                      `json:"text,omitempty"`
+	AnalysisKey string                      `json:"analysisKey,omitempty"`
+	Format      string                      `json:"format"`
+	Version     string                      `json:"version,omitempty"`
+	Model       *epinput.Model              `json:"model"`
+	EPJSON      string                      `json:"epjson,omitempty"`
+	Semantic    *idf.SemanticYAMLProjection `json:"semantic,omitempty"`
+	Report      *idf.Report                 `json:"report"`
+	Timing      *AnalysisTiming             `json:"timing,omitempty"`
 }
 
 type SummaryExportResult struct {
@@ -210,7 +214,7 @@ type MultiSummaryProgress struct {
 type ModelPatchResult = InputAnalysisResult
 
 func NewApp() *App {
-	return &App{}
+	return &App{analysisCache: NewAnalysisCache(defaultAnalysisCacheEntries)}
 }
 
 func (a *App) GetAppInfo() AppInfo {
@@ -230,11 +234,30 @@ func (a *App) AnalyzeIDFText(text string) (*idf.Report, error) {
 }
 
 func (a *App) AnalyzeInputOverviewText(text string) (*InputAnalysisResult, error) {
-	return analyzeInputText(text, idf.AnalyzeOverview, false)
+	return a.analyzeInputText(text, "overview", false)
 }
 
 func (a *App) AnalyzeInputText(text string) (*InputAnalysisResult, error) {
-	return analyzeInputText(text, idf.Analyze, true)
+	return a.analyzeInputText(text, "full", true)
+}
+
+func (a *App) GetCachedAnalysis(textHash string) (*InputAnalysisResult, error) {
+	if a.analysisCache == nil || strings.TrimSpace(textHash) == "" {
+		return nil, nil
+	}
+	for _, mode := range []string{"full", "overview"} {
+		if result, ok := a.analysisCache.LookupTextMode(textHash, mode); ok {
+			cached := cloneInputAnalysisResult(result)
+			if cached.Timing == nil {
+				cached.Timing = &AnalysisTiming{Mode: mode}
+			}
+			cached.Timing.CacheHit = true
+			cached.Timing.TotalMS = 0
+			cached.Timing.QueueWaitMS = 0
+			return cached, nil
+		}
+	}
+	return nil, nil
 }
 
 func (a *App) AnalyzeInputDiagnosticsText(text string) ([]idf.Diagnostic, error) {
@@ -281,29 +304,129 @@ func (a *App) AnalyzeInputOutputText(text string) (*idf.OutputReport, error) {
 	return &output, nil
 }
 
-func analyzeInputText(text string, analyze func(idf.Document) idf.Report, includeEPJSON bool) (*InputAnalysisResult, error) {
+func (a *App) analyzeInputText(text string, mode string, includeEPJSON bool) (*InputAnalysisResult, error) {
+	if a.analysisCache == nil {
+		a.analysisCache = NewAnalysisCache(defaultAnalysisCacheEntries)
+	}
+	requestStart := time.Now()
+	textHash := analysisTextHash(text)
+	if cached, ok := a.analysisCache.LookupTextMode(textHash, mode); ok {
+		return cachedAnalysisResult(cached, requestStart, mode), nil
+	}
+
+	parseStart := time.Now()
 	model, doc, err := parseInputDocument(text)
 	if err != nil {
 		return nil, err
 	}
-	report := analyze(doc)
-	epjsonText := ""
-	if includeEPJSON {
-		epjsonText, err = epinput.Write(model, epinput.FormatEPJSON)
-		if err != nil {
-			return nil, err
-		}
+	parseMS := analysisDurationMS(time.Since(parseStart))
+	key := analysisCacheKey{
+		TextHash:          textHash,
+		Format:            string(model.Format),
+		EnergyPlusVersion: model.Version.Raw,
+		AnalyzerVersion:   currentAppInfo().Version,
+		Mode:              mode,
+		SettingsHash:      defaultAnalysisSettingsHash,
 	}
 
-	return &InputAnalysisResult{
-		Text:     text,
-		Format:   string(model.Format),
-		Version:  model.Version.Raw,
-		Model:    model,
-		EPJSON:   epjsonText,
-		Semantic: semanticProjectionForModelDoc(model, doc),
-		Report:   &report,
-	}, nil
+	result, cacheHit, queueWait, err := a.analysisCache.GetOrCompute(key, func() (*InputAnalysisResult, error) {
+		stageTimer, stageSnapshot := analysisStageRecorder()
+		analyzeStart := time.Now()
+		var report idf.Report
+		switch mode {
+		case "overview":
+			report = idf.AnalyzeOverviewTimed(doc, stageTimer)
+		default:
+			report = idf.AnalyzeTimed(doc, stageTimer)
+		}
+		analyzeMS := analysisDurationMS(time.Since(analyzeStart))
+
+		epjsonStart := time.Now()
+		epjsonText := ""
+		if includeEPJSON {
+			var writeErr error
+			epjsonText, writeErr = epinput.Write(model, epinput.FormatEPJSON)
+			if writeErr != nil {
+				return nil, writeErr
+			}
+		}
+		epjsonMS := analysisDurationMS(time.Since(epjsonStart))
+
+		semanticStart := time.Now()
+		semantic := semanticProjectionForModelDoc(model, doc)
+		semanticMS := analysisDurationMS(time.Since(semanticStart))
+
+		return &InputAnalysisResult{
+			Text:        text,
+			AnalysisKey: textHash,
+			Format:      string(model.Format),
+			Version:     model.Version.Raw,
+			Model:       model,
+			EPJSON:      epjsonText,
+			Semantic:    semantic,
+			Report:      &report,
+			Timing: &AnalysisTiming{
+				Mode:       mode,
+				CacheHit:   false,
+				TotalMS:    analysisDurationMS(time.Since(requestStart)),
+				ParseMS:    parseMS,
+				AnalyzeMS:  analyzeMS,
+				SemanticMS: semanticMS,
+				EPJSONMS:   epjsonMS,
+				Stages:     stageSnapshot(),
+			},
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return analysisResultForRequest(result, requestStart, mode, cacheHit, queueWait, parseMS), nil
+}
+
+func cachedAnalysisResult(result *InputAnalysisResult, requestStart time.Time, mode string) *InputAnalysisResult {
+	return analysisResultForRequest(result, requestStart, mode, true, 0, 0)
+}
+
+func analysisResultForRequest(result *InputAnalysisResult, requestStart time.Time, mode string, cacheHit bool, queueWait time.Duration, parseMS int64) *InputAnalysisResult {
+	clone := cloneInputAnalysisResult(result)
+	if clone == nil {
+		return nil
+	}
+	if clone.Timing == nil {
+		clone.Timing = &AnalysisTiming{Mode: mode}
+	}
+	clone.Timing.Mode = mode
+	clone.Timing.CacheHit = cacheHit
+	clone.Timing.QueueWaitMS = analysisDurationMS(queueWait)
+	clone.Timing.TotalMS = analysisDurationMS(time.Since(requestStart))
+	if cacheHit && parseMS > 0 {
+		clone.Timing.ParseMS = parseMS
+	}
+	return clone
+}
+
+func analysisStageRecorder() (idf.StageTimer, func() map[string]int64) {
+	var mu sync.Mutex
+	stages := map[string]int64{}
+	timer := func(stage string, elapsed time.Duration) {
+		mu.Lock()
+		defer mu.Unlock()
+		stages[stage] = analysisDurationMS(elapsed)
+	}
+	snapshot := func() map[string]int64 {
+		mu.Lock()
+		defer mu.Unlock()
+		if len(stages) == 0 {
+			return nil
+		}
+		result := make(map[string]int64, len(stages))
+		for key, value := range stages {
+			result[key] = value
+		}
+		return result
+	}
+	return timer, snapshot
 }
 
 func parseInputDocument(text string) (*epinput.Model, idf.Document, error) {
@@ -351,15 +474,29 @@ func (a *App) PatchModelValueText(text string, objectIndex int, fieldIndex int, 
 		return nil, err
 	}
 
-	return &ModelPatchResult{
-		Text:     resultText,
-		Format:   string(model.Format),
-		Version:  model.Version.Raw,
-		Model:    model,
-		EPJSON:   epjsonText,
-		Semantic: semanticProjectionForModelDoc(model, doc),
-		Report:   &report,
-	}, nil
+	textHash := analysisTextHash(resultText)
+	result := &ModelPatchResult{
+		Text:        resultText,
+		AnalysisKey: textHash,
+		Format:      string(model.Format),
+		Version:     model.Version.Raw,
+		Model:       model,
+		EPJSON:      epjsonText,
+		Semantic:    semanticProjectionForModelDoc(model, doc),
+		Report:      &report,
+		Timing:      &AnalysisTiming{Mode: "full", CacheHit: false},
+	}
+	if a.analysisCache != nil {
+		a.analysisCache.Store(analysisCacheKey{
+			TextHash:          textHash,
+			Format:            string(model.Format),
+			EnergyPlusVersion: model.Version.Raw,
+			AnalyzerVersion:   currentAppInfo().Version,
+			Mode:              "full",
+			SettingsHash:      defaultAnalysisSettingsHash,
+		}, result)
+	}
+	return result, nil
 }
 
 func (a *App) OpenIDF(path string) (*idf.Report, error) {

@@ -4,6 +4,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Report struct {
@@ -71,17 +72,41 @@ type RelatedObject struct {
 	Role  string `json:"role,omitempty"`
 }
 
+type StageTimer func(stage string, elapsed time.Duration)
+
 func AnalyzeOverview(doc Document) Report {
-	report := analyzeCore(doc)
-	report.Summary = AnalyzeSummary(doc)
-	report.Output = AnalyzeOutput(doc)
-	report.Profile = AnalyzeProfile(doc)
-	report.HVAC = AnalyzeHVAC(doc)
+	return AnalyzeOverviewTimed(doc, nil)
+}
+
+func AnalyzeOverviewTimed(doc Document, timer StageTimer) Report {
+	var report Report
+	timeAnalysisStage(timer, "core", func() {
+		report = analyzeCore(doc)
+	})
+	timeAnalysisStage(timer, "summary", func() {
+		report.Summary = AnalyzeSummary(doc)
+	})
+	timeAnalysisStage(timer, "output", func() {
+		report.Output = AnalyzeOutput(doc)
+	})
+	timeAnalysisStage(timer, "profile", func() {
+		report.Profile = AnalyzeProfile(doc)
+	})
+	timeAnalysisStage(timer, "hvac", func() {
+		report.HVAC = AnalyzeHVAC(doc)
+	})
 	return report
 }
 
 func Analyze(doc Document) Report {
-	report := analyzeCore(doc)
+	return AnalyzeTimed(doc, nil)
+}
+
+func AnalyzeTimed(doc Document, timer StageTimer) Report {
+	var report Report
+	timeAnalysisStage(timer, "core", func() {
+		report = analyzeCore(doc)
+	})
 	var unusedObjects []NamedObject
 	var summary SummaryReport
 	var output OutputReport
@@ -94,31 +119,45 @@ func Analyze(doc Document) Report {
 	wg.Add(7)
 	go func() {
 		defer wg.Done()
-		unusedObjects = FindUnusedObjects(doc)
+		timeAnalysisStage(timer, "unused", func() {
+			unusedObjects = FindUnusedObjects(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		summary = AnalyzeSummary(doc)
+		timeAnalysisStage(timer, "summary", func() {
+			summary = AnalyzeSummary(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		output = AnalyzeOutput(doc)
+		timeAnalysisStage(timer, "output", func() {
+			output = AnalyzeOutput(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		profile = AnalyzeProfile(doc)
+		timeAnalysisStage(timer, "profile", func() {
+			profile = AnalyzeProfile(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		hvac = AnalyzeHVAC(doc)
+		timeAnalysisStage(timer, "hvac", func() {
+			hvac = AnalyzeHVAC(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		geometry = AnalyzeGeometry(doc)
+		timeAnalysisStage(timer, "geometry", func() {
+			geometry = AnalyzeGeometry(doc)
+		})
 	}()
 	go func() {
 		defer wg.Done()
-		diagnostics = AnalyzeDiagnostics(doc)
+		timeAnalysisStage(timer, "diagnostics", func() {
+			diagnostics = AnalyzeDiagnostics(doc)
+		})
 	}()
 	wg.Wait()
 
@@ -130,6 +169,14 @@ func Analyze(doc Document) Report {
 	report.Geometry = geometry
 	report.Diagnostics = diagnostics
 	return report
+}
+
+func timeAnalysisStage(timer StageTimer, stage string, work func()) {
+	start := time.Now()
+	work()
+	if timer != nil {
+		timer(stage, time.Since(start))
+	}
 }
 
 func analyzeCore(doc Document) Report {

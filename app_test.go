@@ -8,7 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/Gonie-Gonie/idf-analyzer/internal/idf"
 	"github.com/Gonie-Gonie/idf-analyzer/internal/simulation"
@@ -39,6 +42,80 @@ func TestAnalyzeInputTextIncludesSummary(t *testing.T) {
 	}
 	if result.Report.Geometry.ZoneCount != 1 {
 		t.Fatalf("geometry zone count = %d, want 1", result.Report.Geometry.ZoneCount)
+	}
+}
+
+func TestAnalyzeInputTextUsesCacheForSameInput(t *testing.T) {
+	app := NewApp()
+	first, err := app.AnalyzeInputText(appSummaryIDF)
+	if err != nil {
+		t.Fatalf("first AnalyzeInputText() error = %v", err)
+	}
+	if first.AnalysisKey == "" {
+		t.Fatalf("first analysis key is empty")
+	}
+	if first.Timing == nil {
+		t.Fatalf("first timing = nil")
+	}
+	if first.Timing.CacheHit {
+		t.Fatalf("first analysis unexpectedly reported cache hit")
+	}
+	_, hasSummaryTiming := first.Timing.Stages["summary"]
+	_, hasCoreTiming := first.Timing.Stages["core"]
+	if !hasSummaryTiming || !hasCoreTiming {
+		t.Fatalf("first analysis did not report stage timings: %+v", first.Timing)
+	}
+
+	second, err := app.AnalyzeInputText(appSummaryIDF)
+	if err != nil {
+		t.Fatalf("second AnalyzeInputText() error = %v", err)
+	}
+	if second.AnalysisKey != first.AnalysisKey {
+		t.Fatalf("analysis key changed: %q != %q", second.AnalysisKey, first.AnalysisKey)
+	}
+	if second.Timing == nil || !second.Timing.CacheHit {
+		t.Fatalf("second analysis timing = %+v, want cache hit", second.Timing)
+	}
+	if second.Report == nil || second.Report.Summary.MetricCount != first.Report.Summary.MetricCount {
+		t.Fatalf("cached report summary = %+v, want metric count %d", second.Report, first.Report.Summary.MetricCount)
+	}
+}
+
+func TestAnalysisCacheSharesInFlightComputation(t *testing.T) {
+	cache := NewAnalysisCache(4)
+	key := analysisCacheKey{TextHash: "same", Format: "idf", EnergyPlusVersion: "24.1", AnalyzerVersion: "test", Mode: "full", SettingsHash: "default"}
+	var calls int32
+	compute := func() (*InputAnalysisResult, error) {
+		atomic.AddInt32(&calls, 1)
+		time.Sleep(20 * time.Millisecond)
+		return &InputAnalysisResult{
+			AnalysisKey: key.TextHash,
+			Format:      key.Format,
+			Version:     key.EnergyPlusVersion,
+			Report:      &idf.Report{},
+		}, nil
+	}
+
+	var wg sync.WaitGroup
+	results := make([]*InputAnalysisResult, 2)
+	for index := range results {
+		wg.Add(1)
+		go func(index int) {
+			defer wg.Done()
+			result, _, _, err := cache.GetOrCompute(key, compute)
+			if err != nil {
+				t.Errorf("GetOrCompute() error = %v", err)
+			}
+			results[index] = result
+		}(index)
+	}
+	wg.Wait()
+
+	if calls != 1 {
+		t.Fatalf("compute calls = %d, want 1", calls)
+	}
+	if results[0] == nil || results[1] == nil || results[0].AnalysisKey != "same" || results[1].AnalysisKey != "same" {
+		t.Fatalf("shared results = %#v", results)
 	}
 }
 
