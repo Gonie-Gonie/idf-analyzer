@@ -3415,9 +3415,99 @@ function graphPortPoint(node, portId) {
 
 function serviceLinkPath(from, to, link = {}) {
   if (link.support) {
-    return orthogonalPath(from, to, { verticalFirst: true, offset: 34 });
+    return grasshopperWirePath(from, to, link, { support: true });
   }
-  return orthogonalPath(from, to);
+  return grasshopperWirePath(from, to, link);
+}
+
+function grasshopperWirePath(from, to, link = {}, options = {}) {
+  const curve = serviceLinkCurve(from, to, link, options);
+  return `M${graphCoord(curve.from.x)},${graphCoord(curve.from.y)} C${graphCoord(curve.c1.x)},${graphCoord(curve.c1.y)} ${graphCoord(curve.c2.x)},${graphCoord(curve.c2.y)} ${graphCoord(curve.to.x)},${graphCoord(curve.to.y)}`;
+}
+
+function serviceLinkCurve(from, to, link = {}, options = {}) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const direction = dx >= 0 ? 1 : -1;
+  const absDx = Math.abs(dx);
+  const absDy = Math.abs(dy);
+  const support = Boolean(options.support || link.support);
+  const laneOffset = serviceLinkLaneOffset(link) * (support ? 0.75 : 1);
+  if (absDx < 36 && absDy < 36) {
+    const loop = 28 + Math.abs(laneOffset);
+    return {
+      from,
+      c1: { x: from.x + direction * loop, y: from.y + laneOffset },
+      c2: { x: to.x - direction * loop, y: to.y + laneOffset },
+      to,
+    };
+  }
+  const tension = support ? clampGraphValue(absDx * 0.5, 58, 136) : clampGraphValue(absDx * 0.46, 74, 190);
+  const verticalEase = support ? clampGraphValue(absDy * 0.18, 10, 42) * (dy >= 0 ? 1 : -1) : clampGraphValue(dy * 0.08, -24, 24);
+  return {
+    from,
+    c1: {
+      x: from.x + direction * tension,
+      y: from.y + laneOffset + verticalEase,
+    },
+    c2: {
+      x: to.x - direction * tension,
+      y: to.y + laneOffset - verticalEase,
+    },
+    to,
+  };
+}
+
+function serviceLinkLaneOffset(link = {}) {
+  const paths = (link.paths || [link.path]).filter(Boolean);
+  const seed = paths.length ? paths.map((path) => path.id || servicePathGraphKey(path)).sort().join("|") : link.key || link.bundleKey || "";
+  const bucket = (stableGraphHash(seed) % 7) - 3;
+  const mediumBias = {
+    air: 0,
+    chilled_water: -8,
+    hot_water: 8,
+    condenser_water: -13,
+    refrigerant: 13,
+    electricity: 18,
+    fuel: 18,
+    service_water: -18,
+    control: 20,
+  };
+  const bundleLift = Number(link.bundleCount || 0) > 1 ? Math.min(10, Number(link.bundleCount || 0) * 1.5) : 0;
+  return clampGraphValue(bucket * 4 + (mediumBias[link.medium] || 0) + bundleLift, -26, 26);
+}
+
+function stableGraphHash(value = "") {
+  let hash = 0;
+  for (let index = 0; index < String(value).length; index += 1) {
+    hash = (hash * 31 + String(value).charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function cubicPoint(curve, t) {
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+  const uuu = uu * u;
+  const ttt = tt * t;
+  return {
+    x: uuu * curve.from.x + 3 * uu * t * curve.c1.x + 3 * u * tt * curve.c2.x + ttt * curve.to.x,
+    y: uuu * curve.from.y + 3 * uu * t * curve.c1.y + 3 * u * tt * curve.c2.y + ttt * curve.to.y,
+  };
+}
+
+function clampGraphValue(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return min;
+  }
+  return Math.min(max, Math.max(min, number));
+}
+
+function graphCoord(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Number(number.toFixed(1)) : 0;
 }
 
 function orthogonalPath(from, to, options = {}) {
@@ -3440,9 +3530,8 @@ function orthogonalPath(from, to, options = {}) {
 }
 
 function serviceLinkLabelPoint(from, to, link = {}) {
-  const x = from.x + (to.x - from.x) * 0.62;
-  const y = from.y + (to.y - from.y) * 0.62 - (link.support ? 15 : 10);
-  return { x, y };
+  const point = cubicPoint(serviceLinkCurve(from, to, link, { support: link.support }), 0.58);
+  return { x: graphCoord(point.x), y: graphCoord(point.y - (link.support ? 15 : 10)) };
 }
 
 function renderHVACServiceGraphDetail(paths, couplings) {

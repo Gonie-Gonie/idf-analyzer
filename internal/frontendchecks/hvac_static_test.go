@@ -102,6 +102,9 @@ func TestFrontendHVACServiceDOMContracts(t *testing.T) {
 		"function renderHVACQuickFilters",
 		"function servicePathMatchesQuickFilters",
 		"function orthogonalPath",
+		"function grasshopperWirePath",
+		"function serviceLinkCurve",
+		"function serviceLinkLaneOffset",
 		"function openHVACResultTab",
 		"function prepareHVACCrossTabContext",
 		"function exportHVACDebugGraph",
@@ -170,6 +173,8 @@ func TestFrontendHVACServiceStylesCoverRoutingAndBundling(t *testing.T) {
 		".hvac-graph-link.medium-refrigerant",
 		".hvac-graph-link.medium-electricity",
 		".hvac-graph-link.medium-control",
+		"stroke-linecap: round",
+		"vector-effect: non-scaling-stroke",
 		".hvac-graphic-shell.scale-actual .hvac-service-svg",
 	} {
 		if !strings.Contains(text, required) {
