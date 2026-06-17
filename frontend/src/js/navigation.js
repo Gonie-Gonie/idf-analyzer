@@ -217,7 +217,7 @@ export function switchResultTab(tabName, options = {}) {
   elements.resultPanes.forEach((pane) => {
     pane.classList.toggle("active", pane.id === `${state.activeResultTab}Pane`);
   });
-  if (state.report) {
+  if (state.report && (state.analysisDirty?.[state.activeResultTab] ?? true)) {
     renderReport({ scope: "active" });
   }
   if (state.activeResultTab === "geometry") {

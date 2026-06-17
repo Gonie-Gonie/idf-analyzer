@@ -1,6 +1,7 @@
 package idf
 
 import (
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -78,6 +79,32 @@ func AnalyzeOverview(doc Document) Report {
 	return AnalyzeOverviewTimed(doc, nil)
 }
 
+func AnalyzeQuick(doc Document) Report {
+	return AnalyzeQuickTimed(doc, nil)
+}
+
+func AnalyzeQuickTimed(doc Document, timer StageTimer) Report {
+	return AnalyzeQuickFromIndex(NewDocumentIndex(doc), timer)
+}
+
+func AnalyzeQuickFromIndex(index *DocumentIndex, timer StageTimer) Report {
+	if index == nil {
+		return Report{}
+	}
+	doc := index.Doc
+	var report Report
+	timeAnalysisStage(timer, "core", func() {
+		report = analyzeCore(doc)
+	})
+	timeAnalysisStage(timer, "summary", func() {
+		report.Summary = AnalyzeSummary(doc)
+	})
+	timeAnalysisStage(timer, "output", func() {
+		report.Output = AnalyzeOutput(doc)
+	})
+	return report
+}
+
 func AnalyzeOverviewTimed(doc Document, timer StageTimer) Report {
 	var report Report
 	timeAnalysisStage(timer, "core", func() {
@@ -116,49 +143,53 @@ func AnalyzeTimed(doc Document, timer StageTimer) Report {
 	var diagnostics []Diagnostic
 
 	var wg sync.WaitGroup
-	wg.Add(7)
-	go func() {
-		defer wg.Done()
+	sem := make(chan struct{}, MaxAnalysisWorkers())
+	run := func(work func()) {
+		wg.Add(1)
+		go func() {
+			sem <- struct{}{}
+			defer func() {
+				<-sem
+				wg.Done()
+			}()
+			work()
+		}()
+	}
+	run(func() {
 		timeAnalysisStage(timer, "unused", func() {
 			unusedObjects = FindUnusedObjects(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "summary", func() {
 			summary = AnalyzeSummary(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "output", func() {
 			output = AnalyzeOutput(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "profile", func() {
 			profile = AnalyzeProfile(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "hvac", func() {
 			hvac = AnalyzeHVAC(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "geometry", func() {
 			geometry = AnalyzeGeometry(doc)
 		})
-	}()
-	go func() {
-		defer wg.Done()
+	})
+	run(func() {
 		timeAnalysisStage(timer, "diagnostics", func() {
 			diagnostics = AnalyzeDiagnostics(doc)
 		})
-	}()
+	})
 	wg.Wait()
 
 	report.UnusedObjects = unusedObjects
@@ -177,6 +208,17 @@ func timeAnalysisStage(timer StageTimer, stage string, work func()) {
 	if timer != nil {
 		timer(stage, time.Since(start))
 	}
+}
+
+func MaxAnalysisWorkers() int {
+	cpus := runtime.NumCPU()
+	if cpus < 1 {
+		return 1
+	}
+	if cpus > 4 {
+		return 4
+	}
+	return cpus
 }
 
 func analyzeCore(doc Document) Report {

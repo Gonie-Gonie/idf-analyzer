@@ -1,9 +1,9 @@
 import { defaultSample, loadDefaultSampleIDF } from "./sample.js";
 import { loadAndApplyAppSettings } from "./settings-client.js";
-import { elements, setStatus, state, updateTextStats } from "./state.js";
+import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
 import {
   analyze,
-  applyRestoredAnalysisSnapshot,
+  applyCachedAnalysisResult,
   exportSummary,
   loadBrowserFile,
   markDocumentChanged,
@@ -284,22 +284,10 @@ if (restoredDocument) {
   if (restoredDocument.activeInputView) {
     switchInputView(restoredDocument.activeInputView, { recordHistory: false });
   }
-  const restoredAnalysis = applyRestoredAnalysisSnapshot(restoredDocument);
   if (restoredDocument.activeResultTab) {
     switchResultTab(restoredDocument.activeResultTab, { recordHistory: false });
   }
-  if (restoredAnalysis) {
-    setStatus(t("status.loadedNamed", { name: restoredDocument.filename || "current input" }), "ok");
-  } else {
-    scheduleAnalyzeAfterPaint({
-      loadingMessage: t("status.analyzingNamed", { name: restoredDocument.filename || "current input" }),
-      queuedMessage: t("status.loadedQueued", { name: restoredDocument.filename || "current input" }),
-      statusMessage: t("status.loadedNamed", { name: restoredDocument.filename || "current input" }),
-      textSnapshot: elements.idfInput.value,
-      analysisKey: restoredDocument.analysisKey || "",
-      preferCache: Boolean(restoredDocument.analysisKey),
-    });
-  }
+  restoreCachedDocumentAnalysis(restoredDocument);
 } else {
   setStatus(t("status.analysisWillStart"), "loading");
   loadDefaultSampleIDF().then(async (sampleText) => {
@@ -318,6 +306,33 @@ if (restoredDocument) {
       statusMessage: t("status.loadedNamed", { name: sourceLabel }),
       textSnapshot: loadedText,
     });
+  });
+}
+
+async function restoreCachedDocumentAnalysis(restoredDocument) {
+  const label = restoredDocument.filename || "current input";
+  const api = backend();
+  if (restoredDocument.analysisKey && api && typeof api.GetCachedAnalysis === "function") {
+    try {
+      const cached = await api.GetCachedAnalysis(restoredDocument.analysisKey);
+      if (cached && applyCachedAnalysisResult(cached, restoredDocument)) {
+        if (restoredDocument.activeResultTab) {
+          switchResultTab(restoredDocument.activeResultTab, { recordHistory: false });
+        }
+        setStatus(t("status.loadedNamed", { name: label }), "ok");
+        return;
+      }
+    } catch {
+      // Fall through to normal analysis if the in-memory backend cache is unavailable.
+    }
+  }
+  scheduleAnalyzeAfterPaint({
+    loadingMessage: t("status.analyzingNamed", { name: label }),
+    queuedMessage: t("status.loadedQueued", { name: label }),
+    statusMessage: t("status.loadedNamed", { name: label }),
+    textSnapshot: elements.idfInput.value,
+    analysisKey: restoredDocument.analysisKey || "",
+    preferCache: Boolean(restoredDocument.analysisKey),
   });
 }
 

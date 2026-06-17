@@ -81,6 +81,49 @@ func TestAnalyzeInputTextUsesCacheForSameInput(t *testing.T) {
 	}
 }
 
+func TestGetCachedAnalysisAssemblesCompletedStageResults(t *testing.T) {
+	app := NewApp()
+	quick, err := app.AnalyzeInputQuickText(appSummaryIDF)
+	if err != nil {
+		t.Fatalf("AnalyzeInputQuickText() error = %v", err)
+	}
+	if quick.AnalysisKey == "" {
+		t.Fatalf("quick analysis key is empty")
+	}
+	if quick.Report == nil || quick.Report.Geometry.ZoneCount != 0 || len(quick.Report.Diagnostics) != 0 {
+		t.Fatalf("quick report should not include heavy stages: %+v", quick.Report)
+	}
+
+	for _, stage := range []string{"profile", "hvac", "output", "diagnostics", "geometry"} {
+		if _, err := app.AnalyzeInputStageText(appSummaryIDF, stage); err != nil {
+			t.Fatalf("AnalyzeInputStageText(%q) error = %v", stage, err)
+		}
+	}
+	cached, err := app.GetCachedAnalysis(quick.AnalysisKey)
+	if err != nil {
+		t.Fatalf("GetCachedAnalysis() error = %v", err)
+	}
+	if cached == nil {
+		t.Fatalf("GetCachedAnalysis() = nil, want assembled result")
+	}
+	if cached.Timing == nil || cached.Timing.Mode != "full" || !cached.Timing.CacheHit {
+		t.Fatalf("cached timing = %+v, want full cache hit", cached.Timing)
+	}
+	if cached.Report == nil || cached.Report.Geometry.ZoneCount != 1 {
+		t.Fatalf("cached geometry zone count = %+v, want 1", cached.Report)
+	}
+	if cached.Report.Summary.MetricCount != quick.Report.Summary.MetricCount {
+		t.Fatalf("cached summary metric count = %d, want %d", cached.Report.Summary.MetricCount, quick.Report.Summary.MetricCount)
+	}
+}
+
+func TestMaxAnalysisWorkersIsCapped(t *testing.T) {
+	workers := idf.MaxAnalysisWorkers()
+	if workers < 1 || workers > 4 {
+		t.Fatalf("MaxAnalysisWorkers() = %d, want 1..4", workers)
+	}
+}
+
 func TestAnalysisCacheSharesInFlightComputation(t *testing.T) {
 	cache := NewAnalysisCache(4)
 	key := analysisCacheKey{TextHash: "same", Format: "idf", EnergyPlusVersion: "24.1", AnalyzerVersion: "test", Mode: "full", SettingsHash: "default"}

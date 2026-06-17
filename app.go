@@ -234,18 +234,30 @@ func (a *App) AnalyzeIDFText(text string) (*idf.Report, error) {
 }
 
 func (a *App) AnalyzeInputOverviewText(text string) (*InputAnalysisResult, error) {
-	return a.analyzeInputText(text, "overview", false)
+	return a.AnalyzeInputQuickText(text)
+}
+
+func (a *App) AnalyzeInputQuickText(text string) (*InputAnalysisResult, error) {
+	return a.analyzeInputText(text, "quick", false)
 }
 
 func (a *App) AnalyzeInputText(text string) (*InputAnalysisResult, error) {
 	return a.analyzeInputText(text, "full", true)
 }
 
+func (a *App) AnalyzeInputStageText(text string, stage string) (*InputAnalysisResult, error) {
+	mode := normalizeAnalysisStage(stage)
+	if mode == "" {
+		return nil, fmt.Errorf("unsupported analysis stage %q", stage)
+	}
+	return a.analyzeInputStageText(text, mode)
+}
+
 func (a *App) GetCachedAnalysis(textHash string) (*InputAnalysisResult, error) {
 	if a.analysisCache == nil || strings.TrimSpace(textHash) == "" {
 		return nil, nil
 	}
-	for _, mode := range []string{"full", "overview"} {
+	for _, mode := range []string{"full"} {
 		if result, ok := a.analysisCache.LookupTextMode(textHash, mode); ok {
 			cached := cloneInputAnalysisResult(result)
 			if cached.Timing == nil {
@@ -256,6 +268,9 @@ func (a *App) GetCachedAnalysis(textHash string) (*InputAnalysisResult, error) {
 			cached.Timing.QueueWaitMS = 0
 			return cached, nil
 		}
+	}
+	if assembled := a.cachedCompletedStageAnalysis(textHash); assembled != nil {
+		return assembled, nil
 	}
 	return nil, nil
 }
@@ -334,6 +349,8 @@ func (a *App) analyzeInputText(text string, mode string, includeEPJSON bool) (*I
 		analyzeStart := time.Now()
 		var report idf.Report
 		switch mode {
+		case "quick":
+			report = idf.AnalyzeQuickTimed(doc, stageTimer)
 		case "overview":
 			report = idf.AnalyzeOverviewTimed(doc, stageTimer)
 		default:
@@ -382,6 +399,136 @@ func (a *App) analyzeInputText(text string, mode string, includeEPJSON bool) (*I
 	}
 
 	return analysisResultForRequest(result, requestStart, mode, cacheHit, queueWait, parseMS), nil
+}
+
+func (a *App) analyzeInputStageText(text string, mode string) (*InputAnalysisResult, error) {
+	if a.analysisCache == nil {
+		a.analysisCache = NewAnalysisCache(defaultAnalysisCacheEntries)
+	}
+	requestStart := time.Now()
+	textHash := analysisTextHash(text)
+	if cached, ok := a.analysisCache.LookupTextMode(textHash, mode); ok {
+		return cachedAnalysisResult(cached, requestStart, mode), nil
+	}
+
+	parseStart := time.Now()
+	model, doc, err := parseInputDocument(text)
+	if err != nil {
+		return nil, err
+	}
+	parseMS := analysisDurationMS(time.Since(parseStart))
+	key := analysisCacheKey{
+		TextHash:          textHash,
+		Format:            string(model.Format),
+		EnergyPlusVersion: model.Version.Raw,
+		AnalyzerVersion:   currentAppInfo().Version,
+		Mode:              mode,
+		SettingsHash:      defaultAnalysisSettingsHash,
+	}
+
+	result, cacheHit, queueWait, err := a.analysisCache.GetOrCompute(key, func() (*InputAnalysisResult, error) {
+		stageStart := time.Now()
+		report := idf.Report{}
+		stageName := mode
+		switch mode {
+		case "profile":
+			report.Profile = idf.AnalyzeProfile(doc)
+		case "hvac":
+			report.HVAC = idf.AnalyzeHVAC(doc)
+		case "output":
+			report.Output = idf.AnalyzeOutput(doc)
+		case "diagnostics":
+			report.Diagnostics = idf.AnalyzeDiagnostics(doc)
+		case "geometry":
+			geometry := idf.AnalyzeGeometry(doc)
+			report.Geometry = geometry
+		default:
+			return nil, fmt.Errorf("unsupported analysis stage %q", mode)
+		}
+		stageMS := analysisDurationMS(time.Since(stageStart))
+
+		return &InputAnalysisResult{
+			AnalysisKey: textHash,
+			Format:      string(model.Format),
+			Version:     model.Version.Raw,
+			Report:      &report,
+			Timing: &AnalysisTiming{
+				Mode:      mode,
+				CacheHit:  false,
+				TotalMS:   analysisDurationMS(time.Since(requestStart)),
+				ParseMS:   parseMS,
+				AnalyzeMS: stageMS,
+				Stages:    map[string]int64{stageName: stageMS},
+			},
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return analysisResultForRequest(result, requestStart, mode, cacheHit, queueWait, parseMS), nil
+}
+
+func (a *App) cachedCompletedStageAnalysis(textHash string) *InputAnalysisResult {
+	quick, ok := a.analysisCache.LookupTextMode(textHash, "quick")
+	if !ok {
+		quick, ok = a.analysisCache.LookupTextMode(textHash, "overview")
+	}
+	if !ok || quick == nil || quick.Report == nil {
+		return nil
+	}
+
+	assembled := cloneInputAnalysisResult(quick)
+	report := *quick.Report
+	requiredStages := []string{"profile", "hvac", "output", "diagnostics", "geometry"}
+	for _, stage := range requiredStages {
+		stageResult, ok := a.analysisCache.LookupTextMode(textHash, stage)
+		if !ok || stageResult == nil || stageResult.Report == nil {
+			return nil
+		}
+		mergeStageReport(&report, stage, stageResult.Report)
+	}
+	assembled.Report = &report
+	if assembled.Timing == nil {
+		assembled.Timing = &AnalysisTiming{}
+	}
+	assembled.Timing.Mode = "full"
+	assembled.Timing.CacheHit = true
+	assembled.Timing.TotalMS = 0
+	assembled.Timing.QueueWaitMS = 0
+	return assembled
+}
+
+func mergeStageReport(target *idf.Report, stage string, source *idf.Report) {
+	switch stage {
+	case "profile":
+		target.Profile = source.Profile
+	case "hvac":
+		target.HVAC = source.HVAC
+	case "output":
+		target.Output = source.Output
+	case "diagnostics":
+		target.Diagnostics = source.Diagnostics
+	case "geometry":
+		target.Geometry = source.Geometry
+	}
+}
+
+func normalizeAnalysisStage(stage string) string {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "profile":
+		return "profile"
+	case "hvac":
+		return "hvac"
+	case "output", "output-detail", "outputs":
+		return "output"
+	case "diagnose", "diagnostic", "diagnostics":
+		return "diagnostics"
+	case "geometry":
+		return "geometry"
+	default:
+		return ""
+	}
 }
 
 func cachedAnalysisResult(result *InputAnalysisResult, requestStart time.Time, mode string) *InputAnalysisResult {

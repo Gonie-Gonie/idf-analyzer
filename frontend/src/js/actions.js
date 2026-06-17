@@ -1,5 +1,12 @@
 import { backend, elements, setStatus, state, updateTextStats } from "./state.js";
-import { renderDiagnostics, renderEmpty, renderReport } from "./views/analysis-views.js";
+import {
+  markAllAnalysisDirty,
+  markAnalysisDirty,
+  renderDiagnostics,
+  renderEmpty,
+  renderReport,
+  renderResultTab,
+} from "./views/analysis-views.js";
 import { preloadGeometryRenderer, renderGeometry } from "./geometry-loader.js";
 import { t } from "./i18n.js";
 
@@ -12,6 +19,8 @@ let afterPaintAnalyzeTimer = 0;
 let analysisRunID = 0;
 let activeAnalysisPromise = null;
 let activeAnalysisText = "";
+const maxFrontendStageConcurrency = 2;
+let idlePreRenderTimer = 0;
 
 export async function analyze(options = {}) {
   const api = backend();
@@ -44,9 +53,11 @@ async function runAnalysis(api, text, analysisKey, runID, options) {
     if (cached) {
       return cached;
     }
-    const result = hasStagedAnalysisAPI(api)
-      ? await runStagedAnalysis(api, text, analysisKey, runID, options)
-      : await runFullAnalysis(api, text, analysisKey, runID, options);
+    const result = hasQueuedStageAnalysisAPI(api)
+      ? await runQueuedStageAnalysis(api, text, analysisKey, runID, options)
+      : hasStagedAnalysisAPI(api)
+        ? await runStagedAnalysis(api, text, analysisKey, runID, options)
+        : await runFullAnalysis(api, text, analysisKey, runID, options);
     return result;
   } catch (error) {
     if (isCurrentAnalysis(runID, text)) {
@@ -61,6 +72,51 @@ async function runAnalysis(api, text, analysisKey, runID, options) {
   }
 }
 
+async function runQueuedStageAnalysis(api, text, analysisKey, runID, options) {
+  const quick = await api.AnalyzeInputQuickText(text);
+  if (!isCurrentAnalysis(runID, text, analysisKey)) {
+    return null;
+  }
+  applyOverviewResult(quick, text, { analysisKey, stage: "quick" });
+  setStatus(t("status.summaryReadyDiagnostics"), "loading");
+  await nextPaint();
+
+  const stages = orderedAnalysisStages(state.activeResultTab);
+  const results = await runStageQueue(stages, async (stage) => {
+    const result = await api.AnalyzeInputStageText(text, stage);
+    if (!isCurrentAnalysis(runID, text, analysisKey)) {
+      return null;
+    }
+    applyStageResult(stage, result);
+    return result;
+  });
+  if (!isCurrentAnalysis(runID, text, analysisKey)) {
+    return null;
+  }
+  state.analysisStage = "complete";
+  scheduleIdlePreRender();
+  window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
+  setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
+  return { ...quick, report: state.report, stages: results.filter(Boolean) };
+}
+
+async function runStageQueue(stages, worker) {
+  const results = [];
+  let nextIndex = 0;
+  async function runNext() {
+    const index = nextIndex;
+    nextIndex += 1;
+    if (index >= stages.length) {
+      return;
+    }
+    results[index] = await worker(stages[index]);
+    await runNext();
+  }
+  const workers = Array.from({ length: Math.min(maxFrontendStageConcurrency, stages.length) }, runNext);
+  await Promise.all(workers);
+  return results;
+}
+
 async function runFullAnalysis(api, text, analysisKey, runID, options) {
   const result =
     typeof api.AnalyzeInputText === "function"
@@ -70,6 +126,7 @@ async function runFullAnalysis(api, text, analysisKey, runID, options) {
     return null;
   }
   applyOverviewResult(result, text, { complete: true, analysisKey });
+  scheduleIdlePreRender();
   window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return result;
@@ -92,6 +149,7 @@ async function runStagedAnalysis(api, text, analysisKey, runID, options) {
   state.report.diagnostics = diagnostics || [];
   state.diagnosticsReady = true;
   state.analysisStage = "diagnostics";
+  markAnalysisDirty("diagnose");
   if (state.activeResultTab === "diagnose") {
     renderDiagnostics();
   }
@@ -109,12 +167,72 @@ async function runStagedAnalysis(api, text, analysisKey, runID, options) {
   state.report.geometry = geometry || {};
   state.geometryReady = true;
   state.analysisStage = "complete";
+  markAnalysisDirty("geometry");
   if (state.activeResultTab === "geometry") {
     renderGeometry(state.report.geometry);
   }
+  scheduleIdlePreRender();
   window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return { ...overview, report: state.report };
+}
+
+function applyStageResult(stage, result) {
+  const report = result?.report || {};
+  state.report = state.report || {};
+  switch (stage) {
+    case "profile":
+      state.report.profile = report.profile || {};
+      markAnalysisDirty("profile");
+      break;
+    case "hvac":
+      state.report.hvac = report.hvac || {};
+      markAnalysisDirty("hvac");
+      break;
+    case "output":
+      state.report.output = report.output || {};
+      markAnalysisDirty("output");
+      break;
+    case "diagnostics":
+      state.report.diagnostics = report.diagnostics || [];
+      state.diagnosticsReady = true;
+      markAnalysisDirty("diagnose");
+      break;
+    case "geometry":
+      state.report.geometry = report.geometry || {};
+      state.geometryReady = true;
+      markAnalysisDirty("geometry");
+      break;
+    default:
+      return;
+  }
+  if (stageMatchesActiveTab(stage)) {
+    renderReport({ scope: "active" });
+  }
+}
+
+function orderedAnalysisStages(activeTab) {
+  const stages = ["profile", "hvac", "output", "diagnostics", "geometry"];
+  const priority = resultTabStage(activeTab);
+  if (!priority) {
+    return stages;
+  }
+  return [priority, ...stages.filter((stage) => stage !== priority)];
+}
+
+function stageMatchesActiveTab(stage) {
+  return resultTabStage(state.activeResultTab) === stage;
+}
+
+function resultTabStage(tab) {
+  const stagesByTab = {
+    profile: "profile",
+    hvac: "hvac",
+    output: "output",
+    diagnose: "diagnostics",
+    geometry: "geometry",
+  };
+  return stagesByTab[tab] || "";
 }
 
 async function readBackendCachedAnalysis(api, text, analysisKey, runID, options) {
@@ -126,6 +244,7 @@ async function readBackendCachedAnalysis(api, text, analysisKey, runID, options)
     return null;
   }
   applyOverviewResult(cached, text, { complete: true, analysisKey });
+  scheduleIdlePreRender();
   window.dispatchEvent(new CustomEvent("idfAnalyzer:analysisComplete", { detail: { text } }));
   setStatus(options.statusMessage || t("status.analysisComplete"), "ok");
   return cached;
@@ -150,8 +269,13 @@ function applyOverviewResult(result, text, { complete = false, analysisKey = "" 
   state.analysisStage = complete ? "complete" : "overview";
   state.diagnosticsReady = complete;
   state.geometryReady = complete;
+  markAllAnalysisDirty();
   renderReport({ scope: "active" });
   updateDocumentActions();
+}
+
+function hasQueuedStageAnalysisAPI(api) {
+  return typeof api.AnalyzeInputQuickText === "function" && typeof api.AnalyzeInputStageText === "function";
 }
 
 function hasStagedAnalysisAPI(api) {
@@ -162,8 +286,8 @@ function hasStagedAnalysisAPI(api) {
   );
 }
 
-function isCurrentAnalysis(runID, text) {
-  return runID === analysisRunID && text === elements.idfInput.value;
+function isCurrentAnalysis(runID, text, analysisKey = "") {
+  return runID === analysisRunID && text === elements.idfInput.value && (!analysisKey || !state.analysisKey || analysisKey === state.analysisKey);
 }
 
 export function scheduleAnalyzeAfterPaint(options = {}) {
@@ -381,7 +505,7 @@ export async function openSettings() {
   window.location.assign("./settings.html");
 }
 
-export async function saveWorkspaceSnapshot({ includeResult = true } = {}) {
+export async function saveWorkspaceSnapshot() {
   const text = elements.idfInput.value || "";
   if (!text.trim()) {
     return;
@@ -402,24 +526,14 @@ export async function saveWorkspaceSnapshot({ includeResult = true } = {}) {
     geometryReady: Boolean(state.geometryReady),
     capturedAt: new Date().toISOString(),
   };
-  const analysisResult = includeResult ? currentAnalysisSnapshot(text, analysisKey) : null;
-  if (analysisResult) {
-    snapshot.analysisResult = analysisResult;
-  }
   try {
     window.sessionStorage.setItem(currentDocumentStorageKey, JSON.stringify(snapshot));
   } catch {
-    delete snapshot.analysisResult;
-    try {
-      window.sessionStorage.setItem(currentDocumentStorageKey, JSON.stringify(snapshot));
-    } catch {
-      // Navigation should still proceed if the browser refuses session storage.
-    }
+    // Navigation should still proceed if the browser refuses session storage.
   }
 }
 
-export function applyRestoredAnalysisSnapshot(snapshot) {
-  const result = snapshot?.analysisResult;
+export function applyCachedAnalysisResult(result, snapshot = {}) {
   if (!result?.report) {
     return false;
   }
@@ -435,11 +549,13 @@ export function applyRestoredAnalysisSnapshot(snapshot) {
   state.lastAnalyzedText = text;
   state.analysisKey = analysisKey;
   state.lastAnalyzedKey = analysisKey;
-  const complete = snapshot.analysisStage === "complete" && isCompleteAnalysisResult(result);
-  state.analysisStage = complete ? "complete" : snapshot.analysisStage || "overview";
-  state.diagnosticsReady = complete && Boolean(snapshot.diagnosticsReady);
-  state.geometryReady = complete && Boolean(snapshot.geometryReady);
+  const complete = isCompleteAnalysisResult(result);
+  state.analysisStage = complete ? "complete" : "overview";
+  state.diagnosticsReady = complete;
+  state.geometryReady = complete;
+  markAllAnalysisDirty();
   renderReport({ scope: "active" });
+  scheduleIdlePreRender();
   updateDocumentActions();
   return complete;
 }
@@ -449,6 +565,7 @@ function clearScheduledAnalyze() {
   autoAnalyzeTimer = 0;
   window.clearTimeout(afterPaintAnalyzeTimer);
   afterPaintAnalyzeTimer = 0;
+  cancelIdlePreRender();
 }
 
 function nextPaint() {
@@ -472,24 +589,37 @@ function nextPaint() {
   });
 }
 
-function currentAnalysisSnapshot(text, analysisKey) {
-  if (!state.report || state.lastAnalyzedText !== text) {
-    return null;
+function scheduleIdlePreRender() {
+  cancelIdlePreRender();
+  const schedule = window.requestIdleCallback || ((callback) => window.setTimeout(() => callback({ timeRemaining: () => 10 }), 200));
+  idlePreRenderTimer = schedule(() => {
+    idlePreRenderTimer = 0;
+    const nextTab = nextDirtyInactiveTab();
+    if (!nextTab || !state.report) {
+      return;
+    }
+    renderResultTab(nextTab, state.report);
+    if (nextDirtyInactiveTab()) {
+      scheduleIdlePreRender();
+    }
+  }, { timeout: 1500 });
+}
+
+function cancelIdlePreRender() {
+  if (!idlePreRenderTimer) {
+    return;
   }
-  return {
-    text,
-    analysisKey: analysisKey || state.lastAnalyzedKey || "",
-    format: state.model?.format || "",
-    version: state.model?.version?.raw || "",
-    model: state.model || null,
-    epjson: state.epjsonText || "",
-    semantic: state.semanticProjection || null,
-    report: state.report,
-    timing: {
-      mode: state.analysisStage === "complete" ? "full" : "overview",
-      cacheHit: true,
-    },
-  };
+  if (window.cancelIdleCallback) {
+    window.cancelIdleCallback(idlePreRenderTimer);
+  } else {
+    window.clearTimeout(idlePreRenderTimer);
+  }
+  idlePreRenderTimer = 0;
+}
+
+function nextDirtyInactiveTab() {
+  const tabs = ["summary", "profile", "hvac", "output", "diagnose"];
+  return tabs.find((tab) => tab !== state.activeResultTab && state.analysisDirty?.[tab]);
 }
 
 async function computeAnalysisKey(text) {

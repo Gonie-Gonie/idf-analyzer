@@ -27,33 +27,45 @@ export function renderReport(options = {}) {
       renderDeferredGeometry(report.geometry);
     }
     renderInputViews();
+    Object.keys(state.analysisDirty || {}).forEach(markAnalysisRendered);
     return;
   }
 
   renderSummary(report.summary);
+  markAnalysisRendered("summary");
   renderActiveResultTab(report);
   renderInputViews();
+  markAnalysisRendered("input");
 }
 
 export function renderActiveResultTab(report = state.report) {
+  renderResultTab(state.activeResultTab, report);
+}
+
+export function renderResultTab(tab, report = state.report) {
   if (!report) {
     return;
   }
-  switch (state.activeResultTab) {
+  switch (tab) {
     case "profile":
       renderProfile(report.profile);
+      markAnalysisRendered("profile");
       break;
     case "hvac":
       renderHVAC(report.hvac);
+      markAnalysisRendered("hvac");
       break;
     case "output":
       renderOutput(report.output);
+      markAnalysisRendered("output");
       break;
     case "simulation":
       renderSimulation();
+      markAnalysisRendered("simulation");
       break;
     case "diagnose":
       renderDiagnostics(report.diagnostics);
+      markAnalysisRendered("diagnose");
       break;
     case "geometry":
       if (state.geometryReady) {
@@ -61,11 +73,33 @@ export function renderActiveResultTab(report = state.report) {
       } else {
         renderDeferredGeometry(report.geometry);
       }
+      markAnalysisRendered("geometry");
       break;
     case "summary":
     default:
       renderSummary(report.summary);
+      markAnalysisRendered("summary");
       break;
+  }
+}
+
+export function markAnalysisDirty(...tabs) {
+  tabs.flat().filter(Boolean).forEach((tab) => {
+    if (state.analysisDirty && Object.prototype.hasOwnProperty.call(state.analysisDirty, tab)) {
+      state.analysisDirty[tab] = true;
+    }
+  });
+}
+
+export function markAllAnalysisDirty() {
+  Object.keys(state.analysisDirty || {}).forEach((tab) => {
+    state.analysisDirty[tab] = true;
+  });
+}
+
+function markAnalysisRendered(tab) {
+  if (state.analysisDirty && Object.prototype.hasOwnProperty.call(state.analysisDirty, tab)) {
+    state.analysisDirty[tab] = false;
   }
 }
 
